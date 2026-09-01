@@ -1,0 +1,369 @@
+/**
+ * Sayfa 5 — Süreç Editörü.
+ *
+ * Canvas (React Flow) + sağ parametre paneli + üst araç çubuğundan oluşur.
+ * Canvas'taki node/edge yapısı tek doğruluk kaynağıdır; "Simülasyonu Çalıştır"
+ * anında `configBuilder` ile backend şemasına çevrilir. Ayrı bir config state'i
+ * tutulmaz — iki temsil arasında eşitlemeyi elle sürdürmek, ekranda görünen
+ * model ile çalışan modelin sessizce ayrışmasına yol açardı.
+ */
+
+import { useCallback, useMemo, useState } from "react";
+import ReactFlow, {
+  addEdge,
+  Background,
+  Controls,
+  MiniMap,
+  ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
+  type Connection as FlowConnection,
+  type NodeMouseHandler,
+} from "reactflow";
+import type {
+  Distribution,
+  SimulationConfig,
+  SimulationDepth,
+  SimulationRunResponse,
+  Station,
+} from "../../types/simulationTypes";
+import { SIMULATION_DEPTH_OPTIONS } from "../../types/simulationTypes";
+import {
+  ARRIVAL_NODE_ID,
+  buildFlowFromConfig,
+  buildSimulationConfig,
+  createStationNode,
+  isStationNode,
+  type FlowEdge,
+  type FlowNode,
+  type StationNodeData,
+} from "../../lib/configBuilder";
+import { ApiError, runSimulation } from "../../lib/apiClient";
+import { GENERIC_ERROR_MESSAGE, summarizeWarning } from "../../lib/errorMessages";
+import { ParameterPanel } from "./ParameterPanel";
+import { Toolbar } from "./Toolbar";
+import { ArrivalNode } from "./nodes/ArrivalNode";
+import { StationNode } from "./nodes/StationNode";
+import { WarningIcon } from "../shared/icons";
+
+/** Yeni eklenen istasyonun canvas üzerindeki başlangıç konumu. */
+const NEW_NODE_POSITION = { x: 420, y: 420 };
+
+interface ProcessEditorProps {
+  initialConfig: SimulationConfig;
+  /**
+   * Bu model için en son alınan simülasyon sonucu.
+   *
+   * Kullanıcı sonuç ekranından editöre döndüğünde kutuların kullanım oranına
+   * göre renklenmiş olması gerekir. Sonuç aktarılmazsa editör her açılışta
+   * sıfırdan kurulur ve renk kodlaması —yani darboğazın şema üzerinde
+   * görünmesi— pratikte hiç izlenemez hâle gelirdi.
+   */
+  lastResult?: SimulationRunResponse | null;
+  onBack: () => void;
+  onSimulationComplete: (result: SimulationRunResponse, config: SimulationConfig) => void;
+}
+
+/**
+ * Simülasyon metriklerini node'lara işler (renk kodlaması için).
+ *
+ * Yalnızca istasyon node'ları metrik taşır; varış kutusunun kullanım oranı
+ * yoktur. Tip daraltması bunu derleme zamanında güvence altına alır — aksi
+ * hâlde varış node'unun verisi yanlışlıkla istasyon verisiyle karıştırılabilirdi.
+ */
+function applyMetrics(nodes: FlowNode[], result: SimulationRunResponse): FlowNode[] {
+  const metricsById = new Map(
+    result.results.station_metrics.map((item) => [item.station_id, item]),
+  );
+  return nodes.map((node): FlowNode => {
+    if (!isStationNode(node)) {
+      return node;
+    }
+    const metrics = metricsById.get(node.id);
+    if (!metrics) {
+      return node;
+    }
+    return {
+      ...node,
+      data: {
+        ...node.data,
+        metrics: {
+          utilization: metrics.utilization,
+          is_bottleneck: metrics.is_bottleneck,
+        },
+      },
+    };
+  });
+}
+
+export function ProcessEditor(props: ProcessEditorProps) {
+  // React Flow'un `useReactFlow` gibi kancaları sağlayıcı içinde olmalıdır.
+  return (
+    <ReactFlowProvider>
+      <EditorCanvas {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+function EditorCanvas({
+  initialConfig,
+  lastResult,
+  onBack,
+  onSimulationComplete,
+}: ProcessEditorProps) {
+  const initialFlow = useMemo(() => {
+    const flow = buildFlowFromConfig(initialConfig);
+    return lastResult
+      ? { ...flow, nodes: applyMetrics(flow.nodes, lastResult) }
+      : flow;
+    // `lastResult` bilinçli olarak bağımlılık dışında: yalnızca editör ilk
+    // kurulduğunda uygulanır. Bağımlılığa eklenirse, çalıştırma sonrası gelen
+    // sonuç canvas'ı baştan kurar ve kullanıcının taşıdığı kutular yerine döner.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialConfig]);
+
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode["data"]>(
+    initialFlow.nodes,
+  );
+  const [edges, setEdges, onEdgesChange] = useEdgesState(initialFlow.edges);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [depth, setDepth] = useState<SimulationDepth>("standard");
+  const [isRunning, setIsRunning] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  const [warnings, setWarnings] = useState<string[]>([]);
+
+  const nodeTypes = useMemo(
+    () => ({ station: StationNode, arrival: ArrivalNode }),
+    [],
+  );
+
+  const flowNodes = nodes as FlowNode[];
+  const flowEdges = edges as FlowEdge[];
+  const selectedNode = flowNodes.find((node) => node.id === selectedNodeId) ?? null;
+  const stationCount = flowNodes.filter(isStationNode).length;
+
+  const handleNodeClick: NodeMouseHandler = useCallback((_event, node) => {
+    setSelectedNodeId(node.id);
+  }, []);
+
+  const handleConnect = useCallback(
+    (connection: FlowConnection) => {
+      setEdges((current) =>
+        addEdge(
+          {
+            ...connection,
+            // Olasılık verilmez: configBuilder aynı kaynaktan çıkan yollara
+            // eşit dağıtır. Kullanıcı isterse sonradan değiştirebilir.
+            data: {},
+            animated: connection.source === ARRIVAL_NODE_ID,
+          },
+          current,
+        ),
+      );
+    },
+    [setEdges],
+  );
+
+  const handleAddStation = useCallback(() => {
+    const fresh = createStationNode(
+      flowNodes.map((node) => node.id),
+      {
+        // Yeni kutular üst üste binmesin diye her eklemede biraz kaydırılır.
+        x: NEW_NODE_POSITION.x + stationCount * 30,
+        y: NEW_NODE_POSITION.y + stationCount * 20,
+      },
+    );
+    setNodes((current) => [...current, fresh] as typeof current);
+    setSelectedNodeId(fresh.id);
+  }, [flowNodes, stationCount, setNodes]);
+
+  const handleUpdateStation = useCallback(
+    (nodeId: string, station: Station) => {
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === nodeId
+            ? { ...node, data: { ...(node.data as StationNodeData), station } }
+            : node,
+        ),
+      );
+    },
+    [setNodes],
+  );
+
+  const handleUpdateArrival = useCallback(
+    (distribution: Distribution) => {
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === ARRIVAL_NODE_ID ? { ...node, data: { distribution } } : node,
+        ),
+      );
+    },
+    [setNodes],
+  );
+
+  const handleDeleteStation = useCallback(
+    (nodeId: string) => {
+      setNodes((current) => current.filter((node) => node.id !== nodeId));
+      // Silinen istasyona bağlı kenarlar da kaldırılır; aksi hâlde canvas'ta
+      // hiçbir yere gitmeyen oklar kalırdı.
+      setEdges((current) =>
+        current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
+      );
+      setSelectedNodeId(null);
+    },
+    [setNodes, setEdges],
+  );
+
+  const handleRun = useCallback(async () => {
+    setErrors([]);
+    setWarnings([]);
+
+    const option =
+      SIMULATION_DEPTH_OPTIONS.find((item) => item.id === depth) ??
+      SIMULATION_DEPTH_OPTIONS[1];
+
+    const built = buildSimulationConfig(flowNodes, flowEdges, {
+      simulation_duration_minutes: option.simulation_duration_minutes,
+      warmup_period_minutes: option.warmup_period_minutes,
+      num_replications: option.num_replications,
+      random_seed: initialConfig.random_seed ?? 42,
+    });
+
+    if (!built.ok) {
+      setErrors(built.errors);
+      return;
+    }
+    setWarnings(built.warnings);
+
+    setIsRunning(true);
+    try {
+      const result = await runSimulation(built.config);
+
+      // Kutular kullanım oranına göre renklenir; kullanıcı sonuç ekranından
+      // buraya döndüğünde darboğazı kendi şemasının üzerinde görür.
+      setNodes((current) => applyMetrics(current as FlowNode[], result) as typeof current);
+
+      setWarnings((current) => [
+        ...current,
+        ...result.warnings.map(summarizeWarning),
+      ]);
+      onSimulationComplete(result, built.config);
+    } catch (error) {
+      setErrors(
+        error instanceof ApiError ? error.userMessages : [GENERIC_ERROR_MESSAGE],
+      );
+    } finally {
+      setIsRunning(false);
+    }
+  }, [depth, flowNodes, flowEdges, initialConfig.random_seed, setNodes, onSimulationComplete]);
+
+  return (
+    <div className="flex h-full flex-col">
+      <Toolbar
+        depth={depth}
+        onDepthChange={setDepth}
+        onAddStation={handleAddStation}
+        onRun={handleRun}
+        onBack={onBack}
+        isRunning={isRunning}
+        stationCount={stationCount}
+      />
+
+      {(errors.length > 0 || warnings.length > 0) && (
+        <div className="space-y-2 border-b border-slate-200 bg-slate-50 px-4 py-3">
+          {errors.map((message) => (
+            <Banner key={message} tone="error" message={message} />
+          ))}
+          {warnings.map((message) => (
+            <Banner key={message} tone="warning" message={message} />
+          ))}
+        </div>
+      )}
+
+      {isRunning && (
+        <p className="border-b border-brand-100 bg-brand-50 px-4 py-2 text-sm text-brand-900">
+          Simülasyon çalışıyor, birkaç saniye sürebilir.
+        </p>
+      )}
+
+      <div className="flex min-h-0 flex-1">
+        <div className="relative min-w-0 flex-1">
+          <ReactFlow
+            nodes={nodes}
+            edges={edges}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={handleConnect}
+            onNodeClick={handleNodeClick}
+            onPaneClick={() => setSelectedNodeId(null)}
+            nodeTypes={nodeTypes}
+            fitView
+            fitViewOptions={{ padding: 0.25 }}
+            proOptions={{ hideAttribution: false }}
+            className="bg-slate-50"
+          >
+            <Background gap={20} size={1} color="#cbd5e1" />
+            <Controls showInteractive={false} />
+            <MiniMap
+              pannable
+              zoomable
+              className="!bottom-4 !right-4 hidden !rounded-lg !border !border-slate-200 sm:block"
+              nodeColor={(node) => (node.type === "arrival" ? "#34d399" : "#94a3b8")}
+            />
+          </ReactFlow>
+
+          {stationCount === 0 && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="pointer-events-auto rounded-xl border-2 border-dashed border-slate-300 bg-white/90 px-6 py-5 text-center shadow-sm">
+                <p className="text-sm font-medium text-slate-700">
+                  Şema boş görünüyor
+                </p>
+                <p className="mt-1 max-w-xs text-xs text-slate-500">
+                  Yukarıdaki “İstasyon Ekle” düğmesiyle ilk iş istasyonunuzu ekleyin,
+                  sonra yeşil giriş kutusundan ona bir ok çizin.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="w-80 shrink-0 max-lg:hidden">
+          <ParameterPanel
+            selectedNode={selectedNode}
+            onUpdateStation={handleUpdateStation}
+            onUpdateArrival={handleUpdateArrival}
+            onDeleteStation={handleDeleteStation}
+          />
+        </div>
+      </div>
+
+      {/* Dar ekranlarda panel canvas'ın altına iner; yan yana sığmadığında
+          canvas kullanılamayacak kadar daralırdı. */}
+      {selectedNode && (
+        <div className="max-h-[45vh] overflow-y-auto border-t border-slate-200 lg:hidden">
+          <ParameterPanel
+            selectedNode={selectedNode}
+            onUpdateStation={handleUpdateStation}
+            onUpdateArrival={handleUpdateArrival}
+            onDeleteStation={handleDeleteStation}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Banner({ tone, message }: { tone: "error" | "warning"; message: string }) {
+  const styles =
+    tone === "error"
+      ? "border-red-200 bg-red-50 text-red-900"
+      : "border-amber-200 bg-amber-50 text-amber-900";
+  const iconColor = tone === "error" ? "text-red-600" : "text-amber-600";
+
+  return (
+    <div className={`flex items-start gap-2.5 rounded-lg border px-3 py-2 ${styles}`}>
+      <WarningIcon className={`mt-0.5 h-4 w-4 shrink-0 ${iconColor}`} />
+      <p className="text-sm">{message}</p>
+    </div>
+  );
+}

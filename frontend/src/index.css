@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+/* React Flow'un kendi stilleri; canvas'ın çalışması için zorunlu. */
+@import "reactflow/dist/style.css";
+
+@theme {
+  /* Ürünün ana rengi: güven verici, sakin bir mavi. Teknik olmayan
+     kullanıcıyı ürküten yüksek doygunluklu renklerden kaçınıldı. */
+  --color-brand-50: #eef4ff;
+  --color-brand-100: #dbe6fe;
+  --color-brand-200: #bfd3fe;
+  --color-brand-300: #93b4fd;
+  --color-brand-400: #608cfa;
+  --color-brand-500: #3b66f6;
+  --color-brand-600: #2547eb;
+  --color-brand-700: #1d35d8;
+  --color-brand-800: #1e2eaf;
+  --color-brand-900: #1e2d8a;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* Uygulama sabit yükseklikli bir kabuktur: gezinme çubuğu üstte sabit durur ve
+   kaydırma yalnızca `main` öğesinin içinde olur. Bu nedenle sayfanın kendisi
+   hiçbir eksende kaymamalıdır.
+
+   Bu kural özellikle yatay taşmaya karşı gereklidir. Grafik kütüphanesi
+   (Recharts) ölçüm için belge köküne geçici öğeler ekler ve tablolar kendi
+   kaydırma kutularının içinde tasarım gereği daha geniştir; bunlar zaman zaman
+   belge düzeyine birkaç piksel taşma sızdırır ve tüm sayfa yana kayar. Kabuğun
+   kaymaması bilinçli bir tasarım kararı olduğu için burada açıkça belirtilir —
+   gerçek bir düzen hatasını gizlemek için değil. */
+body {
+  overflow: hidden;
+  @apply bg-slate-50 text-slate-800 antialiased;
+  font-family:
+    "Inter",
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    sans-serif;
+}
+
+/* Sayı girişlerindeki artırma/azaltma oklarını gizle: dar panelde
+   yer kaplıyor ve dokunmatik cihazlarda yanlışlıkla tetikleniyor. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}

@@ -1,0 +1,54 @@
+{
+  "stations": [
+    {
+      "id": "yikama",
+      "name": "Yıkama",
+      "num_servers": 1,
+      "service_time_distribution": {
+        "type": "normal",
+        "params": { "mean": 1.5, "std": 0.3 }
+      },
+      "buffer_capacity_before": -1,
+      "scrap_rate": 0
+    },
+    {
+      "id": "dograma",
+      "name": "Doğrama",
+      "num_servers": 3,
+      "service_time_distribution": {
+        "type": "triangular",
+        "params": { "min": 2, "mode": 3, "max": 5 }
+      },
+      "buffer_capacity_before": 20,
+      "scrap_rate": 0.03
+    },
+    {
+      "id": "paketleme",
+      "name": "Paketleme",
+      "num_servers": 2,
+      "service_time_distribution": {
+        "type": "exponential",
+        "params": { "mean": 2.5 }
+      },
+      "failure_rate": 0.002,
+      "repair_time_distribution": {
+        "type": "exponential",
+        "params": { "mean": 15 }
+      },
+      "buffer_capacity_before": -1,
+      "scrap_rate": 0
+    }
+  ],
+  "connections": [
+    { "from_station_id": "yikama", "to_station_id": "dograma", "routing_probability": 1 },
+    { "from_station_id": "dograma", "to_station_id": "paketleme", "routing_probability": 1 }
+  ],
+  "arrival_process": {
+    "distribution": { "type": "exponential", "params": { "mean": 1.9 } },
+    "entry_station_id": "yikama"
+  },
+  "simulation_duration_minutes": 10000,
+  "warmup_period_minutes": 500,
+  "num_replications": 30,
+  "random_seed": 42
+}

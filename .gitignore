@@ -1,0 +1,44 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Sanal ortamlar
+venv/
+.venv/
+env/
+ENV/
+
+# Test ve tip denetimi önbellekleri
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# --- Node / frontend ---
+# Ayrıntılı kurallar frontend/.gitignore içinde; buradakiler yedek amaçlıdır.
+node_modules/
+frontend/dist/
+
+# --- Ortam değişkenleri ---
+# Sunucu adresleri ve olası anahtarlar depoya girmemelidir.
+.env
+.env.*
+!.env.example
+
+# --- Editör ve işletim sistemi ---
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+desktop.ini

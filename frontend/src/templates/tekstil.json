@@ -1,0 +1,49 @@
+{
+  "stations": [
+    {
+      "id": "kesim",
+      "name": "Kesim İstasyonu",
+      "num_servers": 2,
+      "service_time_distribution": {
+        "type": "normal",
+        "params": { "mean": 3, "std": 0.5 }
+      },
+      "buffer_capacity_before": -1,
+      "scrap_rate": 0
+    },
+    {
+      "id": "dikis",
+      "name": "Dikiş Hattı",
+      "num_servers": 5,
+      "service_time_distribution": {
+        "type": "triangular",
+        "params": { "min": 4, "mode": 6, "max": 9 }
+      },
+      "buffer_capacity_before": -1,
+      "scrap_rate": 0.02
+    },
+    {
+      "id": "kalite",
+      "name": "Kalite Kontrol",
+      "num_servers": 1,
+      "service_time_distribution": {
+        "type": "exponential",
+        "params": { "mean": 2 }
+      },
+      "buffer_capacity_before": -1,
+      "scrap_rate": 0
+    }
+  ],
+  "connections": [
+    { "from_station_id": "kesim", "to_station_id": "dikis", "routing_probability": 1 },
+    { "from_station_id": "dikis", "to_station_id": "kalite", "routing_probability": 1 }
+  ],
+  "arrival_process": {
+    "distribution": { "type": "exponential", "params": { "mean": 2.5 } },
+    "entry_station_id": "kesim"
+  },
+  "simulation_duration_minutes": 10000,
+  "warmup_period_minutes": 500,
+  "num_replications": 30,
+  "random_seed": 42
+}
