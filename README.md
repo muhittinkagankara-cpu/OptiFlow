@@ -84,9 +84,12 @@ Arayüz `http://localhost:5173` adresinde açılır.
 > uyarı gösterir; model kurabilir ama çalıştıramazsınız.
 >
 > Backend'deki CORS ayarı `http://localhost:5173` ve `http://127.0.0.1:5173`
-> adreslerine izin verir. Frontend'i başka bir portta çalıştırırsanız
-> `simulation_engine/api/simulation_service.py` içindeki `ALLOWED_ORIGINS`
-> listesini güncellemeniz gerekir.
+> adreslerine izin verir. Frontend'i başka bir adreste çalıştırıyorsanız
+> `FRONTEND_ORIGINS` ortam değişkenine o adresi ekleyin; kaynak kodu
+> düzenlemeye gerek yoktur.
+>
+> Yerelde `DATABASE_URL` tanımlı olmadığı için sonuçlar bellekte tutulur ve
+> sunucuyu yeniden başlattığınızda kaybolur. Bu beklenen davranıştır.
 
 ### Üretim derlemesi
 
@@ -161,7 +164,20 @@ Vercel'de aynı depoyu içe aktarın ve **Root Directory** olarak `frontend`
 seçin. Derleme komutu ve çıktı dizini `frontend/vercel.json` içinde tanımlıdır
 (`npm run build`, `dist`).
 
-### 3. CORS — backend'e frontend adresini tanıtın
+### 3. Veritabanı — sonuçların kalıcı olması
+
+Railway projesine bir **PostgreSQL** servisi ekleyin. Railway `DATABASE_URL`
+değişkenini otomatik tanımlar; uygulama bunu görünce sonuçları veritabanına
+yazar, tabloyu ilk çalıştırmada kendisi oluşturur.
+
+Bu adım atlanırsa uygulama çalışmaya devam eder ama sonuçlar bellekte tutulur
+ve **sunucu her yeniden başladığında kaybolur** — kullanıcı daha önce
+çalıştırdığı bir simülasyonun doğrulama raporunu açmak istediğinde "bulunamadı"
+hatası alır.
+
+Kayıtlar 30 gün saklanır; süresi dolanlar her yeni kayıt eklendiğinde silinir.
+
+### 4. CORS — backend'e frontend adresini tanıtın
 
 Railway'de bir ortam değişkeni tanımlayın:
 
@@ -178,6 +194,7 @@ için kaynak kodu düzenlemek ve yeniden dağıtmak gerekmez.
 | Değişken | Nerede | Açıklama |
 |---|---|---|
 | `PORT` | Railway | Platform otomatik atar; elle tanımlamayın |
+| `DATABASE_URL` | Railway | PostgreSQL servisi eklenince otomatik tanımlanır. Yoksa sonuçlar bellekte tutulur |
 | `FRONTEND_ORIGINS` | Railway | CORS'a eklenecek frontend adresleri (virgülle ayrılmış) |
 | `VITE_API_BASE_URL` | Vercel / `.env.production` | Arayüzün bağlanacağı backend adresi |
 
@@ -196,7 +213,9 @@ simulation_engine/
 ├── distributions/   Olasılık dağılımları (ters dönüşümle örnekleme)
 ├── analytics/       Kuyruk teorisi, Little's Law, OEE, TOC, Monte Carlo
 ├── validation/      Analitik doğrulama test paketi
-├── api/             FastAPI servis katmanı
+├── api/
+│   ├── simulation_service.py  FastAPI uç noktaları
+│   └── storage.py             Bellek ve veritabanı depoları (aynı arayüz)
 └── models/          Pydantic veri modelleri
 
 frontend/src/
@@ -229,14 +248,15 @@ bir kestirimidir ve doğru çalışan bir motoru bile sık sık başarısız gö
 
 ## Bilinen sınırlar
 
-- Simülasyon sonuçları sunucu belleğinde tutulur (en fazla 200 kayıt, FIFO).
-  Sunucu yeniden başlarsa kayıtlar kaybolur ve çok işçili bir dağıtımda
-  (`uvicorn --workers 4`) bir işçinin ürettiği kimlik diğerinden okunamaz.
-  Üretim dağıtımı için `SimulationStore` bir veritabanıyla değiştirilmelidir.
-  **Yayına alınmış demoda bunun somut sonucu şudur:** sunucu uyku moduna geçip
-  uyandığında daha önce alınmış bir sonucun doğrulama raporu artık okunamaz ve
-  kullanıcı "bu simülasyon bulunamadı" mesajı görür. Demo öncesinde servisi bir
-  kez uyandırmak bu riski azaltır.
+- `DATABASE_URL` tanımlı **değilse** sonuçlar bellekte tutulur (en fazla 200
+  kayıt, FIFO) ve sunucu yeniden başladığında kaybolur. Yerel geliştirmede bu
+  beklenen davranıştır; yayına alınmış bir kurulumda PostgreSQL eklenmelidir.
+- Veritabanı şeması `create_all` ile oluşturulur, göç (migration) aracı
+  kullanılmaz. Tek tablo ve JSON sütunlar olduğu için içerik değiştiğinde şema
+  değişmez; şema gerçekten değişirse Alembic eklemek gerekir.
+- Sonsuz değerler JSON'a yazılamadığı için sonlu bir sınıra çevrilir. Yalnızca
+  uç durumları etkiler (ör. hiçbir parçanın ulaşamadığı bir istasyonun kapasitesi
+  sonsuz görünür) ve dönüşüm kayıplıdır.
 - **Hız sınırlaması (rate limiting) yoktur.** Demo aşaması için kabul edilebilir
   ancak gerçek müşterilere açılmadan önce eklenmelidir: her istek bir
   simülasyon çalıştırdığı için CPU maliyeti yüksektir ve kötü niyetli olmayan

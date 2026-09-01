@@ -7,3 +7,9 @@
 pydantic>=2.6,<3.0
 fastapi>=0.110
 uvicorn[standard]>=0.29
+
+# Kalici depolama. DATABASE_URL tanimli degilse ikisi de kullanilmaz ve
+# sonuclar bellekte tutulur; yine de kurulu olmalari gerekir cunku depolama
+# katmani ice aktarilirken SQLAlchemy'ye ihtiyac duyar.
+sqlalchemy>=2.0
+psycopg2-binary>=2.9

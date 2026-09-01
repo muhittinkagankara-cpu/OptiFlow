@@ -39,12 +39,12 @@ kestirilir ve `MAX_ESTIMATED_EVENTS` sınırını aşan istekler reddedilir. Bu
 olmadan tek bir istek (ör. 10 milyon dakikalık, 100 replikasyonlu bir senaryo)
 sunucuyu saatlerce meşgul edebilirdi.
 
-**Depolama.** Simülasyon sonuçları süreç belleğinde tutulur (`SimulationStore`).
-Bu bilinçli bir sadeleştirmedir: şartnamede kalıcı depolama gereksinimi yoktur.
-Sonuçlar sunucu yeniden başlatıldığında kaybolur ve çok süreçli bir dağıtımda
-(ör. `uvicorn --workers 4`) bir işçinin ürettiği kimlik diğerinden okunamaz.
-Üretim dağıtımı için bu deponun Redis veya bir veritabanı ile değiştirilmesi
-gerekir; `get_store` bağımlılığı tam da bunu kolaylaştırmak için vardır.
+**Depolama.** Sonuçlar `api.storage` katmanında saklanır. `DATABASE_URL`
+tanımlıysa kalıcı bir veritabanı, değilse süreç belleği kullanılır; iki deponun
+arayüzü aynı olduğu için bu modülde hiçbir dallanma yoktur. Kalıcı depo, sunucu
+yeniden başladığında sonuçların kaybolmasını ve çok işçili bir dağıtımda
+(`uvicorn --workers 4`) bir işçinin ürettiği kimliğin diğerinden okunamamasını
+önler.
 
 Çalıştırma
 ----------
@@ -60,10 +60,7 @@ import logging
 import math
 import os
 import time
-import uuid
-from collections import OrderedDict
-from dataclasses import dataclass, field
-from typing import Dict, List, Sequence
+from typing import Dict, List, Sequence, Union
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Path, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -79,6 +76,14 @@ from simulation_engine.analytics.monte_carlo import (
 )
 from simulation_engine.analytics.oee import compute_oee_report
 from simulation_engine.analytics.queueing_theory import mmc_metrics
+from simulation_engine.api.storage import (
+    MAX_STORED_SIMULATIONS,
+    DatabaseSimulationStore,
+    SimulationStore,
+    StoredSimulation,
+    create_simulation_store,
+    new_simulation_id,
+)
 from simulation_engine.models.schemas import (
     AnalyticalStationComparison,
     BottleneckAnalysis,
@@ -116,9 +121,10 @@ EVENTS_PER_ENTITY_PER_STATION: int = 2
 #: `POST /api/simulations/compare` ucunda kabul edilen azami senaryo sayısı.
 MAX_COMPARISON_SCENARIOS: int = 10
 
-#: Bellekte tutulan azami simülasyon sayısı. Sınır aşıldığında en eski kayıt
-#: düşürülür (FIFO).
-MAX_STORED_SIMULATIONS: int = 200
+#: Depo türlerinin ortak arayüzü. `SimulationStore` (bellek) ve
+#: `DatabaseSimulationStore` (kalıcı) aynı metotları sunar; uç noktalar
+#: aralarındaki farkı görmez.
+SimulationStoreProtocol = Union[SimulationStore, DatabaseSimulationStore]
 
 #: Analitik kuyruk modeliyle karşılaştırmada kabul edilen azami bağıl sapma.
 ANALYTICAL_TOLERANCE_PCT: float = 5.0
@@ -180,66 +186,15 @@ HTTP_422: int = getattr(
 # Depolama
 # --------------------------------------------------------------------------- #
 
-
-@dataclass
-class StoredSimulation:
-    """Bir koşumun, sonradan doğrulama raporu üretmeye yetecek tüm bağlamı."""
-
-    simulation_id: str
-    config: SimulationConfig
-    replications: List[ReplicationResult]
-    monte_carlo: MonteCarloReport
-    bottleneck: BottleneckAnalysis
-    oee: OEEReport
-    duration_seconds: float
-    created_at: float = field(default_factory=time.time)
+#: Uygulama düzeyinde tekil depo. `DATABASE_URL` tanımlıysa kalıcı, değilse
+#: bellek içi bir depo oluşturulur (bkz. `api.storage`). İki deponun arayüzü
+#: aynı olduğu için uç noktalar hangisinin kullanıldığını bilmez.
+#: `get_store` bağımlılığı üzerinden erişilir, böylece testler veya farklı bir
+#: dağıtım kendi deposunu geçirebilir.
+_store: SimulationStoreProtocol = create_simulation_store()
 
 
-class SimulationStore:
-    """Simülasyon sonuçlarının süreç içi deposu.
-
-    `OrderedDict` ile FIFO düşürme uygulanır: sınır aşıldığında en eski kayıt
-    silinir. Süreç belleğinde tutulduğu için sunucu yeniden başladığında
-    kayıtlar kaybolur (bkz. modül açıklamasındaki depolama notu).
-    """
-
-    def __init__(self, max_entries: int = MAX_STORED_SIMULATIONS) -> None:
-        if max_entries < 1:
-            raise ValueError(f"Depo kapasitesi en az 1 olmalidir, alinan: {max_entries}")
-        self._max_entries = max_entries
-        self._entries: "OrderedDict[str, StoredSimulation]" = OrderedDict()
-
-    def save(self, record: StoredSimulation) -> None:
-        """Kaydı depoya ekler; kapasite aşılırsa en eskisini düşürür."""
-        self._entries[record.simulation_id] = record
-        while len(self._entries) > self._max_entries:
-            evicted_id, _ = self._entries.popitem(last=False)
-            logger.info(
-                "Depo kapasitesi doldu; '%s' kimlikli simulasyon dusuruldu.", evicted_id
-            )
-
-    def get(self, simulation_id: str) -> StoredSimulation:
-        """Kimliğe göre kaydı döndürür.
-
-        Raises:
-            KeyError: Kayıt bulunamazsa.
-        """
-        return self._entries[simulation_id]
-
-    def clear(self) -> None:
-        """Depoyu boşaltır (testler için)."""
-        self._entries.clear()
-
-    def __len__(self) -> int:
-        return len(self._entries)
-
-
-#: Uygulama düzeyinde tekil depo. `get_store` bağımlılığı üzerinden erişilir,
-#: böylece testler veya farklı bir dağıtım kendi deposunu geçirebilir.
-_store = SimulationStore()
-
-
-def get_store() -> SimulationStore:
+def get_store() -> SimulationStoreProtocol:
     """Depo bağımlılığı."""
     return _store
 
@@ -361,7 +316,7 @@ def _execute_scenario(config: SimulationConfig) -> StoredSimulation:
     # zaten güven aralıklarıyla ayrıca raporlanır.
     representative = replications[0]
     return StoredSimulation(
-        simulation_id=uuid.uuid4().hex,
+        simulation_id=new_simulation_id(),
         config=config,
         replications=replications,
         monte_carlo=monte_carlo,
@@ -749,7 +704,7 @@ app.add_middleware(
 )
 async def run_simulation(
     config: SimulationConfig = Body(...),
-    store: SimulationStore = Depends(get_store),
+    store: SimulationStoreProtocol = Depends(get_store),
 ) -> SimulationRunResponse:
     """Senaryoyu `num_replications` kez çalıştırıp güven aralıklı sonuç döndürür.
 
@@ -788,7 +743,7 @@ async def run_simulation(
 )
 async def get_validation_report(
     simulation_id: str = Path(..., description="`/run` ucundan donen kimlik"),
-    store: SimulationStore = Depends(get_store),
+    store: SimulationStoreProtocol = Depends(get_store),
 ) -> ValidationReportResponse:
     """Bir koşumun analitik doğrulama sonuçlarını döndürür.
 
@@ -824,7 +779,7 @@ async def get_validation_report(
 )
 async def compare_simulations(
     configs: List[SimulationConfig] = Body(..., min_length=2),
-    store: SimulationStore = Depends(get_store),
+    store: SimulationStoreProtocol = Depends(get_store),
 ) -> ComparisonResponse:
     """Senaryoları çalıştırıp karşılaştırmalı tablo ve anlamlılık testi üretir.
 
