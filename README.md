@@ -114,7 +114,7 @@ npm run build
 
 ## Testleri çalıştırma
 
-### Backend (277 test)
+### Backend (381 test)
 
 Proje kök dizininde:
 
@@ -290,5 +290,11 @@ bir kestirimidir ve doğru çalışan bir motoru bile sık sık başarısız gö
   henüz yoktur. Bu özelliğin yerini tutan devre dışı form, kurulum akışı süreç
   editörü etrafında sadeleştirilirken kaldırıldı; modeller şema üzerinde
   düzenlenir.
+- Doygun bir istasyonda Performance, ölçüm penceresinin izin verdiği tavana
+  dayanır ve tam %100 raporlanabilir. Net çalışma süresi üretim adedini
+  dağılımın teorik ortalamasıyla çarparak bulunduğu için ham oran sonlu koşum
+  uzunluğundan gelen dalgalanmayla 1'i aşabilir; OEE tanım gereği %100'ü
+  aşamayacağından bu değer sınırlanır. Sapma kayda değerse yanıtta bildirilir
+  ve simülasyon süresini uzatmak sapmayı küçültür.
 - Frontend paket boyutu grafik kütüphanesi nedeniyle 500 kB'ı aşar; sonuç
   sayfasını `React.lazy` ile ayırmak bunu düşürür.

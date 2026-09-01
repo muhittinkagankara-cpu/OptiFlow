@@ -96,9 +96,17 @@ WORLD_CLASS_OEE: float = 0.85
 #: kabul edilen kayan nokta toleransı.
 IDENTITY_TOLERANCE: float = 1e-9
 
-#: Performance bileşeni bu değerin üzerine çıkarsa ideal çevrim süresi gerçek
-#: çevrim süresinden büyük demektir; kullanıcı uyarılır.
-PERFORMANCE_UPPER_SANITY_LIMIT: float = 1.0 + 1e-6
+#: Ham Performance bu oranı aşarsa kullanıcıya bildirilir.
+#:
+#: Ham değerin 1'i biraz aşması normaldir ve modelde bir hata değildir: net
+#: çalışma süresi üretim adedini dağılımın **teorik** ortalamasıyla çarparak
+#: bulunur, çalışma süresi ise **gerçek** geçen süredir. Doygun bir istasyonda
+#: gerçekleşen ortalama tesadüfen teorik ortalamanın altına düşerse oran 1'i
+#: aşar. Bu, koşum uzunluğu arttıkça kaybolan bir örnekleme dalgalanmasıdır;
+#: her seferinde uyarmak kullanıcıyı düzeltilecek bir şey aramaya iterdi.
+#: Yalnızca sapma kayda değer olduğunda, koşumun kısalığına işaret etmek için
+#: bildirilir.
+PERFORMANCE_REPORTING_LIMIT: float = 1.02
 
 #: Bir kaybın teşhis metninde "baskın neden" sayılması için gereken asgari pay.
 DOMINANT_CAUSE_SHARE: float = 0.5
@@ -134,8 +142,17 @@ def compute_station_oee(metrics: StationRunMetrics) -> StationOEE:
         )
 
     # --- Zaman merdiveni ---
-    net_operating_time = units_produced * metrics.ideal_cycle_time
-    fully_productive_time = units_good * metrics.ideal_cycle_time
+    #
+    # Net çalışma süresi, tanımı gereği çalışma süresinin bir **alt kümesidir**:
+    # makine, saatin izin verdiğinden fazla üretim yapmış olamaz. Ham çarpım bu
+    # sınırı aşabilir, çünkü üretim adedi dağılımın teorik ortalamasıyla
+    # çarpılırken çalışma süresi gerçek geçen süredir; doygun bir istasyonda
+    # gerçekleşen ortalamanın teorik ortalamanın altına düşmesi oranı 1'in
+    # üzerine taşır. Sınırlanmazsa Performance ve dolayısıyla OEE %100'ü aşar —
+    # tanım gereği imkânsız bir değer, ve raporun tamamına duyulan güveni
+    # zedeleyen türden bir sayı.
+    raw_net_operating_time = units_produced * metrics.ideal_cycle_time
+    net_operating_time = min(raw_net_operating_time, run_time)
 
     # --- Üç bileşen ---
     availability = run_time / planned if planned > 0.0 else 0.0
@@ -143,11 +160,24 @@ def compute_station_oee(metrics: StationRunMetrics) -> StationOEE:
     quality = units_good / units_produced if units_produced > 0 else 1.0
     oee = availability * performance * quality
 
-    if performance > PERFORMANCE_UPPER_SANITY_LIMIT:
+    # Kalite kaybı net çalışma süresiyle aynı ölçekte kalmalıdır; aksi hâlde
+    # sınırlama sonrası `oee == fully_productive_time / planned` özdeşliği
+    # bozulur ve zaman merdiveni bileşenlerle çelişirdi.
+    fully_productive_time = net_operating_time * quality
+
+    raw_performance = (
+        raw_net_operating_time / run_time if run_time > 0.0 else 0.0
+    )
+    if raw_performance > PERFORMANCE_REPORTING_LIMIT:
         warnings.append(
-            f"Performance = {performance:.4f} > 1. Ideal cevrim suresi "
-            f"({metrics.ideal_cycle_time:.4f} dk) gercek cevrim suresinden buyuk "
-            f"gorunuyor; islem suresi dagiliminin ortalamasini kontrol edin."
+            f"Olculen uretim, penceredeki calisma suresinin izin verdiginden "
+            f"%{(raw_performance - 1.0) * 100:.1f} fazla cikti ve Performance "
+            f"%100'de sinirlandi. Bu bir model hatasi degil, sonlu kosum "
+            f"uzunlugundan gelen ornekleme dalgalanmasidir: istasyon doygun "
+            f"calisirken gerceklesen ortalama islem suresi "
+            f"({metrics.avg_service_time:.4f} dk) dagilimin ortalamasinin "
+            f"({metrics.ideal_cycle_time:.4f} dk) altinda kaldi. Simulasyon "
+            f"suresini uzatmak sapmayi kucultur."
         )
     if planned <= 0.0:
         warnings.append(
