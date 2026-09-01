@@ -632,6 +632,71 @@ def test_cors_rejects_unknown_origin(client: TestClient) -> None:
     assert "access-control-allow-origin" not in response.headers
 
 
+def test_resolve_allowed_origins_reads_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Yayina alinmis frontend adresi ortam degiskeninden okunmali.
+
+    Adres kodda sabit olsaydi, frontend her yeni adrese tasindiginda kaynak
+    kodu duzenleyip backend'i yeniden dagitmak gerekirdi.
+    """
+    from simulation_engine.api.simulation_service import (
+        DEVELOPMENT_ORIGINS,
+        FRONTEND_ORIGINS_ENV,
+        resolve_allowed_origins,
+    )
+
+    monkeypatch.setenv(FRONTEND_ORIGINS_ENV, "https://optiflow.vercel.app")
+    origins = resolve_allowed_origins()
+
+    assert "https://optiflow.vercel.app" in origins
+    # Gelistirme adresleri her zaman korunmali; aksi halde yayina alindiginda
+    # yerel gelistirme calismaz hale gelirdi.
+    for development_origin in DEVELOPMENT_ORIGINS:
+        assert development_origin in origins
+
+
+def test_resolve_allowed_origins_accepts_multiple_and_normalizes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Virgulle ayrilmis adresler bolunmeli, bosluk ve sondaki egik cizgi atilmali.
+
+    Vercel her dala ayri bir onizleme adresi verir; birden fazla adres
+    tanimlanabilmesi bu yuzden gereklidir. Sondaki egik cizgi temizlenmezse
+    tarayici adresi farkli bir kaynak sayar ve CORS sessizce basarisiz olur.
+    """
+    from simulation_engine.api.simulation_service import (
+        FRONTEND_ORIGINS_ENV,
+        resolve_allowed_origins,
+    )
+
+    monkeypatch.setenv(
+        FRONTEND_ORIGINS_ENV,
+        " https://optiflow.vercel.app/ , https://optiflow-git-main.vercel.app ",
+    )
+    origins = resolve_allowed_origins()
+
+    assert "https://optiflow.vercel.app" in origins
+    assert "https://optiflow-git-main.vercel.app" in origins
+    assert not any(origin.endswith("/") for origin in origins)
+
+
+def test_resolve_allowed_origins_without_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Degisken tanimli degilse yalnizca gelistirme adresleri bulunmali."""
+    from simulation_engine.api.simulation_service import (
+        DEVELOPMENT_ORIGINS,
+        FRONTEND_ORIGINS_ENV,
+        resolve_allowed_origins,
+    )
+
+    monkeypatch.delenv(FRONTEND_ORIGINS_ENV, raising=False)
+    assert resolve_allowed_origins() == DEVELOPMENT_ORIGINS
+    # Joker hicbir kosulda kullanilmamali.
+    assert "*" not in resolve_allowed_origins()
+
+
 def test_openapi_schema_exposes_all_three_endpoints(client: TestClient) -> None:
     """Sartnamedeki uc uc da OpenAPI semasinda bulunmali."""
     schema = client.get("/openapi.json").json()

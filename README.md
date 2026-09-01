@@ -38,12 +38,17 @@ doğrusu "1.250 birim (%95 güven aralığı: 1.180 – 1.320)" demektir.
 Proje kök dizininde:
 
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
 ```bash
 uvicorn simulation_engine.api.simulation_service:app --reload
 ```
+
+> `requirements.txt` yalnızca sunucunun çalışması için gerekenleri içerir;
+> `requirements-dev.txt` bunlara ek olarak test araçlarını kurar ve geliştirme
+> için doğru olan dosyadır. Yayına alma ortamları `requirements.txt`
+> kullanır — sunucuda pytest kurmak gereksizdir.
 
 Servis `http://127.0.0.1:8000` adresinde çalışır. Etkileşimli API
 dokümantasyonu: `http://127.0.0.1:8000/docs`
@@ -124,6 +129,61 @@ Tip denetimi:
 npx tsc --noEmit -p tsconfig.app.json
 ```
 
+## Yayına alma
+
+Backend Railway'e, frontend Vercel'e dağıtılır. **Sıra önemlidir:** frontend'in
+backend adresini bilmesi, backend'in de frontend adresine izin vermesi gerekir.
+
+### 1. Backend — Railway
+
+Railway'de GitHub reposundan yeni bir proje oluşturun. Depodaki `Procfile`
+başlatma komutunu, `.python-version` ise Python sürümünü belirler; ek
+yapılandırma gerekmez.
+
+```
+web: uvicorn simulation_engine.api.simulation_service:app --host 0.0.0.0 --port $PORT
+```
+
+Uygulama, platformun atadığı `PORT` değişkenini okur ve `0.0.0.0` adresine
+bağlanır. Dağıtım bitince size `https://...up.railway.app` biçiminde bir adres
+verilir.
+
+### 2. Frontend — Vercel
+
+`frontend/.env.production` dosyasındaki değişkene Railway adresini yazın
+(sonda eğik çizgi olmadan):
+
+```
+VITE_API_BASE_URL=https://optiflow-backend.up.railway.app
+```
+
+Vercel'de aynı depoyu içe aktarın ve **Root Directory** olarak `frontend`
+seçin. Derleme komutu ve çıktı dizini `frontend/vercel.json` içinde tanımlıdır
+(`npm run build`, `dist`).
+
+### 3. CORS — backend'e frontend adresini tanıtın
+
+Railway'de bir ortam değişkeni tanımlayın:
+
+```
+FRONTEND_ORIGINS=https://optiflow.vercel.app
+```
+
+Birden çok adres virgülle ayrılabilir (Vercel her dala ayrı bir önizleme
+adresi verir). Adres kodda sabit değildir; bu yüzden yeni bir adres eklemek
+için kaynak kodu düzenlemek ve yeniden dağıtmak gerekmez.
+
+### Ortam değişkenleri
+
+| Değişken | Nerede | Açıklama |
+|---|---|---|
+| `PORT` | Railway | Platform otomatik atar; elle tanımlamayın |
+| `FRONTEND_ORIGINS` | Railway | CORS'a eklenecek frontend adresleri (virgülle ayrılmış) |
+| `VITE_API_BASE_URL` | Vercel / `.env.production` | Arayüzün bağlanacağı backend adresi |
+
+> `VITE_` önekli değişkenler derleme sırasında paketin içine gömülür ve
+> tarayıcıya iner. Bu dosyalara **hiçbir zaman** gizli anahtar yazmayın.
+
 ## Proje yapısı
 
 ```
@@ -173,6 +233,18 @@ bir kestirimidir ve doğru çalışan bir motoru bile sık sık başarısız gö
   Sunucu yeniden başlarsa kayıtlar kaybolur ve çok işçili bir dağıtımda
   (`uvicorn --workers 4`) bir işçinin ürettiği kimlik diğerinden okunamaz.
   Üretim dağıtımı için `SimulationStore` bir veritabanıyla değiştirilmelidir.
+  **Yayına alınmış demoda bunun somut sonucu şudur:** sunucu uyku moduna geçip
+  uyandığında daha önce alınmış bir sonucun doğrulama raporu artık okunamaz ve
+  kullanıcı "bu simülasyon bulunamadı" mesajı görür. Demo öncesinde servisi bir
+  kez uyandırmak bu riski azaltır.
+- **Hız sınırlaması (rate limiting) yoktur.** Demo aşaması için kabul edilebilir
+  ancak gerçek müşterilere açılmadan önce eklenmelidir: her istek bir
+  simülasyon çalıştırdığı için CPU maliyeti yüksektir ve kötü niyetli olmayan
+  birkaç eşzamanlı istek bile servisi yavaşlatabilir. `MAX_ESTIMATED_EVENTS`
+  sınırı tek bir isteğin boyutunu sınırlar, istek **sayısını** değil.
+- **`/docs` herkese açıktır.** Demo aşamasında bilinçli bir tercihtir; API'yi
+  incelemek isteyenlere yardımcı olur ve gizli bilgi açığa çıkarmaz. Kapatmak
+  için `FastAPI(...)` çağrısına `docs_url=None, redoc_url=None` eklemek yeterlidir.
 - Sihirbazdaki "Analiz Et" (doğal dilden model kurma) özelliği henüz hazır
   değildir; modeller form alanlarıyla veya görsel editörle düzenlenir.
 - Frontend paket boyutu grafik kütüphanesi nedeniyle 500 kB'ı aşar; sonuç

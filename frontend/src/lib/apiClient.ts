@@ -19,12 +19,25 @@ import {
   translateErrorDetails,
 } from "./errorMessages";
 
+/** Geliştirme ortamında kullanılan varsayılan backend adresi. */
+const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+
 /**
- * Backend adresi. Geliştirmede uvicorn'un varsayılan portu kullanılır;
- * dağıtımda `VITE_API_BASE_URL` ortam değişkeniyle değiştirilebilir.
+ * Backend adresi.
+ *
+ * Derleme sırasında `VITE_API_BASE_URL` ortam değişkeninden okunur; yerelde
+ * bu değişken tanımlı olmadığı için varsayılana düşer. Vite ortam
+ * değişkenlerini derleme anında koda gömdüğü için, yayına alınmış paket zaten
+ * doğru adresi içerir.
+ *
+ * Boş metin ayrıca denetlenir: tanımsız bir değişken `??` ile varsayılana
+ * düşer ama **boş** bir değişken düşmez ve tüm istekler göreli adrese giderek
+ * sessizce 404 üretirdi. Sondaki eğik çizgi de temizlenir; aksi hâlde
+ * adresler `https://api.example.com//api/simulations/run` biçiminde oluşur.
  */
 export const API_BASE_URL: string =
-  import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000";
+  import.meta.env.VITE_API_BASE_URL?.trim().replace(/\/+$/, "") ||
+  DEFAULT_API_BASE_URL;
 
 const SIMULATIONS_PATH = "/api/simulations";
 

@@ -30,10 +30,20 @@ node_modules/
 frontend/dist/
 
 # --- Ortam değişkenleri ---
-# Sunucu adresleri ve olası anahtarlar depoya girmemelidir.
+# Gizli değer taşıyabilecek dosyalar depoya girmemelidir.
 .env
 .env.*
+.env.local
+
+# İki istisna vardır ve ikisi de yalnızca herkese açık bilgi taşır:
+#   .env.example    — hangi değişkenlerin bulunduğunu belgeler
+#   .env.production — yayına alınmış frontend'in bağlanacağı API adresi
+# Vite'ın `VITE_` önekli değişkenleri derleme sırasında paketin içine gömülür;
+# yani tarayıcıya inen koddan zaten okunabilirler. Bu nedenle bu dosyalara
+# **hiçbir zaman** gizli anahtar yazılmamalıdır — gizli olması gereken her şey
+# backend tarafında kalmalıdır.
 !.env.example
+!.env.production
 
 # --- Editör ve işletim sistemi ---
 .vscode/

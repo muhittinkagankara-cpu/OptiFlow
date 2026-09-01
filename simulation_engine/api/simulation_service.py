@@ -58,6 +58,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import math
+import os
 import time
 import uuid
 from collections import OrderedDict
@@ -124,16 +125,48 @@ ANALYTICAL_TOLERANCE_PCT: float = 5.0
 
 API_PREFIX: str = "/api/simulations"
 
-#: Tarayıcıdan doğrudan istek atmasına izin verilen kaynaklar. Vite geliştirme
-#: sunucusu 5173 portunda çalışır; hem `localhost` hem `127.0.0.1` yazımı
-#: listelenir, çünkü tarayıcılar bu ikisini farklı kaynak sayar.
-#: Joker (`*`) bilinçli olarak kullanılmaz: gereğinden geniş bir CORS ayarı,
-#: kullanıcının tarayıcısındaki herhangi bir sitenin bu API'yi çağırmasına
-#: izin verirdi.
-ALLOWED_ORIGINS: List[str] = [
+#: Geliştirme ortamında tarayıcıdan istek atmasına izin verilen kaynaklar.
+#: Vite geliştirme sunucusu 5173 portunda çalışır; hem `localhost` hem
+#: `127.0.0.1` yazımı listelenir, çünkü tarayıcılar bu ikisini farklı kaynak
+#: sayar.
+DEVELOPMENT_ORIGINS: List[str] = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
 ]
+
+#: Yayına alınmış frontend adreslerinin okunduğu ortam değişkeni. Virgülle
+#: ayrılmış birden çok adres verilebilir, örneğin:
+#:   FRONTEND_ORIGINS=https://optiflow.vercel.app,https://optiflow-git-main.vercel.app
+FRONTEND_ORIGINS_ENV: str = "FRONTEND_ORIGINS"
+
+
+def resolve_allowed_origins() -> List[str]:
+    """Tarayıcıdan doğrudan istek atmasına izin verilen kaynakları belirler.
+
+    Geliştirme adresleri her zaman listededir; yayına alınmış frontend adresi
+    `FRONTEND_ORIGINS` ortam değişkeninden okunur.
+
+    Adresin koda gömülmek yerine ortam değişkeninden gelmesi bilinçlidir:
+    frontend yayına alındığında adresi öğrenilir ve backend'in bunu tanıması
+    gerekir. Adres kodda sabit olsaydı, her adres değişikliğinde kaynak kodu
+    düzenleyip yeniden dağıtmak gerekirdi; ortam değişkeniyle yalnızca
+    değişkeni güncellemek yeterlidir.
+
+    Joker (`*`) hiçbir durumda kullanılmaz: gereğinden geniş bir CORS ayarı,
+    kullanıcının tarayıcısındaki herhangi bir sitenin bu API'yi çağırmasına
+    izin verirdi.
+    """
+    origins = list(DEVELOPMENT_ORIGINS)
+    configured = os.environ.get(FRONTEND_ORIGINS_ENV, "")
+    for origin in configured.split(","):
+        cleaned = origin.strip().rstrip("/")
+        if cleaned and cleaned not in origins:
+            origins.append(cleaned)
+    return origins
+
+
+#: Uygulama başlarken çözülen kaynak listesi.
+ALLOWED_ORIGINS: List[str] = resolve_allowed_origins()
 
 #: 422 durum kodu. Starlette bu sabiti `HTTP_422_UNPROCESSABLE_ENTITY`'den
 #: `HTTP_422_UNPROCESSABLE_CONTENT`'e taşıdı; eski ada erişmek yeni sürümlerde
@@ -830,3 +863,31 @@ async def compare_simulations(
     for record in records:
         store.save(record)
     return _build_comparison_response(records, elapsed)
+
+
+# --------------------------------------------------------------------------- #
+# Doğrudan çalıştırma (yayına alma ortamları için)
+# --------------------------------------------------------------------------- #
+
+#: Yerelde kullanılan varsayılan port. Railway ve Render gibi platformlar
+#: uygulamanın hangi portu dinleyeceğini `PORT` ortam değişkeniyle bildirir;
+#: bu değişken yok sayılırsa platform uygulamaya ulaşamaz ve dağıtım
+#: "sağlıksız" olarak işaretlenir.
+DEFAULT_PORT: int = 8000
+
+
+def main() -> None:
+    """Uygulamayı platformun atadığı portta başlatır.
+
+    `0.0.0.0` adresine bağlanmak zorunludur: kapsayıcı içinde `127.0.0.1`
+    yalnızca kapsayıcının kendisinden erişilebilir olur ve dışarıdan gelen
+    istekler kapsayıcıya hiç ulaşmaz.
+    """
+    import uvicorn
+
+    port = int(os.environ.get("PORT", DEFAULT_PORT))
+    uvicorn.run(app, host="0.0.0.0", port=port)
+
+
+if __name__ == "__main__":
+    main()

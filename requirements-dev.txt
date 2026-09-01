@@ -1,0 +1,7 @@
+# Gelistirme ve test bagimliliklari.
+# Kurulum: pip install -r requirements-dev.txt  (calisma zamani paketlerini de kurar)
+
+-r requirements.txt
+
+pytest>=8.0
+httpx>=0.27
