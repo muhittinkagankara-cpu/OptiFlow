@@ -31,7 +31,9 @@ import { SIMULATION_DEPTH_OPTIONS } from "../../types/simulationTypes";
 import {
   ARRIVAL_NODE_ID,
   buildFlowFromConfig,
+  buildLineGroups,
   buildSimulationConfig,
+  collectLineNames,
   createStationNode,
   isStationNode,
   type FlowEdge,
@@ -43,11 +45,24 @@ import { GENERIC_ERROR_MESSAGE, summarizeWarning } from "../../lib/errorMessages
 import { ParameterPanel } from "./ParameterPanel";
 import { Toolbar } from "./Toolbar";
 import { ArrivalNode } from "./nodes/ArrivalNode";
+import { LineGroupNode } from "./nodes/LineGroupNode";
 import { StationNode } from "./nodes/StationNode";
 import { WarningIcon } from "../shared/icons";
 
 /** Yeni eklenen istasyonun canvas üzerindeki başlangıç konumu. */
 const NEW_NODE_POSITION = { x: 420, y: 420 };
+/**
+ * Yeni istasyonlar ızgaraya dizilir: satır başına bu kadar kutu, sonra alt
+ * satıra geçilir.
+ *
+ * Önceden her kutu bir öncekinden 30 piksel sağa, 20 piksel aşağı
+ * kaydırılıyordu. Bu, birkaç istasyonda hoş bir yelpaze veriyordu ama kutu
+ * genişliği 220 pikselin üzerinde olduğu için 15-20 istasyonluk gerçek bir
+ * fabrikada çapraz bir yığın oluşuyor ve kutular birbirini örtüyordu.
+ */
+const NEW_NODE_COLUMNS = 4;
+const NEW_NODE_STEP_X = 260;
+const NEW_NODE_STEP_Y = 130;
 
 interface ProcessEditorProps {
   initialConfig: SimulationConfig;
@@ -133,12 +148,48 @@ function EditorCanvas({
   const [warnings, setWarnings] = useState<string[]>([]);
 
   const nodeTypes = useMemo(
-    () => ({ station: StationNode, arrival: ArrivalNode }),
+    () => ({ station: StationNode, arrival: ArrivalNode, lineGroup: LineGroupNode }),
     [],
   );
 
   const flowNodes = nodes as FlowNode[];
   const flowEdges = edges as FlowEdge[];
+
+  // Hat adları parametre panelindeki otomatik tamamlamayı besler.
+  const lineNames = useMemo(() => collectLineNames(flowNodes), [flowNodes]);
+
+  /**
+   * Grup kutuları state'te tutulmaz, her renderda istasyonların konumundan
+   * türetilir. State'te tutulsalardı kullanıcı bir istasyonu taşıdığında kutu
+   * yerinde kalır ve elle eşitlenmeleri gerekirdi; türetilmiş olduklarında
+   * kutu istasyonu kendiliğinden izler.
+   */
+  const canvasNodes = useMemo(() => {
+    const groups = buildLineGroups(flowNodes);
+    if (groups.length === 0) {
+      return flowNodes;
+    }
+    const groupNodes = groups.map((group) => ({
+      id: `hat:${group.lineName}`,
+      type: "lineGroup",
+      position: group.position,
+      // Kutular arkada durur ve hiçbir etkileşim almaz; aksi hâlde
+      // istasyonların üstünü kapatır ve tıklamaları yutarlardı.
+      zIndex: -1,
+      draggable: false,
+      selectable: false,
+      focusable: false,
+      deletable: false,
+      // Ölçü hem node üzerinde hem style'da verilir. React Flow, iç deposunda
+      // boyutu bilinmeyen bir node'u `visibility: hidden` ile gizler; yalnızca
+      // style verilseydi kutu DOM'da olur ama hiç görünmezdi.
+      width: group.width,
+      height: group.height,
+      style: { width: group.width, height: group.height },
+      data: { lineName: group.lineName, stationCount: group.stationIds.length },
+    }));
+    return [...groupNodes, ...flowNodes];
+  }, [flowNodes]);
   const selectedNode = flowNodes.find((node) => node.id === selectedNodeId) ?? null;
   const stationCount = flowNodes.filter(isStationNode).length;
 
@@ -168,9 +219,12 @@ function EditorCanvas({
     const fresh = createStationNode(
       flowNodes.map((node) => node.id),
       {
-        // Yeni kutular üst üste binmesin diye her eklemede biraz kaydırılır.
-        x: NEW_NODE_POSITION.x + stationCount * 30,
-        y: NEW_NODE_POSITION.y + stationCount * 20,
+        // Kutular üst üste binmesin diye ızgaraya dizilir; satır dolunca
+        // alta geçilir.
+        x: NEW_NODE_POSITION.x + (stationCount % NEW_NODE_COLUMNS) * NEW_NODE_STEP_X,
+        y:
+          NEW_NODE_POSITION.y +
+          Math.floor(stationCount / NEW_NODE_COLUMNS) * NEW_NODE_STEP_Y,
       },
     );
     setNodes((current) => [...current, fresh] as typeof current);
@@ -289,7 +343,7 @@ function EditorCanvas({
       <div className="flex min-h-0 flex-1">
         <div className="relative min-w-0 flex-1">
           <ReactFlow
-            nodes={nodes}
+            nodes={canvasNodes}
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
@@ -308,7 +362,16 @@ function EditorCanvas({
               pannable
               zoomable
               className="!bottom-4 !right-4 hidden !rounded-lg !border !border-slate-200 sm:block"
-              nodeColor={(node) => (node.type === "arrival" ? "#34d399" : "#94a3b8")}
+              // Hat kutuları haritada gösterilmez: istasyonları kaplayan büyük
+              // dikdörtgenler haritayı okunmaz hâle getirirdi.
+              nodeColor={(node) =>
+                node.type === "lineGroup"
+                  ? "transparent"
+                  : node.type === "arrival"
+                    ? "#34d399"
+                    : "#94a3b8"
+              }
+              nodeStrokeWidth={0}
             />
           </ReactFlow>
 
@@ -330,6 +393,7 @@ function EditorCanvas({
         <div className="w-80 shrink-0 max-lg:hidden">
           <ParameterPanel
             selectedNode={selectedNode}
+            lineNames={lineNames}
             onUpdateStation={handleUpdateStation}
             onUpdateArrival={handleUpdateArrival}
             onDeleteStation={handleDeleteStation}
@@ -343,6 +407,7 @@ function EditorCanvas({
         <div className="max-h-[45vh] overflow-y-auto border-t border-slate-200 lg:hidden">
           <ParameterPanel
             selectedNode={selectedNode}
+            lineNames={lineNames}
             onUpdateStation={handleUpdateStation}
             onUpdateArrival={handleUpdateArrival}
             onDeleteStation={handleDeleteStation}

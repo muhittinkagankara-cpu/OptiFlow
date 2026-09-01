@@ -12,10 +12,17 @@
  * bir istasyonun OEE'si darboğazınkinden düşük çıkar, çünkü işleyecek parça
  * bulamaz. En düşük OEE'yi kısıt sanmak, kısıt olmayan istasyona yatırım
  * yaptıran klasik yerel optimizasyon hatasıdır.
+ *
+ * Tablo iki biçimde çalışır. Model gruplanmamışsa (ya da tek hat varsa) düz bir
+ * liste gösterir — üç istasyonda alt başlıklar hiçbir bilgi eklemez. Birden
+ * fazla hat varsa istasyonlar hat başlıkları altında toplanır ve her grup
+ * katlanabilir olur; yirmi satırı düz liste hâlinde göstermek kullanıcıyı
+ * boğardı.
  */
 
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type { StationMetricsResponse } from "../../types/simulationTypes";
+import type { FactorySummary } from "../../lib/factoryOverview";
 import {
   formatDecimal,
   formatMinutes,
@@ -44,13 +51,67 @@ const OEE_TEXT_COLORS: Record<Tone, string> = {
 interface StationMetricsTableProps {
   stations: StationMetricsResponse[];
   bottleneckStationId: string;
+  /** Hat bazlı özet; verilmezse ya da tek hat varsa tablo düz liste olur. */
+  summary?: FactorySummary;
+  /** Seçili hat; verildiğinde tablo yalnızca o hattı gösterir. */
+  selectedLine?: string | null;
 }
 
 export function StationMetricsTable({
   stations,
   bottleneckStationId,
+  summary,
+  selectedLine = null,
 }: StationMetricsTableProps) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const isGrouped = summary?.isGrouped ?? false;
+
+  /**
+   * Açık duran hat grupları.
+   *
+   * Varsayılan olarak yalnızca darboğazın bulunduğu hat açılır. Hepsini açık
+   * başlatmak yirmi satırlık düz listeye geri dönmek, hepsini kapalı başlatmak
+   * ise tabloyu boş göstermek olurdu.
+   */
+  const [openLines, setOpenLines] = useState<Set<string>>(() => {
+    const bottleneckLine = summary?.lines.find((line) => line.hasFactoryBottleneck);
+    return new Set(bottleneckLine ? [bottleneckLine.lineName] : []);
+  });
+
+  // Kullanıcı bir hat kartına tıkladığında tablo o hatta odaklanır.
+  useEffect(() => {
+    if (selectedLine) {
+      setOpenLines(new Set([selectedLine]));
+    }
+  }, [selectedLine]);
+
+  const visibleLines = (summary?.lines ?? []).filter(
+    (line) => selectedLine === null || line.lineName === selectedLine,
+  );
+
+  const toggleLine = (lineName: string) =>
+    setOpenLines((current) => {
+      const next = new Set(current);
+      if (next.has(lineName)) {
+        next.delete(lineName);
+      } else {
+        next.add(lineName);
+      }
+      return next;
+    });
+
+  const renderRows = (rows: StationMetricsResponse[]) =>
+    rows.map((station) => (
+      <StationRow
+        key={station.station_id}
+        station={station}
+        isBottleneck={station.station_id === bottleneckStationId}
+        isExpanded={expandedId === station.station_id}
+        onToggle={() =>
+          setExpandedId(expandedId === station.station_id ? null : station.station_id)
+        }
+      />
+    ));
 
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
@@ -83,114 +144,171 @@ export function StationMetricsTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
-            {stations.map((station) => {
-              const isBottleneck = station.station_id === bottleneckStationId;
-              const isExpanded = expandedId === station.station_id;
-              const utilTone = utilizationTone(station.utilization, isBottleneck);
-              const oeeToneValue = oeeTone(station.oee.oee);
+            {!isGrouped && renderRows(stations)}
 
-              return (
-                <Fragment key={station.station_id}>
-                  <tr
-                    onClick={() =>
-                      setExpandedId(isExpanded ? null : station.station_id)
-                    }
-                    className={`cursor-pointer transition-colors ${
-                      isBottleneck
-                        ? "bg-red-50 hover:bg-red-100/70"
-                        : "hover:bg-slate-50"
-                    }`}
-                  >
-                    <Td>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-slate-900">
-                          {station.station_name}
-                        </span>
-                        {isBottleneck && (
-                          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
-                            <WarningIcon className="h-3.5 w-3.5" />
-                            Darboğaz
-                          </span>
-                        )}
-                      </div>
-                    </Td>
-
-                    <Td>
-                      {/* Sayı ve çubuk birlikte: biri kesinlik, diğeri
-                          karşılaştırma sağlar. */}
-                      <div className="flex items-center gap-2.5">
-                        <span className="w-11 shrink-0 tabular-nums text-slate-800">
-                          {formatPercent(station.utilization)}
-                        </span>
-                        <span
-                          className="h-2 w-24 shrink-0 overflow-hidden rounded-full bg-slate-200"
-                          role="img"
-                          aria-label={`Doluluk ${formatPercent(station.utilization)}`}
-                        >
+            {isGrouped &&
+              visibleLines.map((line) => {
+                const isOpen = openLines.has(line.lineName);
+                return (
+                  <Fragment key={line.lineName}>
+                    <tr
+                      onClick={() => toggleLine(line.lineName)}
+                      className={`cursor-pointer border-y border-slate-200 transition-colors ${
+                        line.hasFactoryBottleneck
+                          ? "bg-red-50/70 hover:bg-red-100/60"
+                          : "bg-slate-50 hover:bg-slate-100"
+                      }`}
+                    >
+                      <td colSpan={6} className="px-4 py-2.5">
+                        <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                           <span
-                            className={`block h-full rounded-full ${BAR_COLORS[utilTone]}`}
-                            style={{
-                              width: `${Math.min(Math.max(station.utilization, 0), 1) * 100}%`,
-                            }}
-                          />
-                        </span>
-                      </div>
-                    </Td>
-
-                    <Td>
-                      <span className="tabular-nums text-slate-700">
-                        {formatDecimal(station.avg_queue_length)}
-                      </span>
-                      <span className="ml-1 text-xs text-slate-400">parça</span>
-                    </Td>
-
-                    <Td>
-                      <span className="tabular-nums text-slate-700">
-                        {formatMinutes(station.avg_wait_time)}
-                      </span>
-                    </Td>
-
-                    <Td>
-                      <span
-                        className={`font-semibold tabular-nums ${OEE_TEXT_COLORS[oeeToneValue]}`}
-                      >
-                        {formatPercent(station.oee.oee, 1)}
-                      </span>
-                    </Td>
-
-                    <Td>
-                      <span
-                        aria-hidden="true"
-                        className={`inline-block text-slate-400 transition-transform ${
-                          isExpanded ? "rotate-90" : ""
-                        }`}
-                      >
-                        ▸
-                      </span>
-                      <span className="sr-only">
-                        {isExpanded ? "Kırılımı gizle" : "OEE kırılımını göster"}
-                      </span>
-                    </Td>
-                  </tr>
-
-                  {isExpanded && (
-                    <tr className={isBottleneck ? "bg-red-50/60" : "bg-slate-50"}>
-                      <td colSpan={6} className="px-4 py-4">
-                        <OeeBreakdown station={station} />
+                            aria-hidden="true"
+                            className={`inline-block text-slate-400 transition-transform ${
+                              isOpen ? "rotate-90" : ""
+                            }`}
+                          >
+                            ▸
+                          </span>
+                          <span className="text-sm font-semibold text-slate-900">
+                            {line.lineName}
+                          </span>
+                          <span className="text-xs text-slate-500">
+                            {line.stations.length} istasyon · en yoğun{" "}
+                            {line.bottleneck.station_name}{" "}
+                            <span className="tabular-nums">
+                              {formatPercent(line.bottleneck.utilization)}
+                            </span>
+                          </span>
+                          {line.hasFactoryBottleneck && (
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                              <WarningIcon className="h-3.5 w-3.5" />
+                              Darboğaz
+                            </span>
+                          )}
+                          <span className="sr-only">
+                            {isOpen
+                              ? "Bu hattı gizle"
+                              : "Bu hattın istasyonlarını göster"}
+                          </span>
+                        </div>
                       </td>
                     </tr>
-                  )}
-                </Fragment>
-              );
-            })}
+
+                    {isOpen && renderRows(line.stations)}
+                  </Fragment>
+                );
+              })}
           </tbody>
         </table>
       </div>
 
       <p className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 text-xs text-slate-500">
-        OEE kırılımını görmek için bir satıra tıklayın.
+        {isGrouped
+          ? "Hat başlığına tıklayarak grubu açıp kapatabilir, bir istasyon satırına tıklayarak OEE kırılımını görebilirsiniz."
+          : "OEE kırılımını görmek için bir satıra tıklayın."}
       </p>
     </div>
+  );
+}
+
+/** Tek bir istasyon satırı ve açıldığında altına gelen OEE kırılımı. */
+function StationRow({
+  station,
+  isBottleneck,
+  isExpanded,
+  onToggle,
+}: {
+  station: StationMetricsResponse;
+  isBottleneck: boolean;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const utilTone = utilizationTone(station.utilization, isBottleneck);
+  const oeeToneValue = oeeTone(station.oee.oee);
+
+  return (
+    <Fragment>
+      <tr
+        onClick={onToggle}
+        className={`cursor-pointer transition-colors ${
+          isBottleneck ? "bg-red-50 hover:bg-red-100/70" : "hover:bg-slate-50"
+        }`}
+      >
+        <Td>
+          <div className="flex items-center gap-2">
+            <span className="font-medium text-slate-900">{station.station_name}</span>
+            {isBottleneck && (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+                <WarningIcon className="h-3.5 w-3.5" />
+                Darboğaz
+              </span>
+            )}
+          </div>
+        </Td>
+
+        <Td>
+          {/* Sayı ve çubuk birlikte: biri kesinlik, diğeri karşılaştırma sağlar. */}
+          <div className="flex items-center gap-2.5">
+            <span className="w-11 shrink-0 tabular-nums text-slate-800">
+              {formatPercent(station.utilization)}
+            </span>
+            <span
+              className="h-2 w-24 shrink-0 overflow-hidden rounded-full bg-slate-200"
+              role="img"
+              aria-label={`Doluluk ${formatPercent(station.utilization)}`}
+            >
+              <span
+                className={`block h-full rounded-full ${BAR_COLORS[utilTone]}`}
+                style={{
+                  width: `${Math.min(Math.max(station.utilization, 0), 1) * 100}%`,
+                }}
+              />
+            </span>
+          </div>
+        </Td>
+
+        <Td>
+          <span className="tabular-nums text-slate-700">
+            {formatDecimal(station.avg_queue_length)}
+          </span>
+          <span className="ml-1 text-xs text-slate-400">parça</span>
+        </Td>
+
+        <Td>
+          <span className="tabular-nums text-slate-700">
+            {formatMinutes(station.avg_wait_time)}
+          </span>
+        </Td>
+
+        <Td>
+          <span className={`font-semibold tabular-nums ${OEE_TEXT_COLORS[oeeToneValue]}`}>
+            {formatPercent(station.oee.oee, 1)}
+          </span>
+        </Td>
+
+        <Td>
+          <span
+            aria-hidden="true"
+            className={`inline-block text-slate-400 transition-transform ${
+              isExpanded ? "rotate-90" : ""
+            }`}
+          >
+            ▸
+          </span>
+          <span className="sr-only">
+            {isExpanded ? "Kırılımı gizle" : "OEE kırılımını göster"}
+          </span>
+        </Td>
+      </tr>
+
+      {isExpanded && (
+        <tr className={isBottleneck ? "bg-red-50/60" : "bg-slate-50"}>
+          <td colSpan={6} className="px-4 py-4">
+            <OeeBreakdown station={station} />
+          </td>
+        </tr>
+      )}
+    </Fragment>
   );
 }
 

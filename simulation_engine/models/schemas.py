@@ -262,6 +262,15 @@ class Station(BaseModel):
 
     id: str = Field(min_length=1, description="Benzersiz istasyon kimligi")
     name: str = Field(min_length=1, description="Okunabilir istasyon adi")
+    line_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "Istasyonun bagli oldugu hat/bolum adi (or. 'Kesim Hatti'). Yalnizca "
+            "arayuzde gruplama icin kullanilir; simulasyon motorunun hesaplama "
+            "mantigini hicbir sekilde etkilemez. Verilmezse istasyon gruplanmamis "
+            "sayilir, bu yuzden mevcut modeller geriye donuk uyumlu kalir."
+        ),
+    )
     num_servers: int = Field(
         default=1,
         ge=1,

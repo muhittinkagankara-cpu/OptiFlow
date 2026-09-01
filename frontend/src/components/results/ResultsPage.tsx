@@ -9,10 +9,13 @@
  * `ResultsPlaceholder.tsx` bu bileşenle tamamen değiştirilmiştir.
  */
 
+import { useMemo, useRef, useState } from "react";
 import type { SimulationConfig, SimulationRunResponse } from "../../types/simulationTypes";
 import { formatDecimal, formatUnits } from "../../lib/resultsFormatting";
+import { summarizeFactory } from "../../lib/factoryOverview";
 import { ArrowLeftIcon, ArrowRightIcon } from "../shared/icons";
 import { FactoryAnimation } from "./FactoryAnimation";
+import { FactoryOverview } from "./FactoryOverview";
 import { SummaryCards } from "./SummaryCards";
 import { StationMetricsTable } from "./StationMetricsTable";
 import { ValidationPanel } from "./ValidationPanel";
@@ -43,6 +46,33 @@ export function ResultsPage({
   const { results } = result;
   const bottleneck = results.station_metrics.find((station) => station.is_bottleneck);
 
+  const summary = useMemo(
+    () =>
+      summarizeFactory(
+        results.station_metrics,
+        config,
+        results.bottleneck_station_id,
+      ),
+    [results.station_metrics, config, results.bottleneck_station_id],
+  );
+
+  /** Hat kartıyla seçilen hat; `null` ise tüm istasyonlar gösterilir. */
+  const [selectedLine, setSelectedLine] = useState<string | null>(null);
+  const stationsRef = useRef<HTMLElement | null>(null);
+
+  /**
+   * Kart tıklanınca tabloyu filtreler ve oraya kaydırır.
+   *
+   * Kaydırma olmadan, 20 istasyonluk bir sayfada kullanıcı kartlara tıklar ama
+   * hiçbir şey değişmiş gibi görünür: değişen tablo ekranın çok altındadır.
+   */
+  const handleSelectLine = (lineName: string | null) => {
+    setSelectedLine(lineName);
+    if (lineName) {
+      stationsRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
@@ -67,6 +97,14 @@ export function ResultsPage({
       {/* --- Bölüm A --- */}
       <SummaryCards results={results} />
 
+      {/* Fabrika geneli özet: tablodan önce gelir çünkü kullanıcının ilk
+          sorusu "nereye bakmalıyım?" sorusudur. */}
+      <FactoryOverview
+        summary={summary}
+        selectedLine={selectedLine}
+        onSelectLine={handleSelectLine}
+      />
+
       {/* Tek cümlelik yorum: sayıları okumadan önce ne anlama geldiklerini
           söyler. Darboğaz bilgisi kullanıcının en çok işine yarayan tek şeydir. */}
       {bottleneck && (
@@ -83,7 +121,7 @@ export function ResultsPage({
       )}
 
       {/* --- Bölüm B --- */}
-      <section className="mt-8 space-y-4">
+      <section ref={stationsRef} className="mt-8 scroll-mt-6 space-y-4">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">İstasyonlar</h2>
           <p className="mt-0.5 text-sm text-slate-600">
@@ -101,6 +139,8 @@ export function ResultsPage({
         <StationMetricsTable
           stations={results.station_metrics}
           bottleneckStationId={results.bottleneck_station_id}
+          summary={summary}
+          selectedLine={selectedLine}
         />
 
         {/* Animasyon tablonun altinda ve varsayilan olarak kapali durur: izi

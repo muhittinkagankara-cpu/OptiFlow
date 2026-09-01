@@ -46,6 +46,7 @@ import {
   type EntityPhase,
 } from "../../lib/animationTimeline";
 import { buildFlowFromConfig, isStationNode } from "../../lib/configBuilder";
+import { configLines } from "../../lib/factoryOverview";
 import { CHART_COLORS, formatDecimal } from "../../lib/resultsFormatting";
 import { ArrivalNode } from "../editor/nodes/ArrivalNode";
 import { StationNode } from "../editor/nodes/StationNode";
@@ -218,11 +219,56 @@ function AnimationPlayer({
   const phases = useMemo<EntityPhase[]>(() => buildPhases(trace), [trace]);
   const summary = useMemo(() => summarizeTrace(trace, phases), [trace, phases]);
 
+  /**
+   * Hatlar. Birden fazlaysa sekme gösterilir ve sahnede aynı anda yalnızca bir
+   * hat çizilir: yirmi istasyonu ve üzerlerindeki onlarca parçayı aynı anda
+   * göstermek hem ekranı okunmaz hâle getirir hem de her karede gereksiz iş
+   * yapar.
+   */
+  const lines = useMemo(() => configLines(config), [config]);
+  const hasTabs = lines.length > 1;
+
+  // Varsayılan sekme, darboğazın bulunduğu hattır: kullanıcının izlemek
+  // isteyeceği ilk yer orasıdır.
+  const [selectedLine, setSelectedLine] = useState<string | null>(() => {
+    if (lines.length <= 1) {
+      return null;
+    }
+    const withBottleneck = lines.find((line) =>
+      line.stationIds.includes(bottleneckStationId),
+    );
+    return (withBottleneck ?? lines[0]).lineName;
+  });
+
   const { nodes, edges } = useMemo(() => {
     const flow = buildFlowFromConfig(config);
+    const visibleIds =
+      selectedLine === null
+        ? null
+        : new Set(
+            lines.find((line) => line.lineName === selectedLine)?.stationIds ?? [],
+          );
+    /**
+     * Seçili hatta ait olmayan kutular sahneden çıkarılır. Bunları elemek
+     * parçaları da eler: `entityPosition`, konumu bilinmeyen bir istasyondaki
+     * parçayı atlar. Hattın dışına giden ya da dışarıdan gelen parçalar ise
+     * sahnenin kenarından girip çıkıyormuş gibi çizilmeye devam eder — hattın
+     * yalıtılmış değil, daha büyük bir akışın parçası olduğu görünür kalır.
+     */
+    const keep = (nodeId: string) => visibleIds === null || visibleIds.has(nodeId);
+    const visibleNodes = flow.nodes.filter(
+      (node) => !isStationNode(node) || keep(node.id),
+    );
+    // Varış kutusu yalnızca giriş istasyonu sahnedeyse anlamlıdır.
+    const withoutOrphanArrival = visibleNodes.filter(
+      (node) =>
+        isStationNode(node) || keep(config.arrival_process.entry_station_id),
+    );
+    const shownIds = new Set(withoutOrphanArrival.map((node) => node.id));
+
     // Animasyonda kutular yalnızca görüntülenir; düzenleme editörün işidir.
     return {
-      nodes: flow.nodes.map((node) =>
+      nodes: withoutOrphanArrival.map((node) =>
         isStationNode(node)
           ? {
               ...node,
@@ -236,9 +282,11 @@ function AnimationPlayer({
             }
           : node,
       ) as Node[],
-      edges: flow.edges,
+      edges: flow.edges.filter(
+        (edge) => shownIds.has(edge.source) && shownIds.has(edge.target),
+      ),
     };
-  }, [config, bottleneckStationId]);
+  }, [config, bottleneckStationId, selectedLine, lines]);
 
   const seek = useCallback(
     (next: number) => {
@@ -262,8 +310,22 @@ function AnimationPlayer({
     <div className="space-y-4">
       <SamplingNotice trace={trace} />
 
+      {hasTabs && (
+        <LineTabs
+          lines={lines.map((line) => line.lineName)}
+          selected={selectedLine}
+          onSelect={setSelectedLine}
+        />
+      )}
+
       <div className="relative h-[340px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
-        <ReactFlowProvider>
+        {/*
+          Sekme değişince React Flow yeniden kurulur. `fitView` yalnızca ilk
+          kurulumda çalışır; anahtar verilmeseydi yeni hat, önceki hattın
+          yakınlaştırma ayarıyla çizilir ve çoğu zaman ekran dışında kalırdı.
+          Zaman `timeRef`'te tutulduğu için animasyon kaldığı yerden sürer.
+        */}
+        <ReactFlowProvider key={selectedLine ?? "tumu"}>
           <ReactFlow
             nodes={nodes}
             edges={edges}
@@ -581,6 +643,51 @@ function drawDot(
 // --------------------------------------------------------------------------- //
 // Kontroller ve açıklamalar
 // --------------------------------------------------------------------------- //
+
+/**
+ * Hat sekmeleri.
+ *
+ * Yirmi istasyonu aynı anda göstermek yerine kullanıcı tek bir hatta odaklanır.
+ * Bu hem ekran karmaşasını önler hem de her karede çizilen parça sayısını
+ * düşürür.
+ */
+function LineTabs({
+  lines,
+  selected,
+  onSelect,
+}: {
+  lines: string[];
+  selected: string | null;
+  onSelect: (lineName: string) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Hat seçimi"
+      className="flex flex-wrap gap-1.5 rounded-lg bg-slate-100 p-1"
+    >
+      {lines.map((lineName) => {
+        const isSelected = selected === lineName;
+        return (
+          <button
+            key={lineName}
+            type="button"
+            role="tab"
+            aria-selected={isSelected}
+            onClick={() => onSelect(lineName)}
+            className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+              isSelected
+                ? "bg-white text-slate-900 shadow-sm"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            {lineName}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
 
 interface ControlsProps {
   isPlaying: boolean;

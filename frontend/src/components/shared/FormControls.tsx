@@ -44,18 +44,44 @@ interface TextFieldProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  /**
+   * Verilirse alan, tarayıcının kendi otomatik tamamlama listesini gösterir.
+   *
+   * `datalist` bilinçli bir tercihtir: kullanıcı listeden seçebilir **ama**
+   * listede olmayan bir değeri de yazabilir. Açılır menü olsaydı yeni bir hat
+   * adı girmek imkânsızlaşır, serbest metin olsaydı aynı hat farklı yazımlarla
+   * ("Kesim Hattı" / "kesim hatti") ayrı gruplara bölünürdü.
+   */
+  suggestions?: string[];
 }
 
-export function TextField({ id, value, onChange, placeholder }: TextFieldProps) {
+export function TextField({
+  id,
+  value,
+  onChange,
+  placeholder,
+  suggestions,
+}: TextFieldProps) {
+  const listId = suggestions && suggestions.length > 0 ? `${id}-list` : undefined;
   return (
-    <input
-      id={id}
-      type="text"
-      className={INPUT_CLASS}
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onChange(event.target.value)}
-    />
+    <>
+      <input
+        id={id}
+        type="text"
+        className={INPUT_CLASS}
+        value={value}
+        placeholder={placeholder}
+        list={listId}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {listId && (
+        <datalist id={listId}>
+          {suggestions?.map((suggestion) => (
+            <option key={suggestion} value={suggestion} />
+          ))}
+        </datalist>
+      )}
+    </>
   );
 }
 

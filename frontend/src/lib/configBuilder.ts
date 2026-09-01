@@ -294,6 +294,16 @@ function normalizeStation(station: Station, nodeId: string): Station {
     scrap_rate: station.scrap_rate ?? 0,
   };
 
+  // Hat adı boşsa alan hiç gönderilmez. Boş metin göndermek, backend'de
+  // "adı boş olan bir hat" grubu yaratır ve arayüzde gruplanmamış
+  // istasyonlardan ayırt edilemezdi.
+  const lineName = normalized.line_name?.trim();
+  if (lineName) {
+    normalized.line_name = lineName;
+  } else {
+    delete normalized.line_name;
+  }
+
   // Arıza modeli backend'de "ya ikisi de ya hiçbiri" kuralına tabidir.
   if (normalized.failure_rate == null || !normalized.repair_time_distribution) {
     delete normalized.failure_rate;
@@ -567,4 +577,116 @@ export function createEmptyFlow(): { nodes: FlowNode[]; edges: FlowEdge[] } {
     ],
     edges: [],
   };
+}
+
+
+// --------------------------------------------------------------------------- //
+// Hat / bölüm gruplaması
+// --------------------------------------------------------------------------- //
+
+/** Grup kutusunun istasyonların sınır kutusundan taşma payı. */
+const GROUP_PADDING = 26;
+/** Grup başlığına ayrılan üst boşluk. */
+const GROUP_HEADER_HEIGHT = 22;
+/**
+ * React Flow bir node'u ölçene kadar `width`/`height` tanımsızdır. İlk kare
+ * boyunca kutunun sıfır boyutlu çizilmemesi için gerçekçi bir varsayılan
+ * kullanılır; ölçüm gelince zaten gerçek değerle değişir.
+ */
+const ASSUMED_NODE_WIDTH = 224;
+const ASSUMED_NODE_HEIGHT = 92;
+
+/**
+ * Modelde geçen hat adlarını alfabetik ve tekilleştirilmiş olarak döndürür.
+ *
+ * Parametre panelindeki otomatik tamamlama bunu kullanır: kullanıcı daha önce
+ * yazdığı hattı yeniden yazmak yerine seçebilsin. Elle yazımın tekrarlanması,
+ * "Kesim Hattı" ile "Kesim hattı"nın ayrı iki grup olarak görünmesine yol
+ * açardı.
+ */
+export function collectLineNames(nodes: FlowNode[]): string[] {
+  const names = new Set<string>();
+  for (const node of nodes) {
+    if (!isStationNode(node)) {
+      continue;
+    }
+    const name = node.data.station.line_name?.trim();
+    if (name) {
+      names.add(name);
+    }
+  }
+  return [...names].sort((first, second) => first.localeCompare(second, "tr"));
+}
+
+/** Canvas'ta bir hattı çevreleyen arka plan kutusu. */
+export interface LineGroupBox {
+  lineName: string;
+  position: { x: number; y: number };
+  width: number;
+  height: number;
+  stationIds: string[];
+}
+
+/**
+ * Aynı hatta bağlı istasyonları çevreleyen kutuları hesaplar.
+ *
+ * Kutular, istasyonların **sınır kutusundan** türetilir; istasyonlar React
+ * Flow'un `parentNode` mekanizmasıyla kutuya bağlanmaz. Bağlansaydı alt
+ * node'ların konumları gruba göre göreli hâle gelirdi ve konumları mutlak
+ * varsayan her yer (yerleşim, animasyon) sessizce bozulurdu. Buradaki kutu
+ * yalnızca arkada duran bir çizimdir; taşıma ve seçme davranışı değişmez.
+ *
+ * Hat adı girilmemiş istasyonlar hiçbir kutuya girmez: kullanıcı gruplama
+ * istemediyse arayüz gruplama göstermemelidir.
+ */
+export function buildLineGroups(nodes: FlowNode[]): LineGroupBox[] {
+  const byLine = new Map<string, StationFlowNode[]>();
+  for (const node of nodes) {
+    if (!isStationNode(node)) {
+      continue;
+    }
+    const lineName = node.data.station.line_name?.trim();
+    if (!lineName) {
+      continue;
+    }
+    const group = byLine.get(lineName);
+    if (group) {
+      group.push(node);
+    } else {
+      byLine.set(lineName, [node]);
+    }
+  }
+
+  const boxes: LineGroupBox[] = [];
+  for (const [lineName, group] of byLine) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const node of group) {
+      const width = node.width ?? ASSUMED_NODE_WIDTH;
+      const height = node.height ?? ASSUMED_NODE_HEIGHT;
+      minX = Math.min(minX, node.position.x);
+      minY = Math.min(minY, node.position.y);
+      maxX = Math.max(maxX, node.position.x + width);
+      maxY = Math.max(maxY, node.position.y + height);
+    }
+
+    boxes.push({
+      lineName,
+      position: {
+        x: minX - GROUP_PADDING,
+        y: minY - GROUP_PADDING - GROUP_HEADER_HEIGHT,
+      },
+      width: maxX - minX + GROUP_PADDING * 2,
+      height: maxY - minY + GROUP_PADDING * 2 + GROUP_HEADER_HEIGHT,
+      stationIds: group.map((node) => node.id),
+    });
+  }
+
+  // Adı sabit sırada tutmak, her renderda kutuların yeniden sıralanmasını ve
+  // React'in gereksiz yere DOM'u değiştirmesini önler.
+  boxes.sort((first, second) => first.lineName.localeCompare(second.lineName, "tr"));
+  return boxes;
 }

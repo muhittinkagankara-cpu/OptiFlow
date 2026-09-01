@@ -14,6 +14,14 @@ doğrusu "1.250 birim (%95 güven aralığı: 1.180 – 1.320)" demektir.
 - **Süreç modelleme** — İstasyonlar, paralel makineler, bekleme alanları,
   yönlendirme olasılıkları, yeniden işleme döngüleri, arıza/onarım (MTBF/MTTR)
   ve fire oranları.
+- **Hat / bölüm gruplaması** — İstasyonlara isteğe bağlı bir hat adı verilebilir
+  (`line_name`); aynı adı taşıyanlar editörde tek bir kutuda gruplanır. Yalnızca
+  görsel bir katmandır, simülasyon sonuçlarını etkilemez.
+- **Fabrika geneli özet** — 15-20+ istasyonlu modellerde sonuç sayfası hatları
+  ayrı kartlarda özetler (hattın kendi en yoğun istasyonu, ortalama OEE),
+  istasyon tablosunu hat başlıkları altında katlanabilir gruplara ayırır ve
+  animasyonu hat sekmelerine böler. Hat adı girilmemiş küçük modellerde bu
+  katman hiç gösterilmez, düz tabloya düşülür.
 - **Kuyruk teorisi** — M/M/1 ve M/M/c (Erlang-C) kapalı form çözümleri.
 - **Little's Law doğrulaması** — Motor her koşumda kendi iç tutarlılığını
   denetler (L = λ·W).
@@ -106,7 +114,7 @@ npm run build
 
 ## Testleri çalıştırma
 
-### Backend (268 test)
+### Backend (277 test)
 
 Proje kök dizininde:
 
@@ -125,7 +133,7 @@ python -m pytest simulation_engine/validation/ -v -s
 > çok daha hızlıdır, örneğin:
 > `python -m pytest simulation_engine/validation/test_queueing_theory.py -q`
 
-### Frontend (154 test)
+### Frontend (192 test)
 
 `frontend/` dizininde:
 

@@ -25,6 +25,8 @@ import { StationIcon, TrashIcon } from "../shared/icons";
 
 interface ParameterPanelProps {
   selectedNode: FlowNode | null;
+  /** Modelde hâlihazırda geçen hat adları; otomatik tamamlamayı besler. */
+  lineNames: string[];
   onUpdateStation: (nodeId: string, station: Station) => void;
   onUpdateArrival: (distribution: Distribution) => void;
   onDeleteStation: (nodeId: string) => void;
@@ -32,6 +34,7 @@ interface ParameterPanelProps {
 
 export function ParameterPanel({
   selectedNode,
+  lineNames,
   onUpdateStation,
   onUpdateArrival,
   onDeleteStation,
@@ -51,6 +54,7 @@ export function ParameterPanel({
         <StationSettings
           nodeId={selectedNode.id}
           data={selectedNode.data as StationNodeData}
+          lineNames={lineNames}
           onChange={(station) => onUpdateStation(selectedNode.id, station)}
           onDelete={() => onDeleteStation(selectedNode.id)}
         />
@@ -118,11 +122,13 @@ function ArrivalSettings({
 function StationSettings({
   nodeId,
   data,
+  lineNames,
   onChange,
   onDelete,
 }: {
   nodeId: string;
   data: StationNodeData;
+  lineNames: string[];
   onChange: (station: Station) => void;
   onDelete: () => void;
 }) {
@@ -181,6 +187,22 @@ function StationSettings({
               value={station.name}
               onChange={(name) => update({ name })}
               placeholder="Örn. Kesim"
+            />
+          )}
+        </Field>
+
+        <Field
+          label="Hat / Bölüm"
+          help="Bu istasyon hangi hatta ya da bölüme ait? Aynı adı verdiğiniz istasyonlar birlikte gruplanır."
+          hint="İsteğe bağlı. Boş bırakırsanız gruplama gösterilmez."
+        >
+          {(id) => (
+            <TextField
+              id={id}
+              value={station.line_name ?? ""}
+              onChange={(line_name) => update({ line_name })}
+              placeholder="Örn. Kesim Hattı"
+              suggestions={lineNames}
             />
           )}
         </Field>

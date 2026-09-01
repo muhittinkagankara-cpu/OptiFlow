@@ -38,6 +38,14 @@ export interface Distribution {
 export interface Station {
   id: string;
   name: string;
+  /**
+   * İstasyonun bağlı olduğu hat/bölüm adı.
+   *
+   * Yalnızca görsel gruplama içindir; simülasyon motoru bu alanı hiç okumaz.
+   * Boş bırakılabilir — o zaman istasyon gruplanmamış sayılır ve arayüz
+   * hiçbir gruplama göstermez.
+   */
+  line_name?: string | null;
   num_servers: number;
   service_time_distribution: Distribution;
   /** Sunucu başına birim zamandaki arıza oranı; MTBF = 1 / failure_rate. */
