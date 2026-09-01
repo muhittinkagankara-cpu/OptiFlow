@@ -1397,3 +1397,78 @@ class ComparisonResponse(BaseModel):
     best_scenario_index: int = Field(description="En yuksek ortalama ciktiya sahip senaryo")
     best_scenario_rationale: str
     total_duration_seconds: float
+
+
+# --------------------------------------------------------------------------- #
+# Olay izi (event trace) şemaları — canlı fabrika animasyonu
+# --------------------------------------------------------------------------- #
+
+SimulationEventType = Literal[
+    "arrival",
+    "queue_enter",
+    "queue_exit",
+    "service_start",
+    "service_end",
+    "blocked",
+    "system_exit",
+]
+
+
+class SimulationEvent(BaseModel):
+    """Simülasyon sırasında gerçekleşen tek bir olay.
+
+    Bu şema yalnızca **görselleştirme** içindir; istatistiksel sonuçlar olay
+    izinden değil, motorun kendi zaman ağırlıklı toplayıcılarından üretilir.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    timestamp: float = Field(description="Olayin gerceklestigi simulasyon dakikasi")
+    entity_id: str = Field(description="Olaya konu parcanin kimligi")
+    event_type: SimulationEventType
+    station_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Olayin gerceklestigi istasyon. Sistem geneli olaylarda (parcanin "
+            "sisteme girisi) bos birakilir."
+        ),
+    )
+
+
+class SimulationTrace(BaseModel):
+    """Bir simülasyonun ilk N dakikasında gerçekleşen olayların kaydı.
+
+    **Temsili bir örnektir, bilimsel kanıt değildir.** İz tek bir
+    replikasyondan alınır; raporlanan istatistikler ise tüm replikasyonların
+    ortalamasına dayanır. Animasyonda görülen belirli bir kuyruk birikmesi o
+    tek koşuma özgü olabilir. Bu ayrım arayüzde de kullanıcıya belirtilir.
+
+    Kayıt penceresi bilinçli olarak simülasyonun **başından** başlar: sistem
+    boş durumdan dolmaya başlar ve kuyrukların oluşumu izlenebilir. Pencere
+    ortadan başlasaydı, o anda sistemde bulunan parçaların nasıl oraya geldiği
+    kayıtta bulunmaz ve animasyon tutarsız görünürdü.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    events: List[SimulationEvent]
+    duration_minutes: float = Field(
+        description="Izin kapsadigi sure; simulasyonun tamami degil, ilk penceresi"
+    )
+    replication_index: int = Field(
+        description="Izin alindigi replikasyon (varsayilan olarak ilki)"
+    )
+    total_replications: int = Field(
+        description="Sonuclarin dayandigi toplam replikasyon sayisi"
+    )
+    truncated: bool = Field(
+        default=False,
+        description=(
+            "Olay sayisi ust sinira ulastigi icin kayit erken durduysa True. "
+            "Animasyon bu durumda pencerenin tamamini gosteremez."
+        ),
+    )
+    station_ids: List[str] = Field(
+        default_factory=list,
+        description="Modeldeki istasyonlarin kimlikleri (animasyon yerlesimi icin)",
+    )

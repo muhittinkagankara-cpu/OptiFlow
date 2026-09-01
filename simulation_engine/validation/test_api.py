@@ -697,6 +697,66 @@ def test_resolve_allowed_origins_without_environment(
     assert "*" not in resolve_allowed_origins()
 
 
+def test_trace_endpoint_returns_events(
+    shared_client: TestClient, mm1_run: Dict[str, Any]
+) -> None:
+    """Olay izi ucu, animasyon icin gereken olaylari dondurmeli."""
+    response = shared_client.get(f"{API_PREFIX}/{mm1_run['simulation_id']}/trace")
+    assert response.status_code == 200, response.text
+    trace = response.json()
+
+    assert trace["events"], "iz bos olmamali"
+    assert trace["duration_minutes"] > 0
+    assert trace["station_ids"] == ["S"]
+    # Iz tek replikasyondan alinir; arayuz bunu kullaniciya bildirebilmeli.
+    assert trace["replication_index"] == 0
+    assert trace["total_replications"] == mm1_run["results"]["num_replications"]
+
+    timestamps = [event["timestamp"] for event in trace["events"]]
+    assert timestamps == sorted(timestamps)
+    assert trace["events"][0]["event_type"] == "arrival"
+
+
+def test_trace_is_deterministic(
+    shared_client: TestClient, mm1_run: Dict[str, Any]
+) -> None:
+    """Ayni simulasyon icin iz her cagrida ayni olmali.
+
+    Iz saklanmaz, ayni tohumla yeniden uretilir; iki cagrinin farkli sonuc
+    vermesi, animasyonun raporlanan sayilarla iliskisini koparirdi.
+    """
+    path = f"{API_PREFIX}/{mm1_run['simulation_id']}/trace"
+    first = shared_client.get(path).json()
+    second = shared_client.get(path).json()
+
+    assert first == second
+
+
+def test_trace_endpoint_unknown_id_returns_404(client: TestClient) -> None:
+    """Bilinmeyen kimlik icin iz uretilemez."""
+    response = client.get(f"{API_PREFIX}/olmayan-kimlik/trace")
+
+    assert response.status_code == 404
+    assert "bulunamadi" in response.json()["detail"]
+
+
+def test_trace_does_not_alter_stored_results(
+    shared_client: TestClient, mm1_run: Dict[str, Any]
+) -> None:
+    """Iz uretmek, saklanmis sonuclari degistirmemeli.
+
+    Iz ayri bir kosumdan uretilir; bu kosumun saklanan kayda sizmasi,
+    kullanicinin gordugu istatistikleri sessizce degistirirdi.
+    """
+    simulation_id = mm1_run["simulation_id"]
+    before = shared_client.get(f"{API_PREFIX}/{simulation_id}/validation-report").json()
+
+    shared_client.get(f"{API_PREFIX}/{simulation_id}/trace")
+
+    after = shared_client.get(f"{API_PREFIX}/{simulation_id}/validation-report").json()
+    assert after == before
+
+
 def test_openapi_schema_exposes_all_three_endpoints(client: TestClient) -> None:
     """Sartnamedeki uc uc da OpenAPI semasinda bulunmali."""
     schema = client.get("/openapi.json").json()

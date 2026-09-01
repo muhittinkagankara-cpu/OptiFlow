@@ -69,6 +69,8 @@ from simulation_engine.models.schemas import (
     ROUTING_PROBABILITY_TOLERANCE,
     ReplicationResult,
     SimulationConfig,
+    SimulationEvent,
+    SimulationTrace,
     StabilityCheck,
     StationRunMetrics,
     SystemRunMetrics,
@@ -138,6 +140,83 @@ def finite_buffer_blocking_probability(load: float, capacity: int) -> float:
     return (1.0 - load) * power_k / (1.0 - power_k * load)
 
 
+#: Olay izinin varsayılan olarak kapsadığı süre. 10.000 dakikalık tam bir izin
+#: hem boyutu çok büyük olur hem de animasyon olarak izlenemeyecek kadar uzun
+#: sürer; ilk pencere sistemin dolmasını ve kuyrukların oluşmasını göstermeye
+#: yeter.
+DEFAULT_TRACE_WINDOW_MINUTES: float = 500.0
+
+#: Kayıt edilebilecek azami olay sayısı. Yoğun bir modelde pencere dolmadan bu
+#: sınıra ulaşılabilir; kayıt orada durur ve iz "kesildi" olarak işaretlenir.
+#: Sınır olmadan, çok hızlı bir hattın izi belleği ve ağ trafiğini şişirirdi.
+MAX_TRACE_EVENTS: int = 20_000
+
+
+class EventTraceCollector:
+    """Simülasyon olaylarını görselleştirme için kaydeden gözlemci.
+
+    **Simülasyonun sonucuna hiçbir etkisi yoktur.** Yalnızca gerçekleşmiş
+    olayları bir listeye ekler; rastgele sayı çekmez, akışı yönlendirmez, hiçbir
+    karara katılmaz. Bu özellik bir testle kilitlenmiştir: iz açıkken ve
+    kapalıyken üretilen istatistikler birebir aynı olmalıdır.
+
+    Kayıt iki koşuldan biri sağlanınca durur: pencere süresi dolduğunda veya
+    olay sayısı üst sınıra ulaştığında. Durduktan sonra `record` çağrıları
+    sessizce yok sayılır, böylece motorun çağrı noktalarına koşul yazmak
+    gerekmez.
+    """
+
+    def __init__(
+        self,
+        window_minutes: float = DEFAULT_TRACE_WINDOW_MINUTES,
+        max_events: int = MAX_TRACE_EVENTS,
+    ) -> None:
+        self.window_minutes = window_minutes
+        self.max_events = max_events
+        self.events: List[SimulationEvent] = []
+        self.truncated = False
+
+    def record(
+        self,
+        timestamp: float,
+        entity_id: int,
+        event_type: str,
+        station_id: Optional[str] = None,
+    ) -> None:
+        """Tek bir olayı kaydeder; pencere veya sınır aşıldıysa hiçbir şey yapmaz."""
+        if timestamp > self.window_minutes:
+            return
+        if len(self.events) >= self.max_events:
+            self.truncated = True
+            return
+        self.events.append(
+            SimulationEvent(
+                timestamp=timestamp,
+                entity_id=str(entity_id),
+                event_type=event_type,  # type: ignore[arg-type]
+                station_id=station_id,
+            )
+        )
+
+    def build(
+        self, replication_index: int, total_replications: int, station_ids: List[str]
+    ) -> SimulationTrace:
+        """Toplanan olayları `SimulationTrace` şemasına dönüştürür."""
+        covered = (
+            min(self.window_minutes, self.events[-1].timestamp)
+            if self.truncated and self.events
+            else self.window_minutes
+        )
+        return SimulationTrace(
+            events=self.events,
+            duration_minutes=covered,
+            replication_index=replication_index,
+            total_replications=total_replications,
+            truncated=self.truncated,
+            station_ids=station_ids,
+        )
+
+
 def derive_replication_seed(master_seed: int, replication_index: int) -> int:
     """Ana tohumdan belirli bir replikasyonun tohumunu deterministik olarak türetir.
 
@@ -172,6 +251,7 @@ class SimulationEngine:
         config: SimulationConfig,
         replication_index: int = 0,
         master_seed: Optional[int] = None,
+        trace_collector: Optional[EventTraceCollector] = None,
     ) -> None:
         """Motoru konfigürasyondan kurar (henüz çalıştırmaz).
 
@@ -182,9 +262,13 @@ class SimulationEngine:
                 kriptografik olarak rastgele bir tohum kullanılır. Etkin tohum
                 sonuçta raporlanır, böylece herhangi bir koşum sonradan birebir
                 tekrarlanabilir.
+            trace_collector: Verilirse olaylar görselleştirme için kaydedilir.
+                Gözlemci simülasyonun sonucunu **etkilemez**; yalnızca
+                gerçekleşmiş olayları dinler.
         """
         self.config = config
         self.replication_index = replication_index
+        self._trace = trace_collector
 
         effective_master = master_seed if master_seed is not None else config.random_seed
         if effective_master is None:
@@ -645,6 +729,8 @@ class SimulationEngine:
             now + self._arrival_distribution.sample_duration(), EventType.ARRIVAL
         )
 
+        self._observe(entity.id, "arrival")
+
         if self._try_enter_station(entity, self._entry_station):
             self._entities_admitted += 1
             self._change_wip(+1)
@@ -671,6 +757,7 @@ class SimulationEngine:
         station.service_completions += 1
         station.service_time_tally.record(server.assigned_service_minutes)
         entity.total_service_minutes += server.assigned_service_minutes
+        self._observe(entity.id, "service_end", station.id)
 
         # Hurda kontrolü işlemden **sonra** yapılır: kusurlu parça da sunucuyu
         # tam işlem süresi boyunca meşgul etmiştir ve üretilen birim olarak
@@ -792,6 +879,7 @@ class SimulationEngine:
             station.entries += 1
             entity.current_station_id = station.id
             entity.visited_station_ids.append(station.id)
+            self._observe(entity.id, "queue_enter", station.id)
             return True
 
         return False
@@ -818,6 +906,10 @@ class SimulationEngine:
         )
         server.assigned_service_minutes = duration
         server.remaining_service_minutes = duration
+        # Kesintiye ugramis bir isin onarim sonrasi devami yeni bir islem
+        # baslangici degildir; iz yalnizca gercek baslangici kaydeder.
+        if remaining_minutes is None:
+            self._observe(entity.id, "service_start", station.id)
         server.service_complete_event = self.events.schedule(
             now + duration,
             EventType.SERVICE_COMPLETE,
@@ -845,6 +937,7 @@ class SimulationEngine:
         server.blocked_since = self.clock.now
         server.blocked_target_station_id = target.id
         station.resource.set_state(server, ServerState.BLOCKED)
+        self._observe(entity.id, "blocked", station.id)
 
     def _release_server(self, station: Station, server: Server) -> None:
         """Sunucuyu boşaltır, kuyruktan yeni iş çeker ve yukarı akışı bilgilendirir."""
@@ -875,6 +968,7 @@ class SimulationEngine:
             entity = station.buffer.dequeue()
             if entity is None:  # pragma: no cover - döngü koşulu bunu engeller
                 return
+            self._observe(entity.id, "queue_exit", station.id)
             self._start_service(station, server, entity)
 
     def _notify_space_available(self, station: Station) -> None:
@@ -964,8 +1058,21 @@ class SimulationEngine:
         self._entities_scrapped += 1
         self._remove_from_system(entity, EntityState.SCRAPPED)
 
+    def _observe(
+        self, entity_id: int, event_type: str, station_id: Optional[str] = None
+    ) -> None:
+        """Gözlemciye bir olay bildirir; gözlemci yoksa hiçbir şey yapmaz.
+
+        Bu metot simülasyonun akışına katılmaz: dönüş değeri yoktur, rastgele
+        sayı çekmez ve hiçbir kararı etkilemez. Motorun mantığı gözlemcinin
+        varlığından tümüyle bağımsızdır.
+        """
+        if self._trace is not None:
+            self._trace.record(self.clock.now, entity_id, event_type, station_id)
+
     def _remove_from_system(self, entity: Entity, final_state: EntityState) -> None:
         """Parçayı sistemden çıkarır ve akış süresi gözlemini üretir."""
+        self._observe(entity.id, "system_exit", entity.current_station_id)
         entity.state = final_state
         entity.departed_at = self.clock.now
         entity.current_station_id = None
@@ -1128,3 +1235,63 @@ def run_replication(
     return SimulationEngine(
         config, replication_index=replication_index, master_seed=master_seed
     ).run()
+
+
+def capture_trace(
+    config: SimulationConfig,
+    master_seed: Optional[int] = None,
+    replication_index: int = 0,
+    window_minutes: float = DEFAULT_TRACE_WINDOW_MINUTES,
+) -> SimulationTrace:
+    """Bir replikasyonun ilk penceresindeki olayları kaydeder.
+
+    Simülasyon, izin kapsadığı süre kadar **kısaltılarak** yeniden çalıştırılır.
+    Bu, olayları saklamak yerine yeniden üretmeyi mümkün kılar ve iki nedenle
+    tercih edilmiştir:
+
+    1. **Kayıt maliyeti sıfırdır.** İz yüz binlerce bayt tutar; her simülasyonla
+       birlikte saklanması veritabanını hızla şişirirdi. Oysa aynı tohumla
+       yeniden çalıştırmak birkaç saniye sürer ve yalnızca kullanıcı animasyonu
+       istediğinde yapılır.
+    2. **Sonuçla tutarlılığı garantidir.** Tohum türetmesi deterministik olduğu
+       için yeniden üretilen olaylar, raporlanan istatistikleri üreten koşumun
+       ta kendisidir.
+
+    Süreyi kısaltmak olay dizisini değiştirmez: rastgele sayı akışları tohum ve
+    etikete göre türetilir, süreye bağlı değildir; ısınma periyodu yalnızca
+    istatistikleri sıfırlar ve hiç rastgele sayı harcamaz. Bu nedenle kısaltılmış
+    koşumun ilk N dakikası, tam koşumun ilk N dakikasıyla birebir aynıdır — bu
+    özellik testle doğrulanır.
+
+    Args:
+        config: Simülasyon konfigürasyonu.
+        master_seed: Ana tohum; verilmezse `config.random_seed` kullanılır.
+        replication_index: İzi alınacak replikasyon.
+        window_minutes: Kaydın kapsayacağı süre.
+
+    Returns:
+        Olay izi.
+    """
+    window = min(window_minutes, config.simulation_duration_minutes)
+    # Isınma sıfırlanır: bu koşumdan istatistik değil yalnızca olaylar alınır ve
+    # şema ısınmanın süreden kısa olmasını şart koşar.
+    truncated_config = config.model_copy(
+        update={
+            "simulation_duration_minutes": window,
+            "warmup_period_minutes": 0.0,
+        }
+    )
+
+    collector = EventTraceCollector(window_minutes=window)
+    SimulationEngine(
+        truncated_config,
+        replication_index=replication_index,
+        master_seed=master_seed,
+        trace_collector=collector,
+    ).run()
+
+    return collector.build(
+        replication_index=replication_index,
+        total_replications=config.num_replications,
+        station_ids=[station.id for station in config.stations],
+    )

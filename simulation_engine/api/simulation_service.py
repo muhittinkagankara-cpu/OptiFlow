@@ -17,6 +17,10 @@ Uçlar
     senaryolar arasındaki farkın **istatistiksel olarak anlamlı** olup
     olmadığını da bildirir.
 
+``GET /api/simulations/{id}/trace``
+    Animasyon için ilk penceredeki ham olayları döndürür. İz saklanmaz;
+    istendiğinde aynı tohumla yeniden üretilir.
+
 Tasarım kararları
 -----------------
 **Katman sınırı.** Bu modül hiçbir formül içermez. Motor ham gözlemleri,
@@ -75,6 +79,7 @@ from simulation_engine.analytics.monte_carlo import (
     summarize_replications,
 )
 from simulation_engine.analytics.oee import compute_oee_report
+from simulation_engine.core.engine import capture_trace
 from simulation_engine.analytics.queueing_theory import mmc_metrics
 from simulation_engine.api.storage import (
     MAX_STORED_SIMULATIONS,
@@ -99,6 +104,7 @@ from simulation_engine.models.schemas import (
     SimulationConfig,
     SimulationResults,
     SimulationRunResponse,
+    SimulationTrace,
     StationMetricsResponse,
     ValidationReportResponse,
 )
@@ -768,6 +774,48 @@ async def get_validation_report(
             ),
         ) from error
     return _build_validation_report(record)
+
+
+@app.get(
+    f"{API_PREFIX}/{{simulation_id}}/trace",
+    response_model=SimulationTrace,
+    status_code=status.HTTP_200_OK,
+    summary="Animasyon icin olay izini dondurur",
+    tags=["simulations"],
+)
+async def get_simulation_trace(
+    simulation_id: str = Path(..., description="`/run` ucundan donen kimlik"),
+    store: SimulationStoreProtocol = Depends(get_store),
+) -> SimulationTrace:
+    """Bir koşumun ilk penceresindeki olayları görselleştirme için döndürür.
+
+    İz **saklanmaz, yeniden üretilir**: senaryo aynı tohumla ve pencere kadar
+    kısaltılmış süreyle tekrar çalıştırılır. Tohum türetmesi deterministik
+    olduğu için üretilen olaylar, raporlanan istatistikleri üreten koşumun ta
+    kendisidir. Böylece her simülasyonla birlikte yüz binlerce baytlık bir iz
+    saklamak gerekmez ve maliyet yalnızca kullanıcı animasyonu istediğinde
+    ödenir.
+
+    Dönen iz **temsili bir örnektir**: tek bir replikasyondan alınır, oysa
+    raporlanan istatistikler tüm replikasyonların ortalamasına dayanır.
+
+    Raises:
+        HTTPException: Kimlik bulunamazsa (404).
+    """
+    try:
+        record = store.get(simulation_id)
+    except KeyError as error:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=(
+                f"'{simulation_id}' kimlikli simulasyon bulunamadi; olay izi "
+                f"uretilemez."
+            ),
+        ) from error
+
+    return await asyncio.to_thread(
+        capture_trace, record.config, record.monte_carlo.master_seed
+    )
 
 
 @app.post(

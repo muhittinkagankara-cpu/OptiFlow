@@ -60,6 +60,7 @@ dokümantasyonu: `http://127.0.0.1:8000/docs`
 | `POST` | `/api/simulations/run` | Senaryoyu çalıştırır, güven aralıklı sonuç döndürür |
 | `GET` | `/api/simulations/{id}/validation-report` | Analitik doğrulama raporu |
 | `POST` | `/api/simulations/compare` | Senaryoları istatistiksel anlamlılık testiyle karşılaştırır |
+| `GET` | `/api/simulations/{id}/trace` | Animasyon için ham olay izi (ilk 500 dakika) |
 
 ## Frontend'i çalıştırma
 
@@ -257,6 +258,11 @@ bir kestirimidir ve doğru çalışan bir motoru bile sık sık başarısız gö
 - Sonsuz değerler JSON'a yazılamadığı için sonlu bir sınıra çevrilir. Yalnızca
   uç durumları etkiler (ör. hiçbir parçanın ulaşamadığı bir istasyonun kapasitesi
   sonsuz görünür) ve dönüşüm kayıplıdır.
+- Olay izi (`/trace`) **tek bir replikasyondan** alınan temsili bir örnektir;
+  raporlanan istatistikler ise tüm replikasyonların ortalamasına dayanır.
+  Animasyonda görülen belirli bir kuyruk birikmesi o koşuma özgü olabilir.
+  İz ilk 500 dakikayı kapsar (yaklaşık 200 KB); çok yoğun modellerde olay
+  sayısı üst sınıra takılırsa iz kesilir ve bu durum yanıtta bildirilir.
 - **Hız sınırlaması (rate limiting) yoktur.** Demo aşaması için kabul edilebilir
   ancak gerçek müşterilere açılmadan önce eklenmelidir: her istek bir
   simülasyon çalıştırdığı için CPU maliyeti yüksektir ve kötü niyetli olmayan
