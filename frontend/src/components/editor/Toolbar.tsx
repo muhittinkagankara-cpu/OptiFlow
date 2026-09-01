@@ -10,7 +10,7 @@
 
 import { SIMULATION_DEPTH_OPTIONS } from "../../types/simulationTypes";
 import type { SimulationDepth } from "../../types/simulationTypes";
-import { ArrowLeftIcon, PlayIcon, PlusIcon } from "../shared/icons";
+import { ArrowLeftIcon, ArrowRightIcon, PlayIcon, PlusIcon } from "../shared/icons";
 import { Spinner } from "../wizard/WizardStep3_Confirmation";
 
 interface ToolbarProps {
@@ -21,6 +21,17 @@ interface ToolbarProps {
   onBack: () => void;
   isRunning: boolean;
   stationCount: number;
+  /**
+   * Ana düğmenin ne yaptığı.
+   *
+   * Editör iki yerden açılır. Sonuç ekranından gelindiğinde kullanıcı modeli
+   * düzeltip hemen tekrar çalıştırmak ister ("run"). Kurulum sihirbazının
+   * içindeyken ise sıradaki adım onay ekranıdır ("continue") — orada özet ve
+   * kapasite ön kontrolü gösterilir, çalıştırma oradan yapılır. Aynı yerde iki
+   * ayrı ana eylem sunmak, kullanıcıyı hangisine basacağı konusunda tereddütte
+   * bırakırdı.
+   */
+  variant?: "run" | "continue";
 }
 
 export function Toolbar({
@@ -31,7 +42,9 @@ export function Toolbar({
   onBack,
   isRunning,
   stationCount,
+  variant = "run",
 }: ToolbarProps) {
+  const isContinue = variant === "continue";
   const selected =
     SIMULATION_DEPTH_OPTIONS.find((option) => option.id === depth) ??
     SIMULATION_DEPTH_OPTIONS[1];
@@ -108,6 +121,11 @@ export function Toolbar({
             <>
               <Spinner />
               Çalışıyor…
+            </>
+          ) : isContinue ? (
+            <>
+              İleri
+              <ArrowRightIcon className="h-4 w-4" />
             </>
           ) : (
             <>

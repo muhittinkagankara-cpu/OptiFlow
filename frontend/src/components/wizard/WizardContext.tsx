@@ -2,28 +2,40 @@
  * Sihirbazın üç adımı arasında paylaşılan durum.
  *
  * Adımlar arasında gezinirken kurulan modelin kaybolmaması kritiktir: kullanıcı
- * 3. adımda özeti görüp 2. adıma dönerse, yaptığı düzenlemeleri yeniden
- * girmek zorunda kalmamalıdır. Bu yüzden config tek bir yerde, Context'te
- * tutulur; adım bileşenleri yalnızca onu okur ve günceller.
+ * 3. adımda özeti görüp editöre dönerse, yaptığı düzenlemeleri yeniden girmek
+ * zorunda kalmamalıdır. Bu yüzden config tek bir yerde, Context'te tutulur;
+ * adım bileşenleri yalnızca onu okur ve günceller.
+ *
+ * Canvas'ın kendisi de burada saklanır. Şemadan yalnızca config saklansaydı,
+ * kullanıcı onay adımına geçip geri döndüğünde kutular otomatik yerleşime
+ * sıfırlanırdı — 20 istasyonlu bir şemada bu, elle yapılan tüm düzenlemenin
+ * kaybı demektir.
  */
 
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { SimulationConfig } from "../../types/simulationTypes";
+import type { FlowEdge, FlowNode } from "../../lib/configBuilder";
 
 export type WizardStepNumber = 1 | 2 | 3;
 
 /** Şablon kimlikleri; "blank" sıfırdan kurulan model demektir. */
 export type TemplateId = "tekstil" | "gida" | "metal" | "blank";
 
+/** Süreç editöründen bırakılan canvas durumu. */
+export interface FlowSnapshot {
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+}
+
 interface WizardContextValue {
   step: WizardStepNumber;
   templateId: TemplateId | null;
   config: SimulationConfig | null;
-  description: string;
+  flow: FlowSnapshot | null;
 
   selectTemplate: (id: TemplateId, config: SimulationConfig | null) => void;
   updateConfig: (config: SimulationConfig) => void;
-  setDescription: (text: string) => void;
+  setFlow: (flow: FlowSnapshot) => void;
 
   goNext: () => void;
   goBack: () => void;
@@ -37,7 +49,7 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
   const [step, setStep] = useState<WizardStepNumber>(1);
   const [templateId, setTemplateId] = useState<TemplateId | null>(null);
   const [config, setConfig] = useState<SimulationConfig | null>(null);
-  const [description, setDescription] = useState("");
+  const [flow, setFlow] = useState<FlowSnapshot | null>(null);
 
   const selectTemplate = useCallback(
     (id: TemplateId, nextConfig: SimulationConfig | null) => {
@@ -46,6 +58,9 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
       // kullanıcı düzenleme yaptığında içe aktarılan modülün kendisi değişir
       // ve sihirbaz ikinci kez açıldığında "boş" şablon dolu gelirdi.
       setConfig(nextConfig ? structuredClone(nextConfig) : null);
+      // Şablon değişince eski canvas geçersizdir; yeni şablonun istasyonları
+      // için yerleşim baştan kurulmalıdır.
+      setFlow(null);
     },
     [],
   );
@@ -59,37 +74,31 @@ export function WizardProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   /**
-   * "İleri" düğmesi ne zaman aktif olur?
+   * Kabuktaki "İleri" düğmesi ne zaman aktif olur?
    *
-   * 1. adım: bir şablon seçilmiş olmalı (boş şablon da geçerli bir seçimdir).
-   * 2. adım: en az bir istasyonu olan bir model kurulmuş olmalı — boş şablonla
-   *          başlayan kullanıcı hiç istasyon eklemeden 3. adıma geçememeli.
+   * Yalnızca 1. adımda anlamlıdır ve bir şablon seçilmiş olmasını arar (boş
+   * şablon da geçerli bir seçimdir). 2. adım süreç editörüdür; oradaki ilerleme
+   * düğmesi editörün kendi araç çubuğundadır, çünkü ilerlemeden önce canvas'ın
+   * geçerli bir şemaya çevrilebildiği doğrulanmalıdır. 3. adımda ileri gidilecek
+   * bir yer yoktur.
    */
-  const canGoNext = useMemo(() => {
-    if (step === 1) {
-      return templateId !== null;
-    }
-    if (step === 2) {
-      return (config?.stations.length ?? 0) > 0;
-    }
-    return false;
-  }, [step, templateId, config]);
+  const canGoNext = useMemo(() => step === 1 && templateId !== null, [step, templateId]);
 
   const value = useMemo<WizardContextValue>(
     () => ({
       step,
       templateId,
       config,
-      description,
+      flow,
       selectTemplate,
       updateConfig: setConfig,
-      setDescription,
+      setFlow,
       goNext,
       goBack,
       goToStep: setStep,
       canGoNext,
     }),
-    [step, templateId, config, description, selectTemplate, goNext, goBack, canGoNext],
+    [step, templateId, config, flow, selectTemplate, goNext, goBack, canGoNext],
   );
 
   return <WizardContext.Provider value={value}>{children}</WizardContext.Provider>;

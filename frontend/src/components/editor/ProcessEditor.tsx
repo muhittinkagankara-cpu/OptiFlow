@@ -77,6 +77,21 @@ interface ProcessEditorProps {
   lastResult?: SimulationRunResponse | null;
   onBack: () => void;
   onSimulationComplete: (result: SimulationRunResponse, config: SimulationConfig) => void;
+  /**
+   * Verilirse editör kurulum sihirbazının bir adımı olarak davranır: ana düğme
+   * simülasyonu başlatmak yerine bir sonraki adıma (onay ekranına) geçer.
+   *
+   * Canvas'ın o anki hâli de geri verilir. Sihirbaz bunu saklayıp kullanıcı
+   * geri döndüğünde `initialFlow` olarak iade eder; aksi hâlde kullanıcının
+   * elle yerleştirdiği kutular her gidiş-dönüşte otomatik yerleşime sıfırlanır
+   * ve 20 istasyonlu bir şemada bu, yapılan tüm düzenlemenin kaybı demektir.
+   */
+  onContinue?: (
+    config: SimulationConfig,
+    flow: { nodes: FlowNode[]; edges: FlowEdge[] },
+  ) => void;
+  /** Daha önce bırakılmış canvas durumu; verilirse `initialConfig` yerine kullanılır. */
+  initialFlow?: { nodes: FlowNode[]; edges: FlowEdge[] } | null;
 }
 
 /**
@@ -125,9 +140,13 @@ function EditorCanvas({
   lastResult,
   onBack,
   onSimulationComplete,
+  onContinue,
+  initialFlow: savedFlow,
 }: ProcessEditorProps) {
   const initialFlow = useMemo(() => {
-    const flow = buildFlowFromConfig(initialConfig);
+    // Kullanıcı bu editörden daha önce çıkıp geri döndüyse kendi yerleşimi
+    // korunur; yalnızca ilk girişte otomatik yerleşim kurulur.
+    const flow = savedFlow ?? buildFlowFromConfig(initialConfig);
     return lastResult
       ? { ...flow, nodes: applyMetrics(flow.nodes, lastResult) }
       : flow;
@@ -135,7 +154,7 @@ function EditorCanvas({
     // kurulduğunda uygulanır. Bağımlılığa eklenirse, çalıştırma sonrası gelen
     // sonuç canvas'ı baştan kurar ve kullanıcının taşıdığı kutular yerine döner.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialConfig]);
+  }, [initialConfig, savedFlow]);
 
   const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode["data"]>(
     initialFlow.nodes,
@@ -268,7 +287,14 @@ function EditorCanvas({
     [setNodes, setEdges],
   );
 
-  const handleRun = useCallback(async () => {
+  /**
+   * Canvas'ı şemaya çevirir ve hataları panele yazar.
+   *
+   * Hem çalıştırma hem "ileri" aynı doğrulamadan geçer: sihirbazda bozuk bir
+   * modelle onay adımına geçilebilseydi kullanıcı hatayı bir adım geç, üstelik
+   * modeli göremediği bir ekranda öğrenirdi.
+   */
+  const buildFromCanvas = useCallback(() => {
     setErrors([]);
     setWarnings([]);
 
@@ -285,13 +311,28 @@ function EditorCanvas({
 
     if (!built.ok) {
       setErrors(built.errors);
-      return;
+      return null;
     }
     setWarnings(built.warnings);
+    return built.config;
+  }, [flowNodes, flowEdges, depth, initialConfig.random_seed]);
+
+  const handleContinue = useCallback(() => {
+    const config = buildFromCanvas();
+    if (config && onContinue) {
+      onContinue(config, { nodes: flowNodes, edges: flowEdges });
+    }
+  }, [buildFromCanvas, onContinue, flowNodes, flowEdges]);
+
+  const handleRun = useCallback(async () => {
+    const config = buildFromCanvas();
+    if (!config) {
+      return;
+    }
 
     setIsRunning(true);
     try {
-      const result = await runSimulation(built.config);
+      const result = await runSimulation(config);
 
       // Kutular kullanım oranına göre renklenir; kullanıcı sonuç ekranından
       // buraya döndüğünde darboğazı kendi şemasının üzerinde görür.
@@ -301,7 +342,7 @@ function EditorCanvas({
         ...current,
         ...result.warnings.map(summarizeWarning),
       ]);
-      onSimulationComplete(result, built.config);
+      onSimulationComplete(result, config);
     } catch (error) {
       setErrors(
         error instanceof ApiError ? error.userMessages : [GENERIC_ERROR_MESSAGE],
@@ -309,7 +350,7 @@ function EditorCanvas({
     } finally {
       setIsRunning(false);
     }
-  }, [depth, flowNodes, flowEdges, initialConfig.random_seed, setNodes, onSimulationComplete]);
+  }, [buildFromCanvas, setNodes, onSimulationComplete]);
 
   return (
     <div className="flex h-full flex-col">
@@ -317,10 +358,11 @@ function EditorCanvas({
         depth={depth}
         onDepthChange={setDepth}
         onAddStation={handleAddStation}
-        onRun={handleRun}
+        onRun={onContinue ? handleContinue : handleRun}
         onBack={onBack}
         isRunning={isRunning}
         stationCount={stationCount}
+        variant={onContinue ? "continue" : "run"}
       />
 
       {(errors.length > 0 || warnings.length > 0) && (

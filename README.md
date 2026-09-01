@@ -235,7 +235,7 @@ simulation_engine/
 
 frontend/src/
 ├── components/
-│   ├── wizard/      Onboarding sihirbazı (3 adım)
+│   ├── wizard/      Onboarding sihirbazı (sektör → şema → onay)
 │   ├── editor/      Süreç editörü (React Flow canvas)
 │   ├── results/     Sonuç görselleştirme ve canlı akış animasyonu
 │   └── shared/      Ortak form ve ipucu bileşenleri
@@ -286,7 +286,9 @@ bir kestirimidir ve doğru çalışan bir motoru bile sık sık başarısız gö
 - **`/docs` herkese açıktır.** Demo aşamasında bilinçli bir tercihtir; API'yi
   incelemek isteyenlere yardımcı olur ve gizli bilgi açığa çıkarmaz. Kapatmak
   için `FastAPI(...)` çağrısına `docs_url=None, redoc_url=None` eklemek yeterlidir.
-- Sihirbazdaki "Analiz Et" (doğal dilden model kurma) özelliği henüz hazır
-  değildir; modeller form alanlarıyla veya görsel editörle düzenlenir.
+- Doğal dilden model kurma ("süreci kendi cümlelerinizle anlatın") özelliği
+  henüz yoktur. Bu özelliğin yerini tutan devre dışı form, kurulum akışı süreç
+  editörü etrafında sadeleştirilirken kaldırıldı; modeller şema üzerinde
+  düzenlenir.
 - Frontend paket boyutu grafik kütüphanesi nedeniyle 500 kB'ı aşar; sonuç
   sayfasını `React.lazy` ile ayırmak bunu düşürür.

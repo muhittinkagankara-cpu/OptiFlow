@@ -78,7 +78,8 @@ export function WizardStep1_TemplateSelection() {
         </h2>
         <p className="text-sm text-slate-600">
           Size en yakın örneği seçin; hazır bir model yükleyelim. Sonraki adımda
-          kendi rakamlarınıza göre düzenleyeceksiniz.
+          istasyonları şema üzerinde görecek, kendi rakamlarınıza göre
+          düzenleyeceksiniz.
         </p>
       </header>
 
@@ -128,8 +129,8 @@ export function WizardStep1_TemplateSelection() {
       {selected && (
         <p className="rounded-lg bg-slate-100 px-4 py-3 text-sm text-slate-600">
           {selected.config
-            ? `“${selected.title}” şablonu yüklendi — ${selected.config.stations.length} istasyon. Sonraki adımda düzenleyebilirsiniz.`
-            : "Boş şablonla devam ediyorsunuz. Sonraki adımda istasyonlarınızı ekleyeceksiniz."}
+            ? `“${selected.title}” şablonu yüklendi — ${selected.config.stations.length} istasyon. Sonraki adımda şema üzerinde düzenleyebilirsiniz.`
+            : "Boş şablonla devam ediyorsunuz. Sonraki adımda istasyonlarınızı şemaya ekleyeceksiniz."}
         </p>
       )}
     </div>

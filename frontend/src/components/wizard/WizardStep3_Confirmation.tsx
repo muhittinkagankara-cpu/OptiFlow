@@ -1,10 +1,8 @@
 /**
- * Adım 3/3 — Özet ve devam seçenekleri.
+ * Adım 3/3 — Özet ve çalıştırma.
  *
- * Kullanıcı burada iki yol arasında seçim yapar: modeli görsel olarak düzenlemek
- * ya da doğrudan çalıştırmak. "Direkt Çalıştır" seçeneği bilinçli olarak öne
- * çıkarılmıştır — sihirbazın amacı kullanıcıyı iki dakikada bir sonuca
- * ulaştırmaktır ve editöre girmek zorunda bırakmak bu yolu uzatır.
+ * Kullanıcı süreç editöründen buraya gelir; bu ekran çalıştırmadan önceki son
+ * kontroldür. İki yol sunar: şemaya dönüp düzeltmek ya da çalıştırmak.
  *
  * Özet kartı, simülasyonu beklemeden basit bir kapasite ön kontrolü de yapar.
  * Modelin tıkanacağı belliyse kullanıcı bunu sonuç ekranında değil burada
@@ -12,18 +10,35 @@
  */
 
 import { previewCapacity, interarrivalMean } from "../../lib/configDefaults";
-import { DEFAULT_DEPTH } from "../../types/simulationTypes";
-import { ArrowRightIcon, PlayIcon, WarningIcon } from "../shared/icons";
+import { DEFAULT_DEPTH, SIMULATION_DEPTH_OPTIONS } from "../../types/simulationTypes";
+import { ArrowLeftIcon, PlayIcon, WarningIcon } from "../shared/icons";
 import { useWizard } from "./WizardContext";
 
 interface WizardStep3Props {
-  /** Modeli süreç editöründe açar. */
+  /** Bir önceki adıma, süreç şemasına döner. */
   onEdit: () => void;
   /** Varsayılan ayarlarla simülasyonu başlatır. */
   onRun: () => void;
   isRunning: boolean;
   /** Çalıştırma sırasında oluşan hata mesajları. */
   errors: string[];
+}
+
+/**
+ * Şemada seçilen ayrıntı düzeyini config'ten geri okur.
+ *
+ * Süre, sihirbazın sabitlediği bir değer değil kullanıcının editörde yaptığı
+ * bir seçimdir; burada varsayılanı yazmak, bir adım önce yapılan seçimi
+ * sessizce yok saymak olurdu. Eşleşme bulunamazsa (elle kurulmuş bir süre)
+ * önerilen ayara düşülür.
+ */
+function depthOf(config: { simulation_duration_minutes: number }) {
+  return (
+    SIMULATION_DEPTH_OPTIONS.find(
+      (option) =>
+        option.simulation_duration_minutes === config.simulation_duration_minutes,
+    ) ?? DEFAULT_DEPTH
+  );
 }
 
 export function WizardStep3_Confirmation({
@@ -37,11 +52,12 @@ export function WizardStep3_Confirmation({
   if (!config || config.stations.length === 0) {
     return (
       <p className="rounded-xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-        Model henüz kurulmadı. Lütfen önceki adıma dönüp en az bir istasyon ekleyin.
+        Model henüz kurulmadı. Lütfen süreç şemasına dönüp en az bir istasyon ekleyin.
       </p>
     );
   }
 
+  const depth = depthOf(config);
   const capacity = previewCapacity(config);
   const arrivalPerHour = capacity.arrivalRate * 60;
   const totalMachines = config.stations.reduce(
@@ -54,8 +70,8 @@ export function WizardStep3_Confirmation({
       <header className="space-y-1.5">
         <h2 className="text-xl font-semibold text-slate-900">Modeliniz hazır</h2>
         <p className="text-sm text-slate-600">
-          Aşağıdaki özeti kontrol edin. İsterseniz modeli görsel olarak
-          düzenleyebilir, isterseniz doğrudan çalıştırabilirsiniz.
+          Aşağıdaki özeti kontrol edin. Bir şeyi değiştirmek isterseniz şemaya
+          dönebilir, hazırsanız simülasyonu başlatabilirsiniz.
         </p>
       </header>
 
@@ -97,9 +113,9 @@ export function WizardStep3_Confirmation({
 
         <div className="border-t border-slate-100 bg-slate-50 px-6 py-4 text-xs text-slate-600">
           Simülasyon ayarı:{" "}
-          <strong className="font-semibold text-slate-800">{DEFAULT_DEPTH.label}</strong>{" "}
-          — {DEFAULT_DEPTH.description} Ortalama{" "}
-          {interarrivalMean(config).toFixed(1)} dakikada bir iş girişi varsayılıyor.
+          <strong className="font-semibold text-slate-800">{depth.label}</strong> —{" "}
+          {depth.description} Ortalama {interarrivalMean(config).toFixed(1)} dakikada
+          bir iş girişi varsayılıyor.
         </div>
       </div>
 
@@ -141,8 +157,8 @@ export function WizardStep3_Confirmation({
           disabled={isRunning}
           className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg border border-slate-300 bg-white px-5 py-3 text-sm font-medium text-slate-700 transition-colors hover:border-brand-300 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:opacity-50"
         >
-          Modeli Düzenle
-          <ArrowRightIcon className="h-4 w-4" />
+          <ArrowLeftIcon className="h-4 w-4" />
+          Şemaya Dön
         </button>
 
         <button
@@ -159,7 +175,7 @@ export function WizardStep3_Confirmation({
           ) : (
             <>
               <PlayIcon className="h-4 w-4" />
-              Direkt Çalıştır
+              Simülasyonu Çalıştır
             </>
           )}
         </button>

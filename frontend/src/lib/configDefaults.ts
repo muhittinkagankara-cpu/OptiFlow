@@ -1,16 +1,13 @@
 /**
- * Sihirbaz için config oluşturma ve düzenleme yardımcıları.
+ * Sihirbaz için config oluşturma ve kapasite ön kontrolü yardımcıları.
  *
- * Sihirbaz, süreç editöründen farklı olarak **doğrusal bir hat** varsayar:
- * istasyonlar sırayla birbirine bağlanır. Bu bilinçli bir sadeleştirmedir —
- * sihirbazın işi kullanıcıyı iki dakikada çalışan bir modele ulaştırmaktır,
- * dallanma ve yeniden işleme döngüleri gibi yapılar süreç editörüne bırakılır.
- * Bu yüzden istasyon eklendiğinde/silindiğinde bağlantılar burada yeniden
- * kurulur; kullanıcı bağlantılarla hiç uğraşmaz.
+ * Buradaki kapasite hesabı simülasyon değildir; kaba bir ön kontroldür.
+ * Kullanıcı modelin tıkanacağını onay adımında, bir dakika beklemeden önce
+ * görebilmelidir — asıl cevap her zaman simülasyondan gelir.
  */
 
 import type { SimulationConfig, Station } from "../types/simulationTypes";
-import { DEFAULT_DEPTH, INFINITE_CAPACITY } from "../types/simulationTypes";
+import { DEFAULT_DEPTH } from "../types/simulationTypes";
 
 /** Sıfırdan başlayanlar için: istasyonu olmayan, geçerli varsayılanlı config. */
 export function createBlankConfig(): SimulationConfig {
@@ -25,48 +22,6 @@ export function createBlankConfig(): SimulationConfig {
     warmup_period_minutes: DEFAULT_DEPTH.warmup_period_minutes,
     num_replications: DEFAULT_DEPTH.num_replications,
     random_seed: 42,
-  };
-}
-
-/** Mevcut kimliklerle çakışmayan yeni bir istasyon üretir. */
-export function createDefaultStation(existingIds: string[]): Station {
-  const taken = new Set(existingIds);
-  let index = taken.size + 1;
-  let id = `istasyon-${index}`;
-  while (taken.has(id)) {
-    index += 1;
-    id = `istasyon-${index}`;
-  }
-  return {
-    id,
-    name: `Yeni İstasyon ${index}`,
-    num_servers: 1,
-    service_time_distribution: { type: "normal", params: { mean: 5, std: 1 } },
-    buffer_capacity_before: INFINITE_CAPACITY,
-    scrap_rate: 0,
-  };
-}
-
-/**
- * İstasyonları sırayla birbirine bağlar ve girişi ilk istasyona ayarlar.
- *
- * Sihirbazda istasyon eklendikten veya silindikten sonra çağrılır; kullanıcının
- * bağlantıları elle kurmasına gerek kalmaz.
- */
-export function relinkLinearChain(config: SimulationConfig): SimulationConfig {
-  const connections = config.stations.slice(0, -1).map((station, index) => ({
-    from_station_id: station.id,
-    to_station_id: config.stations[index + 1].id,
-    routing_probability: 1,
-  }));
-
-  return {
-    ...config,
-    connections,
-    arrival_process: {
-      ...config.arrival_process,
-      entry_station_id: config.stations[0]?.id ?? "",
-    },
   };
 }
 

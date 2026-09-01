@@ -1,6 +1,13 @@
 /**
  * Sihirbaz kabuğu: adım göstergesi, gövde ve gezinme düğmeleri.
  *
+ * Akış üç adımdır: sektör seçimi → süreç editörü → onay. Ortadaki adım ayrı bir
+ * form değil, ürünün asıl editörüdür (Sayfa 5). Daha önce burada modeli form
+ * alanlarıyla düzenleten bir ara ekran vardı; kullanıcı aynı işi iki farklı
+ * arayüzde yapabiliyordu ve şablonu seçtikten sonra istasyonlarını göremeden
+ * rakam giriyordu. Şablonun kutuları doğrudan canvas'ta açıldığında kullanıcı
+ * ne kurduğunu görerek düzenler.
+ *
  * Adım göstergesi kullanıcıya "nerede olduğunu ve daha ne kadar kaldığını"
  * söyler; belirsizlik, üç adımlık bir akışta bile vazgeçme sebebidir. Tamamlanan
  * adımlar tıklanabilir olur ki kullanıcı geri dönüp kontrol edebilsin, ama
@@ -12,22 +19,20 @@ import { useState } from "react";
 import type { SimulationConfig, SimulationRunResponse } from "../../types/simulationTypes";
 import { ApiError, runSimulation } from "../../lib/apiClient";
 import { GENERIC_ERROR_MESSAGE } from "../../lib/errorMessages";
-import { DEFAULT_DEPTH } from "../../types/simulationTypes";
+import { createBlankConfig } from "../../lib/configDefaults";
+import { ProcessEditor } from "../editor/ProcessEditor";
 import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "../shared/icons";
 import { WizardProvider, useWizard, type WizardStepNumber } from "./WizardContext";
 import { WizardStep1_TemplateSelection } from "./WizardStep1_TemplateSelection";
-import { WizardStep2_NaturalLanguageInput } from "./WizardStep2_NaturalLanguageInput";
 import { WizardStep3_Confirmation } from "./WizardStep3_Confirmation";
 
 const STEP_TITLES: Record<WizardStepNumber, string> = {
   1: "Sektör",
-  2: "Süreciniz",
+  2: "Süreç Şeması",
   3: "Onay",
 };
 
 interface OnboardingWizardProps {
-  /** Kullanıcı modeli süreç editöründe açmak istediğinde çağrılır. */
-  onEditModel: (config: SimulationConfig) => void;
   /** Simülasyon tamamlandığında sonucu üst katmana verir. */
   onSimulationComplete: (result: SimulationRunResponse, config: SimulationConfig) => void;
 }
@@ -40,8 +45,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   );
 }
 
-function WizardShell({ onEditModel, onSimulationComplete }: OnboardingWizardProps) {
-  const { step, config, goNext, goBack, goToStep, canGoNext } = useWizard();
+function WizardShell({ onSimulationComplete }: OnboardingWizardProps) {
+  const { step, config, flow, updateConfig, setFlow, goNext, goBack, goToStep, canGoNext } =
+    useWizard();
   const [isRunning, setIsRunning] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -52,16 +58,11 @@ function WizardShell({ onEditModel, onSimulationComplete }: OnboardingWizardProp
     setErrors([]);
     setIsRunning(true);
     try {
-      // Sihirbazdan çalıştırılan simülasyon her zaman standart ayarı kullanır;
-      // kullanıcı burada teknik parametrelerle uğraşmamalıdır.
-      const payload: SimulationConfig = {
-        ...config,
-        simulation_duration_minutes: DEFAULT_DEPTH.simulation_duration_minutes,
-        warmup_period_minutes: DEFAULT_DEPTH.warmup_period_minutes,
-        num_replications: DEFAULT_DEPTH.num_replications,
-      };
-      const result = await runSimulation(payload);
-      onSimulationComplete(result, payload);
+      // Ayrıntı düzeyi editörde seçilir ve config'e işlenmiştir; burada
+      // sabit bir varsayılana zorlamak, kullanıcının bir adım önce yaptığı
+      // seçimi sessizce geçersiz kılardı.
+      const result = await runSimulation(config);
+      onSimulationComplete(result, config);
     } catch (error) {
       setErrors(
         error instanceof ApiError ? error.userMessages : [GENERIC_ERROR_MESSAGE],
@@ -71,16 +72,47 @@ function WizardShell({ onEditModel, onSimulationComplete }: OnboardingWizardProp
     }
   };
 
+  /**
+   * Süreç editörü tam genişlikte açılır; şema dar bir sütuna sığmaz.
+   *
+   * Adım göstergesi üstte kalır: kullanıcı editöre "düştüğünü" değil,
+   * kurulumun ortasında olduğunu görmelidir.
+   */
+  if (step === 2) {
+    return (
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="mx-auto w-full max-w-3xl px-4 pt-6 pb-4 sm:px-6">
+          <StepIndicator current={step} onSelect={goToStep} />
+        </div>
+
+        <div className="min-h-0 flex-1">
+          <ProcessEditor
+            // Boş şablonda config yoktur; editör yine de bir başlangıç
+            // noktasına ihtiyaç duyar.
+            initialConfig={config ?? createBlankConfig()}
+            initialFlow={flow}
+            onBack={goBack}
+            onContinue={(nextConfig, nextFlow) => {
+              updateConfig(nextConfig);
+              setFlow(nextFlow);
+              goNext();
+            }}
+            onSimulationComplete={onSimulationComplete}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
       <StepIndicator current={step} onSelect={goToStep} />
 
       <div className="mt-8">
         {step === 1 && <WizardStep1_TemplateSelection />}
-        {step === 2 && <WizardStep2_NaturalLanguageInput />}
         {step === 3 && (
           <WizardStep3_Confirmation
-            onEdit={() => config && onEditModel(config)}
+            onEdit={goBack}
             onRun={handleRun}
             isRunning={isRunning}
             errors={errors}
@@ -102,18 +134,12 @@ function WizardShell({ onEditModel, onSimulationComplete }: OnboardingWizardProp
           Geri
         </button>
 
-        {step < 3 && (
+        {step === 1 && (
           <button
             type="button"
             onClick={goNext}
             disabled={!canGoNext}
-            title={
-              canGoNext
-                ? undefined
-                : step === 1
-                  ? "Devam etmek için bir seçenek seçin"
-                  : "Devam etmek için en az bir istasyon ekleyin"
-            }
+            title={canGoNext ? undefined : "Devam etmek için bir seçenek seçin"}
             className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
           >
             İleri
