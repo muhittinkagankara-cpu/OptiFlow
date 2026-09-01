@@ -11,6 +11,7 @@ import type {
   ComparisonResponse,
   SimulationConfig,
   SimulationRunResponse,
+  SimulationTrace,
   ValidationReportResponse,
 } from "../types/simulationTypes";
 import {
@@ -174,4 +175,14 @@ export async function isBackendReachable(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Bir koşumun animasyon için olay izini getirir.
+ *
+ * Backend izi saklamaz; aynı tohumla yeniden üretir. Bu yüzden çağrı birkaç
+ * saniye sürebilir ve yalnızca kullanıcı animasyonu istediğinde yapılmalıdır.
+ */
+export function getSimulationTrace(simulationId: string): Promise<SimulationTrace> {
+  return request<SimulationTrace>(`${SIMULATIONS_PATH}/${simulationId}/trace`);
 }

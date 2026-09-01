@@ -12,6 +12,7 @@
 import type { SimulationConfig, SimulationRunResponse } from "../../types/simulationTypes";
 import { formatDecimal, formatUnits } from "../../lib/resultsFormatting";
 import { ArrowLeftIcon, ArrowRightIcon } from "../shared/icons";
+import { FactoryAnimation } from "./FactoryAnimation";
 import { SummaryCards } from "./SummaryCards";
 import { StationMetricsTable } from "./StationMetricsTable";
 import { ValidationPanel } from "./ValidationPanel";
@@ -99,6 +100,15 @@ export function ResultsPage({
 
         <StationMetricsTable
           stations={results.station_metrics}
+          bottleneckStationId={results.bottleneck_station_id}
+        />
+
+        {/* Animasyon tablonun altinda ve varsayilan olarak kapali durur: izi
+            uretmek sunucuda simulasyonu yeniden calistirmayi gerektirir ve
+            sayfa yuklenirken bu maliyeti odemek gereksizdir. */}
+        <FactoryAnimation
+          simulationId={result.simulation_id}
+          config={config}
           bottleneckStationId={results.bottleneck_station_id}
         />
       </section>

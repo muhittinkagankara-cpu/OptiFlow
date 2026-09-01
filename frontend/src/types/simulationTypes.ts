@@ -350,3 +350,57 @@ export interface ComparisonResponse {
   best_scenario_rationale: string;
   total_duration_seconds: number;
 }
+
+// --------------------------------------------------------------------------- //
+// Olay izi şemaları — GET /api/simulations/{id}/trace
+// --------------------------------------------------------------------------- //
+
+export type SimulationEventType =
+  | "arrival"
+  | "queue_enter"
+  | "queue_exit"
+  | "service_start"
+  | "service_end"
+  | "blocked"
+  | "system_exit";
+
+/** Simülasyon sırasında gerçekleşen tek bir olay. */
+export interface SimulationEvent {
+  /** Olayın gerçekleştiği simülasyon dakikası. */
+  timestamp: number;
+  entity_id: string;
+  event_type: SimulationEventType;
+  /** Sistem geneli olaylarda (parçanın sisteme girişi) null. */
+  station_id: string | null;
+}
+
+/**
+ * Bir simülasyonun ilk penceresindeki olay kaydı.
+ *
+ * **Temsili bir örnektir.** İz tek bir replikasyondan alınır; raporlanan
+ * istatistikler ise tüm replikasyonların ortalamasına dayanır. Animasyonda
+ * görülen belirli bir kuyruk birikmesi o tek koşuma özgü olabilir — arayüz
+ * bunu kullanıcıya açıkça belirtmelidir.
+ */
+export interface SimulationTrace {
+  events: SimulationEvent[];
+  duration_minutes: number;
+  replication_index: number;
+  total_replications: number;
+  /** Olay sayısı üst sınıra ulaştığı için kayıt erken durduysa true. */
+  truncated: boolean;
+  station_ids: string[];
+}
+
+/** Animasyon hız seçenekleri (simülasyon dakikası / gerçek saniye). */
+export const ANIMATION_SPEEDS = [1, 2, 5, 10] as const;
+
+/**
+ * Varsayılan oynatma hızı.
+ *
+ * 500 dakikalık bir iz 1x hızda yaklaşık sekiz buçuk dakika sürer; bu, ilk
+ * izlenimde "hiçbir şey olmuyor" hissi yaratır. 10x'te aynı iz elli saniyede
+ * tamamlanır. Kullanıcının yavaşlatabileceği, açılışta gösterilen bir ipucuyla
+ * ayrıca belirtilir.
+ */
+export const DEFAULT_ANIMATION_SPEED = 10;

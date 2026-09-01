@@ -25,6 +25,12 @@ doğrusu "1.250 birim (%95 güven aralığı: 1.180 – 1.320)" demektir.
 - **Monte Carlo** — Bağımsız replikasyonlarla %95 güven aralığı.
 - **Senaryo karşılaştırma** — İki senaryo arasındaki farkın istatistiksel
   olarak anlamlı mı yoksa rastgelelikle açıklanabilir mi olduğunu söyler.
+- **Canlı akış animasyonu** — Parçaların hat boyunca ilerleyişini, kuyrukların
+  nerede biriktiğini ve hangi makinelerin aynı anda meşgul olduğunu izletir.
+  Sonuç sayfasındaki *Canlı Akışı Gör* bölümünden açılır; oynat/duraklat,
+  1x–10x hız ve zaman çizelgesinde ileri-geri sarma kontrolleri vardır.
+  Varsayılan hız 10x'tir, çünkü 500 dakikalık pencere gerçek zamanda
+  izlenemeyecek kadar uzundur.
 
 ## Gereksinimler
 
@@ -100,7 +106,7 @@ npm run build
 
 ## Testleri çalıştırma
 
-### Backend (220 test)
+### Backend (268 test)
 
 Proje kök dizininde:
 
@@ -119,7 +125,7 @@ python -m pytest simulation_engine/validation/ -v -s
 > çok daha hızlıdır, örneğin:
 > `python -m pytest simulation_engine/validation/test_queueing_theory.py -q`
 
-### Frontend (121 test)
+### Frontend (154 test)
 
 `frontend/` dizininde:
 
@@ -223,9 +229,10 @@ frontend/src/
 ├── components/
 │   ├── wizard/      Onboarding sihirbazı (3 adım)
 │   ├── editor/      Süreç editörü (React Flow canvas)
-│   ├── results/     Sonuç görselleştirme
+│   ├── results/     Sonuç görselleştirme ve canlı akış animasyonu
 │   └── shared/      Ortak form ve ipucu bileşenleri
-├── lib/             Canvas↔şema dönüşümü, API istemcisi, hata çevirisi
+├── lib/             Canvas↔şema dönüşümü, API istemcisi, hata çevirisi,
+│                    animasyon zaman çizelgesi
 ├── templates/       Hazır sektör şablonları
 └── types/           Backend şemalarının TypeScript karşılıkları
 ```
