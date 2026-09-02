@@ -1218,6 +1218,34 @@ class OEEComponentsResponse(BaseModel):
     oee: float = Field(description="Uc bilesenin carpimi")
 
 
+class StationFlowResponse(BaseModel):
+    """Bir istasyondan gecen parca sayilari — akis/kayip diyagrami icin.
+
+    Degerler replikasyonlar arasi **ortalamalardir**, tek bir kosumun sayisi
+    degildir; sayfadaki diger metriklerle ayni tabana oturmalari icin.
+
+    Dort sayi bir denge olusturur:
+
+        entered + rejected = teklif edilen is
+        entered           = completed + (pencere sonunda hala istasyonda olan)
+        completed         = scrapped + (bir sonraki adima giden)
+
+    Bu ayrim onemlidir: `rejected` istasyona hic girmemis parcadir (tampon
+    doluydu), `scrapped` ise islenmis ama hurdaya ayrilmis parcadir. Ikisini
+    tek bir "kayip" altinda toplamak, kullanicinin yanlis yere mudahale
+    etmesine yol acardi — biri tampon/kapasite sorunu, digeri kalite sorunudur.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    entered: float = Field(description="Istasyona giren parca sayisi")
+    completed: float = Field(description="Islemi tamamlanan parca sayisi")
+    scrapped: float = Field(description="Tamamlananlardan hurdaya ayrilan")
+    rejected: float = Field(
+        description="Tampon dolu oldugu icin istasyona hic alinmayan parca"
+    )
+
+
 class StationMetricsResponse(BaseModel):
     """API yanıtında tek bir istasyonun metrikleri."""
 
@@ -1231,6 +1259,9 @@ class StationMetricsResponse(BaseModel):
     oee: OEEComponentsResponse
     is_bottleneck: bool = Field(
         default=False, description="Bu istasyon sistem darbogazi mi?"
+    )
+    flow: StationFlowResponse = Field(
+        description="Istasyondan gecen parca sayilari (akis diyagrami icin)"
     )
 
 

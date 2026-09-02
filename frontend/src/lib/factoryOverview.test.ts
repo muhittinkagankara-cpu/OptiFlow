@@ -64,6 +64,8 @@ function metrics(
       oee,
     },
     is_bottleneck: false,
+    // Akış sayıları bu testlerin konusu değil; şema gereği doldurulur.
+    flow: { entered: 1000, completed: 1000, scrapped: 0, rejected: 0 },
   };
 }
 

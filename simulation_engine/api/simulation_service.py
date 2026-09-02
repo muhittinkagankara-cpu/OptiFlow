@@ -105,6 +105,7 @@ from simulation_engine.models.schemas import (
     SimulationResults,
     SimulationRunResponse,
     SimulationTrace,
+    StationFlowResponse,
     StationMetricsResponse,
     ValidationReportResponse,
 )
@@ -276,8 +277,42 @@ def _summarize_littles_law(
     return summary, worst
 
 
+def _average_station_flow(
+    replications: Sequence[ReplicationResult], station_id: str
+) -> StationFlowResponse:
+    """Bir istasyonun akış sayaçlarını replikasyonlar arasında ortalar.
+
+    Monte Carlo özetine yeni metrik eklenmedi; bu sayılar ham replikasyonlardan
+    doğrudan okunur. Özet sözleşmesini genişletmek, yalnızca bir görselleştirme
+    için raporun her tüketicisini etkileyen bir değişiklik olurdu.
+    """
+    count = len(replications)
+    if count == 0:  # pragma: no cover - API her zaman en az bir replikasyon uretir
+        return StationFlowResponse(entered=0.0, completed=0.0, scrapped=0.0, rejected=0.0)
+
+    totals = {"entered": 0.0, "completed": 0.0, "scrapped": 0.0, "rejected": 0.0}
+    for replication in replications:
+        for station in replication.stations:
+            if station.station_id != station_id:
+                continue
+            totals["entered"] += station.entries
+            totals["completed"] += station.units_produced
+            totals["scrapped"] += station.units_scrapped
+            totals["rejected"] += station.rejected
+
+    return StationFlowResponse(
+        entered=totals["entered"] / count,
+        completed=totals["completed"] / count,
+        scrapped=totals["scrapped"] / count,
+        rejected=totals["rejected"] / count,
+    )
+
+
 def _build_station_metrics(
-    monte_carlo: MonteCarloReport, oee: OEEReport, bottleneck_station_id: str
+    monte_carlo: MonteCarloReport,
+    oee: OEEReport,
+    bottleneck_station_id: str,
+    replications: Sequence[ReplicationResult],
 ) -> List[StationMetricsResponse]:
     """İstasyon metriklerini API yanıt biçimine dönüştürür.
 
@@ -303,6 +338,7 @@ def _build_station_metrics(
                     oee=station_oee.oee,
                 ),
                 is_bottleneck=summary.station_id == bottleneck_station_id,
+                flow=_average_station_flow(replications, summary.station_id),
             )
         )
     return rows
@@ -358,7 +394,10 @@ def _build_run_response(record: StoredSimulation) -> SimulationRunResponse:
         total_throughput=int(round(production.mean)),
         confidence_interval_95=(production.ci_lower, production.ci_upper),
         station_metrics=_build_station_metrics(
-            monte_carlo, record.oee, record.bottleneck.bottleneck_station_id
+            monte_carlo,
+            record.oee,
+            record.bottleneck.bottleneck_station_id,
+            record.replications,
         ),
         bottleneck_station_id=record.bottleneck.bottleneck_station_id,
         littles_law_validation=littles_law_summary,

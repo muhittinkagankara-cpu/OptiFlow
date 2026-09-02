@@ -92,6 +92,21 @@ export interface OEEComponentsResponse {
   oee: number;
 }
 
+/**
+ * Bir istasyondan geçen parça sayıları (replikasyon ortalamaları).
+ *
+ * `rejected` istasyona hiç girmemiş parçadır (tampon doluydu), `scrapped` ise
+ * işlenmiş ama hurdaya ayrılmış parçadır. İkisini tek bir "kayıp" altında
+ * toplamak kullanıcıyı yanlış yere müdahale ettirirdi: biri kapasite/tampon
+ * sorunu, diğeri kalite sorunudur.
+ */
+export interface StationFlowResponse {
+  entered: number;
+  completed: number;
+  scrapped: number;
+  rejected: number;
+}
+
 export interface StationMetricsResponse {
   station_id: string;
   station_name: string;
@@ -100,6 +115,7 @@ export interface StationMetricsResponse {
   avg_wait_time: number;
   oee: OEEComponentsResponse;
   is_bottleneck: boolean;
+  flow: StationFlowResponse;
 }
 
 export interface LittlesLawValidationResponse {

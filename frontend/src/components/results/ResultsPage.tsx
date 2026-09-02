@@ -16,6 +16,7 @@ import { summarizeFactory } from "../../lib/factoryOverview";
 import { ArrowLeftIcon, ArrowRightIcon } from "../shared/icons";
 import { FactoryAnimation } from "./FactoryAnimation";
 import { FactoryOverview } from "./FactoryOverview";
+import { FlowSankey } from "./FlowSankey";
 import { SummaryCards } from "./SummaryCards";
 import { StationMetricsTable } from "./StationMetricsTable";
 import { ValidationPanel } from "./ValidationPanel";
@@ -142,6 +143,10 @@ export function ResultsPage({
           summary={summary}
           selectedLine={selectedLine}
         />
+
+        {/* Akis ve kayip analizi: tablo her istasyonun sayisini verir ama
+            "giren isin ne kadari sona ulasiyor" sorusuna Sankey cevap verir. */}
+        <FlowSankey stations={results.station_metrics} config={config} />
 
         {/* Animasyon tablonun altinda ve varsayilan olarak kapali durur: izi
             uretmek sunucuda simulasyonu yeniden calistirmayi gerektirir ve

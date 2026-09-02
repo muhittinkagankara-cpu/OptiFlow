@@ -33,6 +33,10 @@ doğrusu "1.250 birim (%95 güven aralığı: 1.180 – 1.320)" demektir.
 - **Monte Carlo** — Bağımsız replikasyonlarla %95 güven aralığı.
 - **Senaryo karşılaştırma** — İki senaryo arasındaki farkın istatistiksel
   olarak anlamlı mı yoksa rastgelelikle açıklanabilir mi olduğunu söyler.
+- **Gösterge ve akış diyagramı** — Genel OEE, sektör eşiklerine göre
+  konumlandıran yarım daire bir göstergede okunur. "Akış ve Kayıp Analizi"
+  bölümü ise hatta giren işin ne kadarının sona ulaştığını, ne kadarının fire
+  ya da tampon doluluğu nedeniyle kaybolduğunu Sankey diyagramıyla gösterir.
 - **Canlı akış animasyonu** — Parçaların hat boyunca ilerleyişini, kuyrukların
   nerede biriktiğini ve hangi makinelerin aynı anda meşgul olduğunu izletir.
   Sonuç sayfasındaki *Canlı Akışı Gör* bölümünden açılır; oynat/duraklat,
@@ -76,6 +80,10 @@ dokümantasyonu: `http://127.0.0.1:8000/docs`
 | `POST` | `/api/simulations/compare` | Senaryoları istatistiksel anlamlılık testiyle karşılaştırır |
 | `GET` | `/api/simulations/{id}/trace` | Animasyon için ham olay izi (ilk 500 dakika) |
 
+Her istasyonun yanıtı, akış diyagramını besleyen dört sayaç taşır (`flow`):
+istasyona giren, işlemi tamamlanan, hurdaya ayrılan ve tampon dolu olduğu için
+kabul edilmeyen parça sayıları. Değerler replikasyon ortalamalarıdır.
+
 ## Frontend'i çalıştırma
 
 Ayrı bir terminalde, `frontend/` dizininde:
@@ -114,7 +122,7 @@ npm run build
 
 ## Testleri çalıştırma
 
-### Backend (381 test)
+### Backend (391 test)
 
 Proje kök dizininde:
 
@@ -133,7 +141,7 @@ python -m pytest simulation_engine/validation/ -v -s
 > çok daha hızlıdır, örneğin:
 > `python -m pytest simulation_engine/validation/test_queueing_theory.py -q`
 
-### Frontend (192 test)
+### Frontend (226 test)
 
 `frontend/` dizininde:
 

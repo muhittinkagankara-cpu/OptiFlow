@@ -21,6 +21,7 @@ import {
   type Tone,
 } from "../../lib/resultsFormatting";
 import { Tooltip } from "../shared/Tooltip";
+import { OeeGauge } from "./charts/OeeGauge";
 
 const TONE_STYLES: Record<Tone, { value: string; badge: string }> = {
   good: { value: "text-emerald-700", badge: "bg-emerald-100 text-emerald-800" },
@@ -45,7 +46,24 @@ export function SummaryCards({ results }: SummaryCardsProps) {
   const tone = oeeTone(results.line_oee);
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      {/* SECENEK C: gauge, "Genel OEE" kartinin yerini alir */}
+      <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:col-span-2">
+        <OeeGauge value={results.line_oee} />
+        {/* Renk tek başına bilgi taşımaz: gauge'ın bölgesi renkle anlattığını
+            burada yazıyla da söyler. Renk körü bir kullanıcı için yalnızca
+            renge dayanan bir gösterge okunaksız olurdu. */}
+        <span
+          className={`-mt-1 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${TONE_STYLES[tone].badge}`}
+        >
+          {OEE_TONE_LABEL[tone]}
+          <Tooltip
+            content="Ekipman etkinliği: kullanılabilirlik, performans ve kalitenin çarpımı. Darboğaz istasyonunda ölçülür, çünkü hattın çıktısını o belirler. Kırmızı %50 altı, sarı %50-70, yeşil %70 üzeri."
+            label="Genel OEE hakkında"
+          />
+        </span>
+      </div>
+
       <Card
         label="Beklenen Üretim"
         help="Simülasyon süresince tamamlanan iyi ürün sayısı. Tek bir kesin sayı değil, bir tahmin aralığıdır: aynı hat farklı günlerde farklı sonuç verir."
@@ -75,18 +93,6 @@ export function SummaryCards({ results }: SummaryCardsProps) {
         unit="parça"
       />
 
-      <Card
-        label="Genel OEE"
-        help="Ekipman etkinliği: kullanılabilirlik, performans ve kalitenin çarpımı. Darboğaz istasyonunda ölçülür, çünkü hattın çıktısını o belirler."
-        value={formatPercent(results.line_oee, 1)}
-        tone={tone}
-      >
-        <span
-          className={`mt-2 inline-block rounded-full px-2.5 py-0.5 text-xs font-semibold ${TONE_STYLES[tone].badge}`}
-        >
-          {OEE_TONE_LABEL[tone]}
-        </span>
-      </Card>
     </div>
   );
 }
