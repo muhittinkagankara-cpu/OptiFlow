@@ -81,6 +81,9 @@ from simulation_engine.analytics.monte_carlo import (
 from simulation_engine.analytics.oee import compute_oee_report
 from simulation_engine.core.engine import capture_trace
 from simulation_engine.analytics.queueing_theory import mmc_metrics
+from simulation_engine.api import dependencies
+from simulation_engine.api.dependencies import get_store
+from simulation_engine.api.inventory_routes import router as inventory_router
 from simulation_engine.api.storage import (
     MAX_STORED_SIMULATIONS,
     DatabaseSimulationStore,
@@ -193,17 +196,11 @@ HTTP_422: int = getattr(
 # Depolama
 # --------------------------------------------------------------------------- #
 
-#: Uygulama düzeyinde tekil depo. `DATABASE_URL` tanımlıysa kalıcı, değilse
-#: bellek içi bir depo oluşturulur (bkz. `api.storage`). İki deponun arayüzü
-#: aynı olduğu için uç noktalar hangisinin kullanıldığını bilmez.
-#: `get_store` bağımlılığı üzerinden erişilir, böylece testler veya farklı bir
-#: dağıtım kendi deposunu geçirebilir.
-_store: SimulationStoreProtocol = create_simulation_store()
-
-
-def get_store() -> SimulationStoreProtocol:
-    """Depo bağımlılığı."""
-    return _store
+#: Depo ve `get_store` bağımlılığı `api.dependencies` içinde tanımlıdır; envanter
+#: router'ı da aynı nesneye ihtiyaç duyduğu ve bu modül onu içe aktardığı için
+#: ortak bir yere alınmıştır. Buradan yeniden dışa verilir, çünkü mevcut testler
+#: ve dağıtımlar bağımlılığı bu modülden içe aktarıyor.
+_store = dependencies._store
 
 
 # --------------------------------------------------------------------------- #
@@ -735,9 +732,15 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=False,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    # PUT ve DELETE envanter kalemlerinin guncellenmesi/silinmesi icin gerekli;
+    # simulasyon uclari yalnizca GET ve POST kullanir.
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
+
+# Envanter modulu ayri bir router olarak takilir. Uretim simulasyonundan
+# bagimsizdir: hic kalem eklenmeden simulasyon aynen calisir.
+app.include_router(inventory_router)
 
 
 @app.post(

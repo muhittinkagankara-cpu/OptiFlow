@@ -31,6 +31,11 @@ doğrusu "1.250 birim (%95 güven aralığı: 1.180 – 1.320)" demektir.
   boyutlandırması. Kapasite kısıtı ile talep kısıtını ayırt eder.
 - **Takt time ve hat dengeleme** — Ranked Positional Weight (RPW) algoritması.
 - **Monte Carlo** — Bağımsız replikasyonlarla %95 güven aralığı.
+- **Envanter planlama** — Hammadde ve yarı mamuller için EOQ (en ekonomik
+  sipariş miktarı), güvenlik stoku ve yeniden sipariş noktası; Monte Carlo ile
+  stok tükenme riski. Bir kalem üretim istasyonuna bağlanırsa, stok bittiğinde
+  kaybedilecek üretim de kestirilir. Modül bağımsızdır: kalem eklemeden
+  simülasyon, simülasyon çalıştırmadan envanter analizi yapılabilir.
 - **Senaryo karşılaştırma** — İki senaryo arasındaki farkın istatistiksel
   olarak anlamlı mı yoksa rastgelelikle açıklanabilir mi olduğunu söyler.
 - **Gösterge ve akış diyagramı** — Genel OEE, sektör eşiklerine göre
@@ -80,6 +85,15 @@ dokümantasyonu: `http://127.0.0.1:8000/docs`
 | `POST` | `/api/simulations/compare` | Senaryoları istatistiksel anlamlılık testiyle karşılaştırır |
 | `GET` | `/api/simulations/{id}/trace` | Animasyon için ham olay izi (ilk 500 dakika) |
 
+Envanter uçları ayrı bir önekte toplanır:
+
+| Yöntem | Yol | Açıklama |
+|---|---|---|
+| `POST` / `GET` | `/api/inventory/items` | Kalem ekler / listeler |
+| `GET` / `PUT` / `DELETE` | `/api/inventory/items/{id}` | Tek kalemi okur, günceller, siler |
+| `POST` | `/api/inventory/analyze/{id}` | EOQ, güvenlik stoku, sipariş noktası |
+| `POST` | `/api/inventory/stockout-risk/{id}` | Monte Carlo tükenme riski; `simulation_id` verilirse üretim kaybı da |
+
 Her istasyonun yanıtı, akış diyagramını besleyen dört sayaç taşır (`flow`):
 istasyona giren, işlemi tamamlanan, hurdaya ayrılan ve tampon dolu olduğu için
 kabul edilmeyen parça sayıları. Değerler replikasyon ortalamalarıdır.
@@ -122,7 +136,7 @@ npm run build
 
 ## Testleri çalıştırma
 
-### Backend (391 test)
+### Backend (497 test)
 
 Proje kök dizininde:
 
@@ -141,7 +155,7 @@ python -m pytest simulation_engine/validation/ -v -s
 > çok daha hızlıdır, örneğin:
 > `python -m pytest simulation_engine/validation/test_queueing_theory.py -q`
 
-### Frontend (226 test)
+### Frontend (240 test)
 
 `frontend/` dizininde:
 
@@ -234,7 +248,8 @@ simulation_engine/
 │   ├── entities.py      Entity, Buffer, Server, Resource, Station
 │   └── engine.py        Ana olay döngüsü, blokaj ve arıza mantığı
 ├── distributions/   Olasılık dağılımları (ters dönüşümle örnekleme)
-├── analytics/       Kuyruk teorisi, Little's Law, OEE, TOC, Monte Carlo
+├── analytics/       Kuyruk teorisi, Little's Law, OEE, TOC, Monte Carlo,
+│                    envanter (EOQ, güvenlik stoku, tükenme riski)
 ├── validation/      Analitik doğrulama test paketi
 ├── api/
 │   ├── simulation_service.py  FastAPI uç noktaları
@@ -245,6 +260,7 @@ frontend/src/
 ├── components/
 │   ├── wizard/      Onboarding sihirbazı (sektör → şema → onay)
 │   ├── editor/      Süreç editörü (React Flow canvas)
+│   ├── inventory/   Envanter yönetimi (liste, kalem detayı, form)
 │   ├── results/     Sonuç görselleştirme ve canlı akış animasyonu
 │   └── shared/      Ortak form ve ipucu bileşenleri
 ├── lib/             Canvas↔şema dönüşümü, API istemcisi, hata çevirisi,
@@ -272,6 +288,21 @@ bir kestirimidir ve doğru çalışan bir motoru bile sık sık başarısız gö
 
 ## Bilinen sınırlar
 
+- Envanter kalemleri de `DATABASE_URL` tanımlı değilse bellekte tutulur ve
+  sunucu yeniden başladığında kaybolur. Bu, simülasyon sonuçlarından daha
+  maliyetlidir: kalemler kullanıcının elle girdiği kalıcı veridir, bir koşum ise
+  tekrarlanabilir. Yayına alınmış bir kurulumda PostgreSQL eklenmelidir.
+- Stok tükenme riski, **yeni sipariş gelmediğini** varsayar; soru "hiçbir şey
+  yapmazsam ne olur?" sorusudur. Bir sipariş politikası varsayılsaydı sonuç o
+  politikanın doğruluğuna bağlanır ve uyarı olarak işlevini yitirirdi.
+- Envanter gün, simülasyon dakika cinsinden çalışır. Bir kalem üretim
+  istasyonuna bağlanırken günde kaç dakika üretim yapıldığı **zorunlu olarak**
+  sorulur (`production_minutes_per_day`; tek vardiya 480, iki vardiya 960,
+  kesintisiz 1440). Varsayılan değer yoktur ve bu bilgi olmadan üretim etkisi
+  hesaplanmaz: kesintisiz çalışmayı varsaymak, tek vardiyalı bir fabrikanın
+  üretim kaybını üç kat büyük gösterir ve kullanıcı bunu fark etmezdi.
+  Bağlantı ile süre yalnızca birlikte geçerlidir; şema birini diğeri olmadan
+  reddeder.
 - `DATABASE_URL` tanımlı **değilse** sonuçlar bellekte tutulur (en fazla 200
   kayıt, FIFO) ve sunucu yeniden başladığında kaybolur. Yerel geliştirmede bu
   beklenen davranıştır; yayına alınmış bir kurulumda PostgreSQL eklenmelidir.

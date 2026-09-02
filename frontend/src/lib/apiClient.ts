@@ -9,9 +9,12 @@
 
 import type {
   ComparisonResponse,
+  InventoryAnalysis,
+  InventoryItem,
   SimulationConfig,
   SimulationRunResponse,
   SimulationTrace,
+  StockoutRiskReport,
   ValidationReportResponse,
 } from "../types/simulationTypes";
 import {
@@ -41,6 +44,7 @@ export const API_BASE_URL: string =
   DEFAULT_API_BASE_URL;
 
 const SIMULATIONS_PATH = "/api/simulations";
+const INVENTORY_PATH = "/api/inventory";
 
 /** FastAPI'nin Pydantic doğrulama hatası biçimi. */
 interface PydanticErrorItem {
@@ -185,4 +189,105 @@ export async function isBackendReachable(): Promise<boolean> {
  */
 export function getSimulationTrace(simulationId: string): Promise<SimulationTrace> {
   return request<SimulationTrace>(`${SIMULATIONS_PATH}/${simulationId}/trace`);
+}
+
+
+// --------------------------------------------------------------------------- //
+// Envanter
+// --------------------------------------------------------------------------- //
+//
+// Envanter uçları üretim simülasyonundan bağımsızdır; hiçbiri bir koşum
+// gerektirmez. Yalnızca stok tükenme riski, isteğe bağlı olarak bir koşum
+// kimliği alıp üretim kaybını da hesaplar.
+
+export function listInventoryItems(): Promise<InventoryItem[]> {
+  return request<InventoryItem[]>(`${INVENTORY_PATH}/items`);
+}
+
+export function getInventoryItem(itemId: string): Promise<InventoryItem> {
+  return request<InventoryItem>(`${INVENTORY_PATH}/items/${encodeURIComponent(itemId)}`);
+}
+
+export function createInventoryItem(item: InventoryItem): Promise<InventoryItem> {
+  return request<InventoryItem>(`${INVENTORY_PATH}/items`, {
+    method: "POST",
+    body: JSON.stringify(item),
+  });
+}
+
+export function updateInventoryItem(
+  itemId: string,
+  item: InventoryItem,
+): Promise<InventoryItem> {
+  return request<InventoryItem>(`${INVENTORY_PATH}/items/${encodeURIComponent(itemId)}`, {
+    method: "PUT",
+    body: JSON.stringify(item),
+  });
+}
+
+/**
+ * Kalemi siler.
+ *
+ * Sunucu 204 döndürür; gövde yoktur ve `parseResponse` JSON beklediği için
+ * burada ayrı ele alınır.
+ */
+export async function deleteInventoryItem(itemId: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE_URL}${INVENTORY_PATH}/items/${encodeURIComponent(itemId)}`,
+      { method: "DELETE", headers: { "Content-Type": "application/json" } },
+    );
+  } catch (cause) {
+    throw ApiError.network(cause);
+  }
+  if (!response.ok) {
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      // Gövde JSON değilse ham durum koduyla devam edilir.
+    }
+    const rawDetails = extractRawDetails(body, response.status);
+    throw new ApiError(response.status, rawDetails, translateErrorDetails(rawDetails));
+  }
+}
+
+export function analyzeInventoryItem(
+  itemId: string,
+  serviceLevel: number,
+): Promise<InventoryAnalysis> {
+  const query = new URLSearchParams({ service_level: String(serviceLevel) });
+  return request<InventoryAnalysis>(
+    `${INVENTORY_PATH}/analyze/${encodeURIComponent(itemId)}?${query}`,
+    { method: "POST" },
+  );
+}
+
+export interface StockoutRiskOptions {
+  horizonDays?: number;
+  /** Üretim etkisi için okunacak koşum; verilmezse etki hesaplanmaz. */
+  simulationId?: string | null;
+  randomSeed?: number;
+}
+
+export function getStockoutRisk(
+  itemId: string,
+  options: StockoutRiskOptions = {},
+): Promise<StockoutRiskReport> {
+  const query = new URLSearchParams();
+  if (options.horizonDays !== undefined) {
+    query.set("horizon_days", String(options.horizonDays));
+  }
+  if (options.simulationId) {
+    query.set("simulation_id", options.simulationId);
+  }
+  if (options.randomSeed !== undefined) {
+    query.set("random_seed", String(options.randomSeed));
+  }
+  const suffix = query.toString() ? `?${query}` : "";
+  return request<StockoutRiskReport>(
+    `${INVENTORY_PATH}/stockout-risk/${encodeURIComponent(itemId)}${suffix}`,
+    { method: "POST" },
+  );
 }

@@ -19,6 +19,7 @@ Kaynaklar
 - Banks, J. et al. (2010). *Discrete-Event System Simulation*, 5th ed.
 """
 
+from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -1512,3 +1513,276 @@ class SimulationTrace(BaseModel):
         default_factory=list,
         description="Modeldeki istasyonlarin kimlikleri (animasyon yerlesimi icin)",
     )
+
+
+# --------------------------------------------------------------------------- #
+# Envanter / stok yönetimi
+# --------------------------------------------------------------------------- #
+#
+# Bu bölüm üretim motorundan **bağımsızdır**: motor envanter kalemlerini hiç
+# görmez, envanter hesapları da simülasyonu çalıştırmak zorunda değildir.
+# Bağlantı tek yönlüdür ve isteğe bağlıdır — `linked_station_id` dolduğunda
+# envanter katmanı motorun çıktısını *okur*, motora hiçbir şey yazmaz.
+
+
+class InventoryItem(BaseModel):
+    """Stokta tutulan bir hammadde ya da yarı mamul.
+
+    Alanlar klasik envanter teorisinin (EOQ, yeniden sipariş noktası, güvenlik
+    stoku) ihtiyaç duyduğu girdilerdir. Maliyet alanları **birim para birimi**
+    cinsindendir; hangi para birimi olduğu modelin dışındadır ve tutarlı
+    olduğu sürece sonuçları etkilemez.
+
+    Talep, günlük ortalama ve standart sapmayla tanımlanır. Standart sapma
+    güvenlik stokunun tek belirleyicisidir: talep hiç dalgalanmıyorsa
+    (`daily_demand_std = 0`) güvenlik stoku da sıfırdır, çünkü korunulacak bir
+    belirsizlik yoktur.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, description="Benzersiz kalem kimligi")
+    name: str = Field(min_length=1, description="Okunabilir kalem adi")
+    unit: str = Field(min_length=1, description="Olcu birimi: adet, kg, metre...")
+
+    current_stock: float = Field(
+        ge=0.0, description="Su anda elde bulunan miktar"
+    )
+    unit_cost: float = Field(
+        gt=0.0, description="Birim satin alma maliyeti"
+    )
+    lead_time_days: float = Field(
+        ge=0.0, description="Siparisin tedarikciden gelme suresi (gun)"
+    )
+    daily_demand_avg: float = Field(
+        ge=0.0, description="Gunluk ortalama tuketim"
+    )
+    daily_demand_std: float = Field(
+        default=0.0,
+        ge=0.0,
+        description=(
+            "Gunluk tuketimin standart sapmasi. Sifir, talebin hic dalgalanmadigi "
+            "anlamina gelir ve guvenlik stokunu sifirlar."
+        ),
+    )
+    ordering_cost: float = Field(
+        gt=0.0,
+        description=(
+            "Siparis basina sabit maliyet (nakliye, islem, kurulum). Miktardan "
+            "bagimsizdir; EOQ'nun buyuk parti vermeye iten tarafi budur."
+        ),
+    )
+    holding_cost_rate: float = Field(
+        gt=0.0,
+        description=(
+            "Yillik stok tutma maliyetinin birim maliyete orani (0.2 = %20). "
+            "EOQ'nun kucuk parti vermeye iten tarafi budur."
+        ),
+    )
+    linked_station_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "Bu kalemi girdi olarak kullanan istasyon. Verilirse stok tukenmesinin "
+            "uretime etkisi hesaplanabilir; verilmezse envanter analizi yine tam "
+            "calisir. Motor bu alani hicbir zaman okumaz."
+        ),
+    )
+    production_minutes_per_day: Optional[float] = Field(
+        default=None,
+        gt=0.0,
+        description=(
+            "Bagli istasyonun gunde kac dakika uretim yaptigi. Ornek degerler: "
+            "tek vardiya 480, iki vardiya 960, kesintisiz 1440.\n\n"
+            "Envanter **gun**, simulasyon ise takvimi olmayan **dakika** cinsinden "
+            "calisir; ikisini baglamak icin bu bilgi zorunludur ve modelden "
+            "turetilemez. Varsayilan bir deger verilmez: kesintisiz calismayi "
+            "varsaymak, tek vardiyali bir fabrikanin uretim kaybini uc kat "
+            "buyuk gosterirdi ve kullanici bunu fark etmezdi."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _validate_holding_rate(self) -> "InventoryItem":
+        """Tutma maliyeti oranı için akla yatkın bir üst sınır uygular."""
+        if self.holding_cost_rate > 5.0:
+            raise ValueError(
+                f"'{self.id}' kaleminde 'holding_cost_rate' = "
+                f"{self.holding_cost_rate}. Bu alan bir **oran** bekler "
+                f"(0.2 = yillik %20); yuzde olarak (20) girilmis olabilir."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _validate_station_link(self) -> "InventoryItem":
+        """İstasyon bağlantısı ve günlük üretim süresi yalnızca birlikte anlamlıdır.
+
+        Bağlantı varken süre olmazsa üretim etkisi hesaplanamaz; süre varken
+        bağlantı olmazsa alan hiçbir işe yaramayan ölü veridir. Şema bu iki
+        durumu da reddeder — motorun arıza modelinde uygulanan "ya ikisi de ya
+        hiçbiri" kuralının aynısı.
+        """
+        has_link = self.linked_station_id is not None
+        has_minutes = self.production_minutes_per_day is not None
+
+        if has_link and not has_minutes:
+            raise ValueError(
+                f"'{self.id}' kalemi bir istasyona baglanmis ama "
+                f"'production_minutes_per_day' verilmemis. Uretim kaybini "
+                f"hesaplamak icin gunde kac dakika uretim yapildigi bilinmelidir "
+                f"(tek vardiya 480, iki vardiya 960, kesintisiz 1440)."
+            )
+        if has_minutes and not has_link:
+            raise ValueError(
+                f"'{self.id}' kaleminde 'production_minutes_per_day' verilmis ama "
+                f"'linked_station_id' bos. Gunluk uretim suresi yalnizca bir "
+                f"istasyona baglantiyla birlikte anlamlidir."
+            )
+        return self
+
+
+class InventoryStatus(str, Enum):
+    """Bir kalemin sipariş aciliyeti."""
+
+    OK = "ok"
+    WARNING = "warning"
+    CRITICAL = "critical"
+
+
+class InventoryAnalysis(BaseModel):
+    """Bir envanter kaleminin klasik envanter teorisi analizi.
+
+    Üç temel çıktı vardır ve üçü birlikte "ne zaman, ne kadar sipariş vereyim?"
+    sorusunu yanıtlar: EOQ **ne kadar**, yeniden sipariş noktası **ne zaman**,
+    güvenlik stoku ise **belirsizliğe karşı ne kadar fazladan** tutulacağını
+    söyler.
+
+    Talep sıfırsa (`daily_demand_avg = 0`) EOQ tanımsızdır — sıfıra bölme değil,
+    anlamsızlık söz konusudur: hiç tüketilmeyen bir kalem için "en ekonomik
+    sipariş miktarı" diye bir şey yoktur. Bu durumda `is_applicable` False olur
+    ve sayılar sıfır döner.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str
+    item_name: str
+    unit: str
+    service_level: float = Field(
+        description="Analizde kullanilan hizmet seviyesi (0-1)"
+    )
+    z_value: float = Field(
+        description="Hizmet seviyesine karsilik gelen standart normal degeri"
+    )
+
+    is_applicable: bool = Field(
+        description="Talep sifirsa False; EOQ ve tureviler anlamsizdir"
+    )
+
+    annual_demand: float = Field(description="daily_demand_avg x 365")
+    economic_order_quantity: float = Field(description="EOQ — en ekonomik parti buyuklugu")
+    safety_stock: float = Field(description="Z x sigma x sqrt(tedarik suresi)")
+    reorder_point: float = Field(
+        description="Tedarik suresi boyunca beklenen tuketim + guvenlik stoku"
+    )
+
+    orders_per_year: float = Field(description="Yillik talep / EOQ")
+    days_between_orders: float = Field(description="Iki siparis arasindaki gun sayisi")
+
+    annual_ordering_cost: float = Field(description="Siparis sayisi x siparis maliyeti")
+    annual_holding_cost: float = Field(
+        description="Ortalama stok (EOQ/2 + guvenlik stoku) x birim tutma maliyeti"
+    )
+    total_annual_cost: float = Field(
+        description="Siparis + tutma maliyeti (satin alma bedeli haric)"
+    )
+
+    current_stock: float
+    days_of_stock: float = Field(
+        description="Mevcut stogun kac gun yetecegi; talep sifirsa sonsuz yerine -1"
+    )
+    days_until_reorder: float = Field(
+        description=(
+            "Stogun yeniden siparis noktasina inmesine kac gun kaldigi. Zaten "
+            "altindaysa 0, talep yoksa -1."
+        )
+    )
+    status: InventoryStatus
+    recommendation: str = Field(description="Kullaniciya tek cumlelik oneri")
+
+
+class StockLevelProjection(BaseModel):
+    """Tek bir günün stok seviyesi kestirimi."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    day: int = Field(ge=0, description="Bugunden itibaren gun sayisi")
+    mean_stock: float = Field(description="Replikasyonlar arasi ortalama stok")
+    ci_lower: float = Field(description="%95 guven araliginin alt siniri")
+    ci_upper: float = Field(description="%95 guven araliginin ust siniri")
+
+
+class ProductionImpact(BaseModel):
+    """Stok tükenmesinin bağlı istasyon üzerindeki üretim etkisi.
+
+    Yalnızca kalem bir istasyona bağlıysa ve o istasyon için bir simülasyon
+    sonucu varsa doldurulur. Etki, motorun **ölçtüğü** üretim hızından
+    türetilir; motor bu hesap için yeniden çalıştırılmaz ve hiçbir şekilde
+    değiştirilmez.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    station_id: str
+    station_name: str
+    simulation_id: str = Field(description="Uretim hizinin okundugu kosum")
+    units_per_day: float = Field(description="Istasyonun gunluk uretim hizi")
+    expected_lost_units: float = Field(
+        description="Beklenen duruş suresi x gunluk uretim hizi"
+    )
+    lost_units_ci: Tuple[float, float] = Field(
+        description="Kayip uretimin %95 guven araligi [alt, ust]"
+    )
+    message: str = Field(description="Kullaniciya tek cumlelik uyari")
+
+
+class StockoutRiskReport(BaseModel):
+    """Stok tükenme riskinin Monte Carlo kestirimi.
+
+    Model bilinçli olarak **yeni sipariş gelmediğini** varsayar: soru "hiçbir
+    şey yapmazsam ne olur?" sorusudur. Sipariş politikası varsayılsaydı sonuç,
+    o politikanın doğruluğuna bağlı hâle gelir ve uyarı olarak işlevini
+    yitirirdi.
+
+    Güven aralıkları, üretim simülasyonundakiyle **aynı** fonksiyondan
+    (`monte_carlo.summarize`) gelir; iki modülün aynı sayıyı iki farklı
+    yöntemle hesaplaması, aralarındaki küçük farkların açıklanamaz hâle
+    gelmesi demek olurdu.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    item_id: str
+    item_name: str
+    unit: str
+    horizon_days: int = Field(description="Kac gunluk projeksiyon yapildigi")
+    num_replications: int
+    master_seed: int = Field(description="Kosumu tekrarlamak icin kullanilan tohum")
+
+    stockout_probability: float = Field(
+        ge=0.0, le=1.0, description="Ufuk icinde stogun tukenme olasiligi"
+    )
+    expected_stockout_days: MonteCarloStatistic = Field(
+        description="Stogun tukenmis oldugu gun sayisi (tukenmeyen kosumlarda 0)"
+    )
+    mean_first_stockout_day: Optional[float] = Field(
+        default=None,
+        description="Tukenmenin gerceklestigi kosumlarda ilk tukenme gunu ortalamasi",
+    )
+    projection: List[StockLevelProjection] = Field(
+        description="Gun gun stok seviyesi ve guven araligi"
+    )
+    production_impact: Optional[ProductionImpact] = Field(
+        default=None,
+        description="Kalem bir istasyona bagliysa ve kosum sonucu varsa doldurulur",
+    )
+    headline: str = Field(description="Sonucun tek cumlelik ozeti")

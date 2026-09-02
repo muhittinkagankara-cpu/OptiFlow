@@ -91,7 +91,16 @@ interface NumberFieldProps {
   onChange: (value: number) => void;
   min?: number;
   max?: number;
-  step?: number;
+  /**
+   * Artış adımı, ya da her değere izin vermek için `"any"`.
+   *
+   * Tarayıcı, girilen sayıyı `min + n * step` dizisine göre doğrular. Ondalıklı
+   * bir alt sınırla (ör. 0,01) varsayılan adım birleştiğinde yuvarlak sayılar
+   * geçersiz olur: 0,01 tabanında 0,1 adımla 100 yazılamaz, yalnızca 99,91 ve
+   * 100,01 geçerlidir. Böyle bir alan sessizce gönderilemez hâle gelir — para
+   * gibi her değerin meşru olduğu alanlarda `"any"` kullanılmalıdır.
+   */
+  step?: number | "any";
   suffix?: string;
   disabled?: boolean;
 }

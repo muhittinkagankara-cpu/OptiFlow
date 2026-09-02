@@ -428,3 +428,132 @@ export const ANIMATION_SPEEDS = [1, 2, 5, 10] as const;
  * ayrıca belirtilir.
  */
 export const DEFAULT_ANIMATION_SPEED = 10;
+
+
+// --------------------------------------------------------------------------- //
+// Envanter / stok yönetimi
+// --------------------------------------------------------------------------- //
+//
+// Envanter katmanı üretim simülasyonundan bağımsızdır: hiç kalem eklenmeden
+// simülasyon çalışır, hiç simülasyon çalıştırılmadan envanter analizi yapılır.
+// Bağlantı tek yönlü ve isteğe bağlıdır (`linked_station_id`).
+
+/** Stokta tutulan bir hammadde ya da yarı mamul. */
+export interface InventoryItem {
+  id: string;
+  name: string;
+  /** Ölçü birimi: adet, kg, metre... */
+  unit: string;
+  current_stock: number;
+  unit_cost: number;
+  lead_time_days: number;
+  daily_demand_avg: number;
+  daily_demand_std: number;
+  ordering_cost: number;
+  /** Yıllık tutma maliyetinin birim maliyete oranı (0.2 = %20). */
+  holding_cost_rate: number;
+  /** Bu kalemi girdi olarak kullanan istasyon; boş bırakılabilir. */
+  linked_station_id?: string | null;
+  /**
+   * Bağlı istasyonun günde kaç dakika üretim yaptığı.
+   *
+   * İstasyon bağlantısıyla **birlikte zorunludur**: envanter gün, simülasyon
+   * dakika cinsinden çalışır ve bu köprü modelden türetilemez. Varsayılan bir
+   * değer yoktur — kesintisiz çalışmayı varsaymak, tek vardiyalı bir
+   * fabrikanın üretim kaybını üç kat büyük gösterirdi.
+   */
+  production_minutes_per_day?: number | null;
+}
+
+/** Vardiya düzenine göre örnek günlük üretim süreleri (dakika). */
+export const SHIFT_PRESETS = [
+  { label: "Tek vardiya", minutes: 480 },
+  { label: "İki vardiya", minutes: 960 },
+  { label: "Kesintisiz", minutes: 1440 },
+] as const;
+
+export type InventoryStatus = "ok" | "warning" | "critical";
+
+/** Kullanıcıya sunulan hizmet seviyeleri; backend ile aynı liste. */
+export const SERVICE_LEVELS = [0.9, 0.95, 0.99] as const;
+export const DEFAULT_SERVICE_LEVEL = 0.95;
+
+export interface InventoryAnalysis {
+  item_id: string;
+  item_name: string;
+  unit: string;
+  service_level: number;
+  z_value: number;
+  is_applicable: boolean;
+  annual_demand: number;
+  economic_order_quantity: number;
+  safety_stock: number;
+  reorder_point: number;
+  orders_per_year: number;
+  days_between_orders: number;
+  annual_ordering_cost: number;
+  annual_holding_cost: number;
+  total_annual_cost: number;
+  current_stock: number;
+  /** Talep sıfırsa -1 (sonsuz yerine işaret değeri). */
+  days_of_stock: number;
+  days_until_reorder: number;
+  status: InventoryStatus;
+  recommendation: string;
+}
+
+/**
+ * Monte Carlo özeti — güven aralığıyla birlikte tek bir metrik.
+ *
+ * Backend'de üretim simülasyonuyla **aynı** fonksiyondan üretilir, bu yüzden
+ * alanları da aynıdır.
+ */
+export interface MonteCarloStatisticResponse {
+  metric: string;
+  label: string;
+  unit: string;
+  count: number;
+  mean: number;
+  std_dev: number;
+  standard_error: number;
+  critical_value: number;
+  half_width: number;
+  ci_lower: number;
+  ci_upper: number;
+  minimum: number;
+  maximum: number;
+  relative_precision: number;
+}
+
+export interface StockLevelProjection {
+  day: number;
+  mean_stock: number;
+  ci_lower: number;
+  ci_upper: number;
+}
+
+export interface ProductionImpact {
+  station_id: string;
+  station_name: string;
+  simulation_id: string;
+  units_per_day: number;
+  expected_lost_units: number;
+  /** [alt sınır, üst sınır] */
+  lost_units_ci: [number, number];
+  message: string;
+}
+
+export interface StockoutRiskReport {
+  item_id: string;
+  item_name: string;
+  unit: string;
+  horizon_days: number;
+  num_replications: number;
+  master_seed: number;
+  stockout_probability: number;
+  expected_stockout_days: MonteCarloStatisticResponse;
+  mean_first_stockout_day: number | null;
+  projection: StockLevelProjection[];
+  production_impact: ProductionImpact | null;
+  headline: string;
+}
