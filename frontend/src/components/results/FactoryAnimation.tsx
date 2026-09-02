@@ -72,6 +72,14 @@ const QUEUE_SPACING = 17;
  * sayısı arttıkça parçaların kutuyu taşmaması gerekir.
  */
 const SERVICE_SPACING = 16;
+/**
+ * Parçaların istasyonlar arası yolculuğunda izlediği yayın derinliği (piksel).
+ *
+ * Düz çizgi mekanik görünür; hafif bir kavis hareketi organik kılar. Değer
+ * bilinçli olarak küçüktür: büyütüldüğünde parçalar bağlantı çizgisinden
+ * belirgin biçimde ayrılır ve hangi yolu izledikleri okunmaz hâle gelir.
+ */
+const TRAVEL_CURVE_OFFSET = 12;
 
 const NODE_TYPES = { station: StationNode, arrival: ArrivalNode };
 
@@ -274,6 +282,7 @@ function AnimationPlayer({
               ...node,
               data: {
                 ...node.data,
+                presentation: "animation" as const,
                 metrics: {
                   utilization: 0,
                   is_bottleneck: node.id === bottleneckStationId,
@@ -282,9 +291,13 @@ function AnimationPlayer({
             }
           : node,
       ) as Node[],
-      edges: flow.edges.filter(
-        (edge) => shownIds.has(edge.source) && shownIds.has(edge.target),
-      ),
+      // Tüm kenarlar akar hâle getirilir. Editörde yalnızca giriş oku
+      // animasyonluydu; izleme ekranında akışın yönünü sürekli göstermek
+      // sahneye canlılık katar ve parçaların hangi yöne gittiği, hiçbir parça
+      // o an yolda değilken bile okunur kalır.
+      edges: flow.edges
+        .filter((edge) => shownIds.has(edge.source) && shownIds.has(edge.target))
+        .map((edge) => ({ ...edge, animated: true })),
     };
   }, [config, bottleneckStationId, selectedLine, lines]);
 
@@ -318,7 +331,24 @@ function AnimationPlayer({
         />
       )}
 
-      <div className="relative h-[340px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+      {/*
+        Nokta deseni sahneyi "teknik diyagram" gibi gösterir ve boş beyaz alanı
+        azaltır. Bilinçli olarak React Flow'un kendi `Background` bileşeni
+        kullanılmadı: o, deseni akış koordinatında çizer ve yakınlaştırmayla
+        birlikte küçülür. Animasyon sahnesi tüm hattı sığdırdığı için zoom
+        genellikle 1'in altındadır ve noktalar yarım pikselin altına inip
+        tamamen kayboluyordu. Ekran koordinatındaki bu desen her ölçekte aynı
+        kalır. Kontrastı, parçalar ve kutularla asla yarışmayacak kadar
+        düşüktür.
+      */}
+      <div
+        className="optiflow-stage relative h-[340px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50"
+        style={{
+          backgroundImage:
+            "radial-gradient(circle, rgba(100, 116, 139, 0.18) 1px, transparent 1px)",
+          backgroundSize: "20px 20px",
+        }}
+      >
         {/*
           Sekme değişince React Flow yeniden kurulur. `fitView` yalnızca ilk
           kurulumda çalışır; anahtar verilmeseydi yeni hat, önceki hattın
@@ -340,7 +370,8 @@ function AnimationPlayer({
             zoomOnDoubleClick={false}
             preventScrolling={false}
             proOptions={{ hideAttribution: true }}
-          />
+          >
+          </ReactFlow>
           <EntityCanvas
             phases={phases}
             timeRef={timeRef}
@@ -575,10 +606,7 @@ function entityPosition(
     if (!start || !finish) {
       return null;
     }
-    return {
-      x: start.x + (finish.x - start.x) * entity.progress,
-      y: start.y + (finish.y - start.y) * entity.progress,
-    };
+    return quadraticPoint(start, finish, entity.progress);
   }
 
   const station = entity.stationId ? positions.get(entity.stationId) : null;
@@ -602,6 +630,48 @@ function entityPosition(
   return {
     x: station.x + NODE_WIDTH / 2 + offset,
     y: station.y + NODE_HEIGHT / 2,
+  };
+}
+
+/**
+ * İki nokta arasında hafif bir yay üzerindeki konumu döndürür.
+ *
+ * Kontrol noktası, orta noktadan doğrunun **dikine** kaydırılır; böylece kavis
+ * yalnızca yatay akışta değil, paralel dallara giden eğik yollarda da doğru
+ * yönde oluşur. Yatay bir yolda yay yukarı doğru bükülür ve parça bir "sıçrama"
+ * yapıyormuş gibi görünür.
+ *
+ * Aynı noktadan aynı noktaya giden (uzunluğu sıfır) bir yolculukta kavis
+ * hesaplanamaz; böyle bir durumda düz konum döndürülür ve sıfıra bölme
+ * önlenir.
+ */
+function quadraticPoint(
+  start: { x: number; y: number },
+  finish: { x: number; y: number },
+  progress: number,
+): { x: number; y: number } {
+  const dx = finish.x - start.x;
+  const dy = finish.y - start.y;
+  const length = Math.hypot(dx, dy);
+  if (length === 0) {
+    return { x: start.x, y: start.y };
+  }
+
+  const control = {
+    x: (start.x + finish.x) / 2 + (dy / length) * TRAVEL_CURVE_OFFSET,
+    y: (start.y + finish.y) / 2 - (dx / length) * TRAVEL_CURVE_OFFSET,
+  };
+
+  const inverse = 1 - progress;
+  return {
+    x:
+      inverse * inverse * start.x +
+      2 * inverse * progress * control.x +
+      progress * progress * finish.x,
+    y:
+      inverse * inverse * start.y +
+      2 * inverse * progress * control.y +
+      progress * progress * finish.y,
   };
 }
 

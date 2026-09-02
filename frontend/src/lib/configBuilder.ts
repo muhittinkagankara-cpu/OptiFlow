@@ -45,6 +45,15 @@ export interface StationNodeData {
   station: Station;
   /** Yalnızca bir simülasyon çalıştıktan sonra dolar. */
   metrics?: StationNodeMetrics;
+  /**
+   * Kutunun hangi bağlamda çizildiği.
+   *
+   * Animasyonda kutular yalnızca izlenir; gölge, durum şeridi ve fareyle
+   * yükselme gibi süsler oraya aittir. Editörde aynı süsler kutuları
+   * sürüklerken gürültü yaratır ve taşıma geri bildirimiyle yarışır, bu yüzden
+   * varsayılan olarak kapalıdır.
+   */
+  presentation?: "editor" | "animation";
 }
 
 export interface ArrivalNodeData {

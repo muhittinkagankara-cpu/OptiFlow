@@ -56,3 +56,62 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
 }
+
+/* --------------------------------------------------------------------------
+   Fabrika animasyonu sahnesi
+   --------------------------------------------------------------------------
+   Buradaki kurallar yalnızca dekoratiftir: hiçbir sayıyı, konumu ya da akışı
+   etkilemez. Tümü `.optiflow-stage` altına kapsanmıştır; süreç editörü aynı
+   React Flow sınıflarını kullandığı için kapsanmasaydı düzenleme ekranı da
+   yanıp sönmeye başlardı.
+   -------------------------------------------------------------------------- */
+
+/* Akan bağlantı çizgileri ("marching ants").
+
+   React Flow'un kendi `animated` kenar animasyonu kullanılır; dash deseni
+   kaynaktan hedefe doğru kayar, yani yön her zaman akış yönüdür. Varsayılan
+   hızı bu sahne için tedirgin edici derecede hızlıdır, yumuşatılır.
+
+   Hız bilinçli olarak sabittir ve gerçek akış yoğunluğuyla orantılı DEĞİLDİR.
+   Orantılı olsaydı kullanıcı çizgi hızını bir veri olarak okumaya başlar ve
+   dekoratif bir öğe sessizce yanlış bir ölçüye dönüşürdü. */
+.optiflow-stage .react-flow__edge.animated path {
+  animation-duration: 1.4s;
+}
+
+/* Darboğaz istasyonunun nabzı.
+
+   Amaç dikkat çekmek, rahatsız etmek değil: döngü uzun, kontrast düşük ve
+   renk kutunun zaten taşıdığı kırmızıdan alınır — yeni bir kod eklenmez. */
+@keyframes optiflow-bottleneck-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.08),
+      0 0 0 0 rgba(220, 38, 38, 0.3);
+  }
+  50% {
+    box-shadow:
+      0 2px 8px rgba(0, 0, 0, 0.08),
+      0 0 16px 4px rgba(220, 38, 38, 0.2);
+  }
+}
+
+.optiflow-bottleneck-glow {
+  animation: optiflow-bottleneck-pulse 2.6s ease-in-out infinite;
+}
+
+/* Hareketi azaltılmış tercihine saygı.
+
+   Yanıp sönen ve sürekli kayan öğeler, bu ayarın var olma sebebidir: baş
+   dönmesi ve vestibüler rahatsızlık tetikleyebilirler. Durum bilgisi renk ve
+   yazılı etiketle zaten taşındığı için animasyonun durması hiçbir bilgiyi
+   götürmez. */
+@media (prefers-reduced-motion: reduce) {
+  .optiflow-stage .react-flow__edge.animated path {
+    animation: none;
+  }
+  .optiflow-bottleneck-glow {
+    animation: none;
+  }
+}

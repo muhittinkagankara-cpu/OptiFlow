@@ -166,3 +166,59 @@ export function EntryIcon(props: IconProps) {
     </Svg>
   );
 }
+
+/** Kesim: makas. */
+export function ScissorsIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="6" cy="6" r="2.5" />
+      <circle cx="6" cy="18" r="2.5" />
+      <path d="M8.1 7.6 20 18M8.1 16.4 20 6" />
+    </Svg>
+  );
+}
+
+/** Dikiş: iğne ve iplik. */
+export function SewingIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M20 4 9.5 14.5" />
+      <path d="m7 17 2.5-2.5 1.5 1.5L8.5 18.5z" />
+      <circle cx="18.2" cy="5.8" r="1.1" />
+      <path d="M6 21c1.8-1.2 1.8-3.2 0-4.4" />
+    </Svg>
+  );
+}
+
+/** Kalite kontrol: büyüteç ve onay işareti. */
+export function InspectIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.5 15.5 5 5" />
+      <path d="m7.8 10.6 2 2 3.4-3.6" />
+    </Svg>
+  );
+}
+
+/** Paketleme: kapalı koli. */
+export function BoxIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5z" />
+      <path d="M3 7.5 12 12l9-4.5M12 12v9" />
+    </Svg>
+  );
+}
+
+/** Boyama: boya fırçası. */
+export function PaintIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M5 3h11v5H5z" />
+      <path d="M16 5.5h2.5a2 2 0 0 1 2 2V11H9" />
+      <path d="M9 8h3v4.5a1.5 1.5 0 0 1-1.5 1.5h0A1.5 1.5 0 0 1 9 12.5z" />
+      <path d="M10.5 14v7" />
+    </Svg>
+  );
+}
