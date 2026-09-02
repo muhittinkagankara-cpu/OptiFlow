@@ -339,3 +339,60 @@ def test_holding_cost_includes_safety_stock() -> None:
 
     assert with_buffer.safety_stock > 0.0
     assert with_buffer.annual_holding_cost > without.annual_holding_cost
+
+
+# --------------------------------------------------------------------------- #
+# 6. Tedarik süresini karşılama — durum kartıyla tükenme riskinin ayrımı
+# --------------------------------------------------------------------------- #
+
+
+def test_ample_stock_covers_lead_time() -> None:
+    """Bol stokta siparis bugun verilse mal zamaninda gelir."""
+    report = analyze(item(current_stock=1000.0, daily_demand_avg=10.0, lead_time_days=5.0))
+    assert report.covers_lead_time is True
+
+
+def test_stock_below_reorder_point_may_still_cover_lead_time() -> None:
+    """Siparis noktasinin altinda olmak, gec kalmis olmak demek degildir.
+
+    Yeniden siparis noktasi zaten tedarik suresi + guvenlik payi kadar once
+    uyarir; tam da bu yuzden "siparis ver" uyarisi aldiginda kullanicinin hala
+    vakti vardir.
+    """
+    # ROP = 10 x 5 = 50; stok 45 ise altinda ama 4,5 gun yetiyor.
+    report = analyze(item(current_stock=45.0, daily_demand_avg=10.0, lead_time_days=5.0))
+    assert report.status is InventoryStatus.CRITICAL
+    assert report.covers_lead_time is False
+
+
+def test_stock_shorter_than_lead_time_is_flagged() -> None:
+    """Stok tedarik suresinden kisaysa siparis vermek tek basina yetmez.
+
+    Bu durumu siradan bir "simdi siparis verin" uyarisiyla ayni kefeye koymak,
+    kullanicinin hizlandirilmis tedarik gibi bir onlem alma firsatini
+    kacirmasina yol acardi.
+    """
+    report = analyze(item(current_stock=20.0, daily_demand_avg=10.0, lead_time_days=7.0))
+
+    assert report.covers_lead_time is False
+    assert "stoksuz kalacaksınız" in report.recommendation
+    assert "hızlandırılmış" in report.recommendation
+
+
+def test_zero_demand_always_covers_lead_time() -> None:
+    """Hic tuketilmeyen kalem tukenmez; tedarik suresi sorusu anlamsizdir."""
+    assert analyze(item(daily_demand_avg=0.0)).covers_lead_time is True
+
+
+def test_sufficient_stock_recommendation_explains_the_stockout_section() -> None:
+    """"Yeterli" onerisi, asagidaki tukenme riskiyle celiskiyi onceden acmali.
+
+    Kart "Yeterli" derken risk bolumu "%100 ihtimalle tukenir" diyebilir; ikisi
+    farkli sorularin cevabidir. Aciklanmadan yan yana konmalari, kullanicinin
+    hangisine guvenecegini bilememesine yol acar.
+    """
+    report = analyze(item(current_stock=1000.0, daily_demand_avg=10.0, lead_time_days=5.0))
+
+    assert report.status is InventoryStatus.OK
+    assert "hiç sipariş verilmediği" in report.recommendation
+    assert "zamanında sipariş verildiğinde" in report.recommendation

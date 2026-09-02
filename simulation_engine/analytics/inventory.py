@@ -194,6 +194,12 @@ def analyze(
         days_of_stock = NOT_APPLICABLE
         days_until_reorder = NOT_APPLICABLE
 
+    # Siparis bugun verilse bile mal gelene kadar stok yeter mi? Bu, "siparis
+    # ver" ile "cok gec, durus kacinilmaz" arasindaki farktir ve yalnizca
+    # yeniden siparis noktasina bakarak ayirt edilemez.
+    covers_lead_time = (
+        item.daily_demand_avg <= 0.0 or days_of_stock >= item.lead_time_days
+    )
     status = _resolve_status(item, rop, days_until_reorder)
 
     return InventoryAnalysis(
@@ -215,8 +221,11 @@ def analyze(
         current_stock=item.current_stock,
         days_of_stock=days_of_stock,
         days_until_reorder=days_until_reorder,
+        covers_lead_time=covers_lead_time,
         status=status,
-        recommendation=_build_recommendation(item, eoq, rop, days_until_reorder, status),
+        recommendation=_build_recommendation(
+            item, eoq, rop, days_until_reorder, status, covers_lead_time, days_of_stock
+        ),
     )
 
 
@@ -245,6 +254,8 @@ def _build_recommendation(
     rop: float,
     days_until_reorder: float,
     status: InventoryStatus,
+    covers_lead_time: bool,
+    days_of_stock: float,
 ) -> str:
     """Sayıları kullanıcının doğrudan uygulayabileceği bir cümleye çevirir."""
     if item.daily_demand_avg <= 0.0:
@@ -255,6 +266,19 @@ def _build_recommendation(
 
     quantity = f"{eoq:,.0f} {item.unit}"
     if status is InventoryStatus.CRITICAL:
+        if not covers_lead_time:
+            # Sipariş vermek tek başına yetmiyor: mal gelmeden stok bitiyor.
+            # Bunu sıradan bir "şimdi sipariş verin" uyarısıyla aynı kefeye
+            # koymak, kullanıcının hızlandırılmış tedarik gibi bir önlem alma
+            # fırsatını kaçırmasına yol açardı.
+            shortfall = item.lead_time_days - days_of_stock
+            return (
+                f"Stok {days_of_stock:,.0f} gün yetiyor ama tedarik "
+                f"{item.lead_time_days:,.0f} gün sürüyor. Şimdi {quantity} "
+                f"sipariş verseniz bile yaklaşık {shortfall:,.0f} gün stoksuz "
+                f"kalacaksınız; hızlandırılmış tedarik ya da geçici bir kaynak "
+                f"gerekiyor."
+            )
         return (
             f"Stok, yeniden sipariş noktasının ({rop:,.0f} {item.unit}) altında. "
             f"Şimdi {quantity} sipariş verin; tedarik {item.lead_time_days:,.0f} "
@@ -267,8 +291,10 @@ def _build_recommendation(
             f"sipariş hazırlığına başlayın."
         )
     return (
-        f"Stok yeterli. Sipariş noktasına ({rop:,.0f} {item.unit}) inmesine "
-        f"yaklaşık {days_until_reorder:,.0f} gün var; parti büyüklüğü {quantity}."
+        f"Stok yeterli: sipariş noktasına ({rop:,.0f} {item.unit}) inmesine "
+        f"yaklaşık {days_until_reorder:,.0f} gün var, parti büyüklüğü {quantity}. "
+        f"Aşağıdaki tükenme riski, hiç sipariş verilmediği varsayımıyla "
+        f"hesaplanır; zamanında sipariş verildiğinde bu risk gerçekleşmez."
     )
 
 

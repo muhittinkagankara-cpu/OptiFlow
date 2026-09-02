@@ -306,7 +306,7 @@ function ItemRow({
             {/* Renk tek başına bilgi taşımaz: noktanın yanında her zaman yazı
                 bulunur, aksi hâlde renk körü kullanıcı için tablo okunamaz. */}
             <span className={`inline-block h-2 w-2 rounded-full ${TONE_DOT[tone]}`} />
-            {statusLabel(analysis.status)}
+            {statusLabel(analysis.status, analysis.covers_lead_time)}
           </span>
         ) : (
           <span className="text-xs text-slate-400">tüketim girilmemiş</span>

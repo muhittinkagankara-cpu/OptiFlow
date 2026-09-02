@@ -29,10 +29,19 @@ export function statusTone(status: InventoryStatus): Tone {
  *
  * Renk tek başına bilgi taşımaz; renk körü bir kullanıcı için tablo yalnızca
  * renkle konuşsaydı okunamaz olurdu.
+ *
+ * `coversLeadTime` false olduğunda etiket değişir: stok, sipariş bugün verilse
+ * bile mal gelene kadar yetmiyordur. Bu, sıradan bir "sipariş ver" uyarısından
+ * farklı bir durumdur — sipariş vermek tek başına sorunu çözmez ve kullanıcının
+ * hızlandırılmış tedarik gibi bir önlem alması gerekir. İkisini aynı etiketle
+ * göstermek, bu fırsatı kaçırmasına yol açardı.
  */
-export function statusLabel(status: InventoryStatus): string {
+export function statusLabel(
+  status: InventoryStatus,
+  coversLeadTime: boolean = true,
+): string {
   if (status === "critical") {
-    return "Sipariş ver";
+    return coversLeadTime ? "Sipariş ver" : "Tedarik yetişmiyor";
   }
   if (status === "warning") {
     return "Yaklaşıyor";

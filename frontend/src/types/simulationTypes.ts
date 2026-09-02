@@ -498,6 +498,13 @@ export interface InventoryAnalysis {
   /** Talep sıfırsa -1 (sonsuz yerine işaret değeri). */
   days_of_stock: number;
   days_until_reorder: number;
+  /**
+   * Sipariş bugün verilse bile mal gelene kadar stok yeter mi?
+   *
+   * `false` ise sipariş vermek tek başına yetmez; duruş kaçınılmazdır. Bu ayrım
+   * yalnızca yeniden sipariş noktasına bakarak yapılamaz.
+   */
+  covers_lead_time: boolean;
   status: InventoryStatus;
   recommendation: string;
 }

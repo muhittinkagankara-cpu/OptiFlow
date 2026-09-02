@@ -30,6 +30,24 @@ describe("statusTone / statusLabel", () => {
     expect(statusLabel("ok")).toBe("Yeterli");
   });
 
+  it("tedarik yetişmiyorsa etiket ayrışır", () => {
+    // "Sipariş ver" ile "tedarik yetişmiyor" farklı eylemler gerektirir:
+    // ikincisinde sipariş vermek tek başına sorunu çözmez.
+    expect(statusLabel("critical", true)).toBe("Sipariş ver");
+    expect(statusLabel("critical", false)).toBe("Tedarik yetişmiyor");
+  });
+
+  it("yalnızca kritik durumda tedarik ayrımı yapılır", () => {
+    // Stok sipariş noktasının üzerindeyken "tedarik yetişmiyor" demek anlamsız
+    // olurdu; henüz sipariş verilmesi bile gerekmiyordur.
+    expect(statusLabel("warning", false)).toBe("Yaklaşıyor");
+    expect(statusLabel("ok", false)).toBe("Yeterli");
+  });
+
+  it("tedarik bilgisi verilmezse mevcut davranış korunur", () => {
+    expect(statusLabel("critical")).toBe("Sipariş ver");
+  });
+
   it("kritik durum en güçlü tonu alır", () => {
     expect(statusTone("critical")).not.toBe(statusTone("ok"));
     expect(statusTone("critical")).not.toBe(statusTone("warning"));

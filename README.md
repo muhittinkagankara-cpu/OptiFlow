@@ -136,7 +136,7 @@ npm run build
 
 ## Testleri çalıştırma
 
-### Backend (497 test)
+### Backend (502 test)
 
 Proje kök dizininde:
 
@@ -155,7 +155,7 @@ python -m pytest simulation_engine/validation/ -v -s
 > çok daha hızlıdır, örneğin:
 > `python -m pytest simulation_engine/validation/test_queueing_theory.py -q`
 
-### Frontend (240 test)
+### Frontend (243 test)
 
 `frontend/` dizininde:
 

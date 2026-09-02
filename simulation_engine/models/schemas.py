@@ -1706,6 +1706,12 @@ class InventoryAnalysis(BaseModel):
             "altindaysa 0, talep yoksa -1."
         )
     )
+    covers_lead_time: bool = Field(
+        description=(
+            "Mevcut stok, yeni siparis bugun verilse bile gelene kadar yeter mi? "
+            "False ise siparis vermek tek basina yetmez; durus kacinilmazdir."
+        )
+    )
     status: InventoryStatus
     recommendation: str = Field(description="Kullaniciya tek cumlelik oneri")
 

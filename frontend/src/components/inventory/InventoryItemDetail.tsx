@@ -233,11 +233,18 @@ function AnalysisCards({ analysis }: { analysis: InventoryAnalysis }) {
       />
       <Card
         label="Mevcut Durum"
-        help="Stoğun sipariş noktasına ne kadar yakın olduğu."
+        help={
+          "Bu kart tek bir soruya cevap verir: şimdi sipariş vermeli miyim? " +
+          "Ölçüt, stoğun yeniden sipariş noktasına olan uzaklığıdır ve " +
+          "zamanında sipariş vereceğiniz varsayılır. Aşağıdaki tükenme riski " +
+          "ise tersini sorar: hiç sipariş verilmezse ne olur? Bu yüzden " +
+          "\"Yeterli\" bir kalem için bile 30 günlük tükenme olasılığı yüksek " +
+          "çıkabilir — ikisi çelişmez, farklı soruların cevabıdır."
+        }
         value={formatQuantity(analysis.current_stock, analysis.unit)}
         note={`${formatDays(analysis.days_of_stock)} yeter`}
         tone={tone}
-        badge={statusLabel(analysis.status)}
+        badge={statusLabel(analysis.status, analysis.covers_lead_time)}
       />
       <Card
         label="Yıllık Maliyet"
@@ -323,8 +330,19 @@ function StockoutSection({ risk }: { risk: StockoutRiskReport }) {
     <section className="mt-8 space-y-4">
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Stok Tükenme Riski</h2>
+        {/*
+          Bu bölüm yukarıdaki "Mevcut Durum" kartıyla çelişiyor görünebilir:
+          kart yeşil "Yeterli" derken burada "%100 ihtimalle tükenir" yazabilir.
+          İkisi farklı soruların cevabıdır ve bunu okuyucuya söylemeden yan yana
+          koymak, hangisine güveneceğini bilememesine yol açar.
+        */}
         <p className="mt-0.5 text-sm text-slate-600">
-          Yeni sipariş gelmediği varsayımıyla, önümüzdeki {risk.horizon_days} gün.
+          <strong className="font-medium text-slate-700">
+            Hiç sipariş verilmediği
+          </strong>{" "}
+          varsayımıyla, önümüzdeki {risk.horizon_days} gün. Yukarıdaki durum
+          kartı ise zamanında sipariş verildiğini varsayar; bu yüzden “Yeterli”
+          bir kalemin burada tükeniyor görünmesi normaldir.
         </p>
       </div>
 
