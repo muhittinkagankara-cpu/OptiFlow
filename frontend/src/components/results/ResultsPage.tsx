@@ -153,7 +153,7 @@ export function ResultsPage({
             isin nerede kayboldugunu gorur, sonra bunun ne kadara mal oldugunu.
             Varsayilan olarak kapali durur cunku maliyet oranlari girilmeden
             gosterilecek bir rakam yoktur. */}
-        <FinancialImpactPanel result={result} />
+        <FinancialImpactPanel result={result} config={config} />
 
         {/* Animasyon tablonun altinda ve varsayilan olarak kapali durur: izi
             uretmek sunucuda simulasyonu yeniden calistirmayi gerektirir ve

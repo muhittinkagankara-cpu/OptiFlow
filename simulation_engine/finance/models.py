@@ -185,6 +185,68 @@ class StationFinancialImpact(BaseModel):
     is_bottleneck: bool = False
 
 
+class HeatBand(str, Enum):
+    """Isı skorunun renk bandı.
+
+    Renk backend'de belirlenir, arayüzde değil: eşikler iki yerde tanımlansaydı
+    biri değiştiğinde diğeri sessizce eskir ve aynı skor iki ekranda iki farklı
+    renk alırdı.
+    """
+
+    GREEN = "green"
+    YELLOW = "yellow"
+    ORANGE = "orange"
+    RED = "red"
+
+
+class HeatComponent(BaseModel):
+    """Isı skorunun tek bir bileşeni ve skora katkısı.
+
+    İpucu balonunun içeriğidir: bir kutunun **neden** kırmızı olduğu, kutuya
+    bakan kişi tarafından okunabilmelidir. Yalnızca skor gösterilseydi, sayı
+    bir hükme dönüşür ama gerekçesi görünmez olurdu.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(description="Bilesen anahtari, or. 'loss'")
+    label: str = Field(description="Kullaniciya gosterilecek ad")
+    raw_value: float = Field(description="Ham deger (para ya da 0-1 oran)")
+    normalized: float = Field(ge=0.0, le=1.0, description="0-1'e normalize hali")
+    weight: float = Field(ge=0.0, le=1.0, description="Bilesenin agirligi")
+    contribution: float = Field(
+        ge=0.0, description="Bu bilesenin 100'luk skora katkisi"
+    )
+
+
+class StationHeat(BaseModel):
+    """Bir istasyonun ısı skoru."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    station_id: str
+    station_name: str
+    score: float = Field(ge=0.0, le=100.0)
+    band: HeatBand
+    components: List[HeatComponent] = Field(default_factory=list)
+
+    total_loss: float = Field(
+        ge=0.0,
+        description=(
+            "Istasyonun mutlak parasal kaybi. Skor goreli oldugu icin bu tutar "
+            "skorla BIRLIKTE gosterilmelidir."
+        ),
+    )
+    is_bottleneck: bool = False
+    is_relative: bool = Field(
+        description=(
+            "Kayip bileseni koşumdaki en kotu istasyona gore mi olculdu? "
+            "Hicbir istasyonda kayip yoksa False olur ve skor yalnizca "
+            "kullanim/bekleme/fire'den gelir."
+        )
+    )
+
+
 class ImprovementSuggestion(BaseModel):
     """En yüksek getirili iyileştirme önerisi.
 
@@ -214,6 +276,23 @@ class FinancialReport(BaseModel):
     impact: FinancialImpact
     stations: List[StationFinancialImpact] = Field(default_factory=list)
     suggestions: List[ImprovementSuggestion] = Field(default_factory=list)
+
+    heat: List[StationHeat] = Field(
+        default_factory=list,
+        description=(
+            "Isi haritasi: en sicaktan en soguga sirali istasyon skorlari. "
+            "Ayni yanitta tasinmasi bilinclidir — arayuz ayni koşum icin ikinci "
+            "bir istek atmak zorunda kalmaz ve iki panel her zaman ayni veriyi "
+            "gosterir."
+        ),
+    )
+    top_loss_stations: List[StationHeat] = Field(
+        default_factory=list,
+        description=(
+            "En cok para kaybettiren istasyonlar; skora gore DEGIL tutara gore "
+            "siralanir. En sicak istasyon her zaman en pahali istasyon degildir."
+        ),
+    )
 
     recoverable_loss: float = Field(
         ge=0.0,

@@ -101,6 +101,16 @@ input[type="number"] {
   animation: optiflow-bottleneck-pulse 2.6s ease-in-out infinite;
 }
 
+/* Isı haritasındaki kritik (kırmızı) istasyonun nabzı.
+
+   Aynı animasyon eğrisi darboğaz nabzıyla paylaşılır — ayrı bir hareket dili
+   eklemek, "kırmızı zaten dikkat çekiyor, bir de farklı biçimde titriyor"
+   gibi rakip sinyaller yaratırdı. Yalnızca kritik banttaki istasyonlar atar;
+   hepsi atsaydı hareket bir sinyal olmaktan çıkıp gürültüye dönüşürdü. */
+.optiflow-heat-pulse {
+  animation: optiflow-bottleneck-pulse 2.6s ease-in-out infinite;
+}
+
 /* Hareketi azaltılmış tercihine saygı.
 
    Yanıp sönen ve sürekli kayan öğeler, bu ayarın var olma sebebidir: baş
@@ -112,6 +122,9 @@ input[type="number"] {
     animation: none;
   }
   .optiflow-bottleneck-glow {
+    animation: none;
+  }
+  .optiflow-heat-pulse {
     animation: none;
   }
 }

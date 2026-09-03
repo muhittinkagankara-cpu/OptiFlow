@@ -747,4 +747,42 @@ export interface FinancialReport {
   /** Yalnızca `production_minutes_per_day` verildiğinde dolar. */
   daily_loss?: number | null;
   window_minutes: number;
+  /** Isı haritası: en sıcaktan en soğuğa sıralı. */
+  heat: StationHeat[];
+  /** En çok para kaybettiren istasyonlar; ısıya göre değil **tutara** göre. */
+  top_loss_stations: StationHeat[];
+}
+
+// --------------------------------------------------------------------------- //
+// Isı haritası — Sprint 2
+// --------------------------------------------------------------------------- //
+//
+// Skor ve renk bandı **backend'de** hesaplanır. Arayüz yalnızca bandı bir CSS
+// sınıfına çevirir; eşikleri yeniden uygulamaz. İki yerde eşik tanımlansaydı
+// biri değiştiğinde diğeri sessizce eskir ve aynı skor iki ekranda iki farklı
+// renk alırdı.
+
+export type HeatBand = "green" | "yellow" | "orange" | "red";
+
+/** Isı skorunun tek bir bileşeni; ipucu balonunun içeriği. */
+export interface HeatComponent {
+  name: string;
+  label: string;
+  raw_value: number;
+  normalized: number;
+  weight: number;
+  contribution: number;
+}
+
+export interface StationHeat {
+  station_id: string;
+  station_name: string;
+  score: number;
+  band: HeatBand;
+  components: HeatComponent[];
+  /** Mutlak parasal kayıp. Skor göreli olduğu için skorla birlikte gösterilir. */
+  total_loss: number;
+  is_bottleneck: boolean;
+  /** Kayıp bileşeni koşumdaki en kötü istasyona göre mi ölçüldü? */
+  is_relative: boolean;
 }

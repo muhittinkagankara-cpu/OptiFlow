@@ -34,6 +34,7 @@ from __future__ import annotations
 from typing import Dict, List, Optional, Sequence
 
 from simulation_engine.analytics.bottleneck import CRITICAL_UTILIZATION
+from simulation_engine.finance.heatmap import compute_heatmap, top_loss_stations
 from simulation_engine.finance.models import (
     REQUIRED_RATE_BY_COMPONENT,
     FinancialImpact,
@@ -461,6 +462,10 @@ def build_report(
     per_station = [
         compute_station_impact(item, settings, bottleneck) for item in stations
     ]
+    # Isi haritasi ayni kayip dokumunden turetilir; finans hesabi TEKRARLANMAZ.
+    # Ayni yanitta tasinmasi sayesinde arayuz ikinci bir istek atmaz ve iki
+    # panel her zaman ayni koşumun verisini gosterir.
+    heat = compute_heatmap(stations, per_station)
 
     daily: Optional[float] = None
     if settings.production_minutes_per_day is not None:
@@ -475,6 +480,8 @@ def build_report(
         impact=impact,
         stations=sorted(per_station, key=lambda item: item.total_loss, reverse=True),
         suggestions=suggest_improvements(per_station),
+        heat=heat,
+        top_loss_stations=top_loss_stations(heat),
         recoverable_loss=recoverable_loss(impact),
         daily_loss=daily,
         window_minutes=window_minutes,

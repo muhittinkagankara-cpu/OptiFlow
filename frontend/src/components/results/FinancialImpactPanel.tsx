@@ -19,9 +19,13 @@ import type {
   FinancialReport,
   FinancialSettings,
   LossComponent,
+  SimulationConfig,
   SimulationRunResponse,
 } from "../../types/simulationTypes";
 import { ApiError, getFinancialImpact } from "../../lib/apiClient";
+import { FactoryHeatmap } from "../heatmap/FactoryHeatmap";
+import { HeatLegend } from "../heatmap/HeatLegend";
+import { TopLossStations } from "../heatmap/TopLossStations";
 import { GENERIC_ERROR_MESSAGE } from "../../lib/errorMessages";
 import {
   confidenceLabel,
@@ -54,9 +58,10 @@ const SHIFT_PRESETS = [
 
 interface FinancialImpactPanelProps {
   result: SimulationRunResponse;
+  config: SimulationConfig;
 }
 
-export function FinancialImpactPanel({ result }: FinancialImpactPanelProps) {
+export function FinancialImpactPanel({ result, config }: FinancialImpactPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [settings, setSettings] = useState<FinancialSettings>({});
   const [report, setReport] = useState<FinancialReport | null>(null);
@@ -137,7 +142,7 @@ export function FinancialImpactPanel({ result }: FinancialImpactPanelProps) {
             </ul>
           )}
 
-          {report && <ReportView report={report} />}
+          {report && <ReportView report={report} config={config} />}
         </div>
       )}
     </section>
@@ -262,11 +267,40 @@ function SettingsForm({
 }
 
 /** Hesaplanmış raporun görünümü. */
-function ReportView({ report }: { report: FinancialReport }) {
+function ReportView({
+  report,
+  config,
+}: {
+  report: FinancialReport;
+  config: SimulationConfig;
+}) {
   const { impact } = report;
+  const [focusedId, setFocusedId] = useState<string | null>(null);
 
   return (
     <div className="mt-6 space-y-6">
+      {/* --- Isı haritası: "param nerede yanıyor?" tek ekranda --- */}
+      {report.heat.length > 0 && (
+        <div>
+          <h4 className="mb-2 text-sm font-semibold text-slate-900">Isı haritası</h4>
+          <div className="grid gap-3 lg:grid-cols-[1fr_240px]">
+            <FactoryHeatmap
+              config={config}
+              heat={report.heat}
+              focusedId={focusedId}
+              onFocus={setFocusedId}
+            />
+            <div className="space-y-3">
+              <HeatLegend isRelative={report.heat.some((item) => item.is_relative)} />
+              <TopLossStations
+                stations={report.top_loss_stations}
+                focusedId={focusedId}
+                onFocus={setFocusedId}
+              />
+            </div>
+          </div>
+        </div>
+      )}
       {/* --- Başlık kartları --- */}
       <div className="grid gap-3 sm:grid-cols-3">
         <HeadlineCard
