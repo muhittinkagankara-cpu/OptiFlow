@@ -188,6 +188,31 @@ Uygulama, platformun atadığı `PORT` değişkenini okur ve `0.0.0.0` adresine
 bağlanır. Dağıtım bitince size `https://...up.railway.app` biçiminde bir adres
 verilir.
 
+### 1b. Veritabanı şeması — Alembic
+
+Şema **Alembic ile yönetilir** ve uygulama açılışında kendiliğinden göç
+çalıştırmaz. Bu bilinçlidir: başarısız bir göçün uygulamayı yarım başlatması
+yerine dağıtımı durdurması gerekir. Her dağıtımda, uygulama başlatılmadan önce
+bir kez çalıştırın:
+
+```bash
+DATABASE_URL="$DATABASE_URL" alembic upgrade head
+```
+
+**Mevcut bir veritabanında ilk kez:** `simulations` ve `inventory_items`
+tabloları Alembic devreye girmeden önce `create_all()` ile oluşturulmuştu.
+Baseline göçü bu tabloları yeniden yaratmaya çalışmasın diye önce damgalayın,
+sonra yükseltin — bu iki komut yalnızca **bir kez**, mevcut veritabanında
+çalıştırılır:
+
+```bash
+DATABASE_URL="$DATABASE_URL" alembic stamp a1b2c3d4e5f6
+DATABASE_URL="$DATABASE_URL" alembic upgrade head
+```
+
+Boş bir veritabanında damgalamaya gerek yoktur; `alembic upgrade head` şemayı
+sıfırdan kurar.
+
 ### 2. Frontend — Vercel
 
 `frontend/.env.production` dosyasındaki değişkene Railway adresini yazın

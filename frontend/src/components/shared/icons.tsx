@@ -222,3 +222,23 @@ export function PaintIcon(props: IconProps) {
     </Svg>
   );
 }
+
+/** Disket — "Kaydet" eylemi. */
+export function SaveIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" />
+      <path d="M17 21v-8H7v8" />
+      <path d="M7 3v5h8" />
+    </Svg>
+  );
+}
+
+/** Klasör — kayıtlı fabrikalar listesi. */
+export function FolderIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
+    </Svg>
+  );
+}

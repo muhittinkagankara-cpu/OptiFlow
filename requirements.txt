@@ -13,3 +13,4 @@ uvicorn[standard]>=0.29
 # katmani ice aktarilirken SQLAlchemy'ye ihtiyac duyar.
 sqlalchemy>=2.0
 psycopg2-binary>=2.9
+alembic>=1.13

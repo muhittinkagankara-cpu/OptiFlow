@@ -9,6 +9,12 @@
 
 import type {
   ComparisonResponse,
+  Factory,
+  FactoryCreateRequest,
+  FactoryDetail,
+  FactorySaveRequest,
+  FactoryVersion,
+  FactoryVersionSummary,
   InventoryAnalysis,
   InventoryItem,
   SimulationConfig,
@@ -45,6 +51,7 @@ export const API_BASE_URL: string =
 
 const SIMULATIONS_PATH = "/api/simulations";
 const INVENTORY_PATH = "/api/inventory";
+const FACTORIES_PATH = "/api/factories";
 
 /** FastAPI'nin Pydantic doğrulama hatası biçimi. */
 interface PydanticErrorItem {
@@ -288,6 +295,108 @@ export function getStockoutRisk(
   const suffix = query.toString() ? `?${query}` : "";
   return request<StockoutRiskReport>(
     `${INVENTORY_PATH}/stockout-risk/${encodeURIComponent(itemId)}${suffix}`,
+    { method: "POST" },
+  );
+}
+
+
+// --------------------------------------------------------------------------- //
+// Fabrikalar
+// --------------------------------------------------------------------------- //
+//
+// Fabrika modeli artık backend'de yaşar. Sayfa yenilendiğinde kaybolan tek şey
+// "hangi fabrikadaydım" bilgisidir ve o da `factoryModel.recallFactory` ile
+// hatırlanır; modelin kendisi buradan yeniden yüklenir.
+
+export function listFactories(): Promise<Factory[]> {
+  return request<Factory[]>(FACTORIES_PATH);
+}
+
+export function getFactory(factoryId: string): Promise<FactoryDetail> {
+  return request<FactoryDetail>(`${FACTORIES_PATH}/${encodeURIComponent(factoryId)}`);
+}
+
+export function createFactory(payload: FactoryCreateRequest): Promise<FactoryDetail> {
+  return request<FactoryDetail>(FACTORIES_PATH, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Fabrikayı kaydeder.
+ *
+ * Model gönderildiğinde backend, içeriğin özetini güncel sürümünkiyle
+ * karşılaştırır: aynıysa yeni sürüm oluşmaz ve var olan sürüm geri döner.
+ * Yani "Kaydet" düğmesine iki kez basmak sürüm geçmişini kirletmez.
+ */
+export function saveFactory(
+  factoryId: string,
+  payload: FactorySaveRequest,
+): Promise<FactoryDetail> {
+  return request<FactoryDetail>(`${FACTORIES_PATH}/${encodeURIComponent(factoryId)}`, {
+    method: "PUT",
+    body: JSON.stringify(payload),
+  });
+}
+
+/**
+ * Fabrikayı siler.
+ *
+ * Sunucu 204 döndürür; gövde yoktur ve `parseResponse` JSON beklediği için
+ * envanter silmede olduğu gibi burada da ayrı ele alınır.
+ */
+export async function deleteFactory(factoryId: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE_URL}${FACTORIES_PATH}/${encodeURIComponent(factoryId)}`,
+      { method: "DELETE", headers: { "Content-Type": "application/json" } },
+    );
+  } catch (cause) {
+    throw ApiError.network(cause);
+  }
+  if (!response.ok) {
+    let body: unknown = null;
+    try {
+      body = await response.json();
+    } catch {
+      // Gövde JSON değilse ham durum koduyla devam edilir.
+    }
+    const rawDetails = extractRawDetails(body, response.status);
+    throw new ApiError(response.status, rawDetails, translateErrorDetails(rawDetails));
+  }
+}
+
+export function listFactoryVersions(
+  factoryId: string,
+): Promise<FactoryVersionSummary[]> {
+  return request<FactoryVersionSummary[]>(
+    `${FACTORIES_PATH}/${encodeURIComponent(factoryId)}/versions`,
+  );
+}
+
+export function getFactoryVersion(
+  factoryId: string,
+  versionId: string,
+): Promise<FactoryVersion> {
+  return request<FactoryVersion>(
+    `${FACTORIES_PATH}/${encodeURIComponent(factoryId)}/versions/${encodeURIComponent(versionId)}`,
+  );
+}
+
+/**
+ * Kayıtlı bir fabrikanın güncel sürümünü çalıştırır.
+ *
+ * `runSimulation` ile aynı hesabı yapar; tek farkı sonucun hangi fabrika
+ * sürümünden üretildiğinin kaydedilmesidir. Bu sayede aylar sonra bakıldığında
+ * sonucun hangi modelden geldiği kesin olarak bilinir.
+ */
+export function runFactorySimulation(
+  factoryId: string,
+): Promise<SimulationRunResponse> {
+  return request<SimulationRunResponse>(
+    `${FACTORIES_PATH}/${encodeURIComponent(factoryId)}/run`,
     { method: "POST" },
   );
 }

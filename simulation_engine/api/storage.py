@@ -115,6 +115,17 @@ class SimulationRecord(Base):
     results: Mapped[Dict[str, Any]] = mapped_column(JSON_TYPE)
     status: Mapped[str] = mapped_column(String(16))
 
+    # Koşumun hangi fabrika sürümünden üretildiği. Her ikisi de boş olabilir:
+    # `POST /api/simulations/run` doğrudan bir `SimulationConfig` ile
+    # çağrılabilir ve bu koşum hiçbir kayıtlı fabrikaya ait değildir. Mevcut
+    # kayıtlar da bu sütunlar eklenmeden önce yazıldığı için boştur.
+    factory_id: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+    factory_version_id: Mapped[Optional[str]] = mapped_column(
+        String(64), nullable=True, index=True
+    )
+
 
 @dataclass
 class StoredSimulation:
@@ -128,6 +139,11 @@ class StoredSimulation:
     oee: OEEReport
     duration_seconds: float
     created_at: float = field(default_factory=time.time)
+
+    #: Koşumun üretildiği fabrika ve sürüm. Kayıtlı bir fabrikadan
+    #: çalıştırılmayan koşumlarda boştur.
+    factory_id: Optional[str] = None
+    factory_version_id: Optional[str] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -173,7 +189,11 @@ def serialize_record(record: StoredSimulation) -> Dict[str, Any]:
 
 
 def deserialize_record(
-    simulation_id: str, config: Dict[str, Any], results: Dict[str, Any]
+    simulation_id: str,
+    config: Dict[str, Any],
+    results: Dict[str, Any],
+    factory_id: Optional[str] = None,
+    factory_version_id: Optional[str] = None,
 ) -> StoredSimulation:
     """Veritabanı satırını `StoredSimulation` nesnesine geri çevirir."""
     return StoredSimulation(
@@ -187,6 +207,8 @@ def deserialize_record(
         oee=OEEReport.model_validate(results["oee"]),
         duration_seconds=results["duration_seconds"],
         created_at=results.get("created_at", time.time()),
+        factory_id=factory_id,
+        factory_version_id=factory_version_id,
     )
 
 
@@ -288,7 +310,11 @@ class DatabaseSimulationStore:
             # vermesini engeller.
             pool_pre_ping=True,
         )
-        Base.metadata.create_all(self._engine)
+        # Yalnizca kendi tablosu olusturulur. Filtresiz `create_all`, ayni
+        # `Base` uzerinde tanimli fabrika tablolarini da yaratir ve bunlar
+        # Alembic tarafindan yonetiliyor; uygulama onlari acilista kendiliginden
+        # yaratsaydi `alembic upgrade head` "tablo zaten var" hatasiyla duserdi.
+        Base.metadata.create_all(self._engine, tables=[SimulationRecord.__table__])
         self._session_factory = sessionmaker(bind=self._engine)
 
     def save(self, record: StoredSimulation) -> None:
@@ -302,6 +328,8 @@ class DatabaseSimulationStore:
                     config=payload["config"],
                     results=payload["results"],
                     status="completed",
+                    factory_id=record.factory_id,
+                    factory_version_id=record.factory_version_id,
                 )
             )
             self._delete_expired(session)
@@ -318,7 +346,13 @@ class DatabaseSimulationStore:
             row = session.get(SimulationRecord, simulation_id)
             if row is None:
                 raise KeyError(simulation_id)
-            return deserialize_record(row.id, row.config, row.results)
+            return deserialize_record(
+                row.id,
+                row.config,
+                row.results,
+                row.factory_id,
+                row.factory_version_id,
+            )
 
     def clear(self) -> None:
         """Tüm kayıtları siler (testler için)."""
@@ -339,20 +373,32 @@ class DatabaseSimulationStore:
             return len(session.execute(select(SimulationRecord.id)).all())
 
     def _delete_expired(self, session: Any) -> None:
-        """Saklama süresi dolmuş kayıtları siler.
+        """Saklama süresi dolmuş, hiçbir fabrika sürümüne bağlı olmayan kayıtları siler.
 
         Her ekleme sırasında çalışır. Zamanlanmış bir görev yerine bu yolun
         seçilmesi bilinçlidir: ayrı bir zamanlayıcı, kurulması ve izlenmesi
         gereken yeni bir bileşen demektir; ekleme anındaki temizlik ise
         uygulamanın kendisiyle birlikte her zaman çalışır.
+
+        Bir fabrika sürümüne bağlı koşumlar **hiçbir zaman silinmez**. Bu ayrım
+        kalıcı fabrika modeliyle birlikte zorunlu hâle geldi: kayıtlı bir
+        modelden alınmış sonuç, o modelin geçmişinin parçasıdır — "sürüm 2 ile
+        sürüm 5 arasında ne değişti" sorusunun cevabı otuz gün sonra kendiliğinden
+        silinemez. Fabrikaya bağlı olmayan koşumlar ise hâlâ geçicidir:
+        kaydedilmemiş bir modelin tek seferlik denemesidir ve saklanmaları
+        için bir sebep yoktur.
         """
         cutoff = datetime.now(timezone.utc) - timedelta(days=self._retention_days)
         result = session.execute(
-            delete(SimulationRecord).where(SimulationRecord.created_at < cutoff)
+            delete(SimulationRecord).where(
+                SimulationRecord.created_at < cutoff,
+                SimulationRecord.factory_version_id.is_(None),
+            )
         )
         if result.rowcount:
             logger.info(
-                "%d adet suresi dolmus simulasyon kaydi silindi (%d gunden eski).",
+                "%d adet suresi dolmus simulasyon kaydi silindi (%d gunden eski, "
+                "hicbir fabrika surumune bagli olmayanlar).",
                 result.rowcount,
                 self._retention_days,
             )

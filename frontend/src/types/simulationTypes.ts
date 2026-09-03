@@ -564,3 +564,98 @@ export interface StockoutRiskReport {
   production_impact: ProductionImpact | null;
   headline: string;
 }
+
+// --------------------------------------------------------------------------- //
+// Fabrika modeli — kalıcı, sürümlenmiş
+// --------------------------------------------------------------------------- //
+//
+// Bu tipler backend'deki Pydantic modellerinin birebir karşılığıdır ve elle
+// güncel tutulur; projede kod üretimi (codegen) yok, mevcut tüm tipler de aynı
+// biçimde yazılmış durumda. Alan adları backend'in yazımını (snake_case)
+// korur: iki tarafta iki farklı ad kullanmak, her istek ve yanıtta bir çeviri
+// katmanı gerektirir ve o katman sessizce eskiyen bir yer olurdu.
+
+/** Canvas üzerinde bir kutunun konumu. */
+export interface NodePosition {
+  x: number;
+  y: number;
+}
+
+/**
+ * Editör yerleşimi — yalnızca sunum.
+ *
+ * `SimulationConfig` motorun ihtiyaç duyduğu her şeyi taşır ama kutuların
+ * nerede durduğunu taşımaz. Yirmi istasyonluk bir modelde yerleşim,
+ * kullanıcının harcadığı emeğin büyük bölümüdür; ayrı bir alanda saklanmasa
+ * her açılışta otomatik yerleşime sıfırlanırdı.
+ */
+export interface FactoryLayout {
+  stations: Record<string, NodePosition>;
+  arrival?: NodePosition | null;
+}
+
+/** Bir fabrika modelinin değişmez anlık görüntüsü. */
+export interface FactoryVersion {
+  id: string;
+  factory_id: string;
+  version_number: number;
+  /** `config` + `layout` üzerinden hesaplanan SHA-256. */
+  snapshot_hash: string;
+  config: SimulationConfig;
+  layout?: FactoryLayout | null;
+  note?: string | null;
+  created_at: string;
+}
+
+/** Sürüm listesinde gösterilen özet; modeli taşımaz. */
+export interface FactoryVersionSummary {
+  id: string;
+  version_number: number;
+  snapshot_hash: string;
+  station_count: number;
+  note?: string | null;
+  created_at: string;
+}
+
+/** Kullanıcının sahip olduğu, adlandırılmış fabrika. */
+export interface Factory {
+  id: string;
+  /** Çok kiracılı desteğe hazırlık; şimdilik her zaman boş. */
+  org_id?: string | null;
+  name: string;
+  sector?: string | null;
+  current_version_id?: string | null;
+  version_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Bir fabrika ve onun güncel sürümü. */
+export interface FactoryDetail {
+  factory: Factory;
+  current_version?: FactoryVersion | null;
+}
+
+/** Yeni fabrika oluşturma isteği. */
+export interface FactoryCreateRequest {
+  name: string;
+  sector?: string | null;
+  config?: SimulationConfig;
+  layout?: FactoryLayout;
+  note?: string | null;
+}
+
+/**
+ * Kaydetme isteği.
+ *
+ * `config` gönderildiğinde backend özet karşılaştırması yapar: içerik güncel
+ * sürümle aynıysa yeni sürüm oluşmaz. `layout` yalnızca `config` ile birlikte
+ * gönderilebilir — yerleşim modelin bir parçasıdır ve tek başına sürümlenmez.
+ */
+export interface FactorySaveRequest {
+  name?: string;
+  sector?: string | null;
+  config?: SimulationConfig;
+  layout?: FactoryLayout;
+  note?: string | null;
+}

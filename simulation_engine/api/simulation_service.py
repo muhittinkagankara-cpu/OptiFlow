@@ -64,7 +64,7 @@ import logging
 import math
 import os
 import time
-from typing import Dict, List, Sequence, Union
+from typing import Dict, List, Optional, Sequence, Union
 
 from fastapi import Body, Depends, FastAPI, HTTPException, Path, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,7 +82,11 @@ from simulation_engine.analytics.oee import compute_oee_report
 from simulation_engine.core.engine import capture_trace
 from simulation_engine.analytics.queueing_theory import mmc_metrics
 from simulation_engine.api import dependencies
-from simulation_engine.api.dependencies import get_store
+from simulation_engine.api.dependencies import (
+    FactoryStoreProtocol,
+    get_factory_store,
+    get_store,
+)
 from simulation_engine.api.inventory_routes import router as inventory_router
 from simulation_engine.api.storage import (
     MAX_STORED_SIMULATIONS,
@@ -91,6 +95,15 @@ from simulation_engine.api.storage import (
     StoredSimulation,
     create_simulation_store,
     new_simulation_id,
+)
+from simulation_engine.api.factory_routes import (
+    FACTORY_PREFIX,
+    factory_not_found,
+    router as factory_router,
+)
+from simulation_engine.api.factory_storage import (
+    FactoryHasNoVersion,
+    FactoryNotFound,
 )
 from simulation_engine.models.schemas import (
     AnalyticalStationComparison,
@@ -341,10 +354,20 @@ def _build_station_metrics(
     return rows
 
 
-def _execute_scenario(config: SimulationConfig) -> StoredSimulation:
+def _execute_scenario(
+    config: SimulationConfig,
+    factory_id: Optional[str] = None,
+    factory_version_id: Optional[str] = None,
+) -> StoredSimulation:
     """Bir senaryoyu çalıştırır ve tüm analizleri tek sonuç kümesi üzerinden yapar.
 
     Bu fonksiyon CPU yoğundur ve `asyncio.to_thread` içinden çağrılmalıdır.
+
+    `factory_id` ve `factory_version_id` yalnızca koşum kayıtlı bir fabrikadan
+    başlatıldığında doldurulur. Kaydın hangi modelden üretildiğini burada,
+    sonucun oluşturulduğu tek yerde işaretlemek bilinçlidir: çağıran tarafın
+    sonradan alana atama yapması gerekseydi, yeni bir çağrı yolunda bunu
+    unutmak sessizce sahipsiz bir koşum bırakırdı.
     """
     replications, master_seed, elapsed = run_replications(config)
     monte_carlo = summarize_replications(replications, master_seed, elapsed)
@@ -362,6 +385,8 @@ def _execute_scenario(config: SimulationConfig) -> StoredSimulation:
         bottleneck=bottleneck_analytics.analyze(representative, config),
         oee=compute_oee_report(representative),
         duration_seconds=elapsed,
+        factory_id=factory_id,
+        factory_version_id=factory_version_id,
     )
 
 
@@ -417,6 +442,8 @@ def _build_run_response(record: StoredSimulation) -> SimulationRunResponse:
         duration_seconds=record.duration_seconds,
         warnings=_deduplicate(warnings),
         headline=monte_carlo.headline,
+        factory_id=record.factory_id,
+        factory_version_id=record.factory_version_id,
     )
 
 
@@ -742,6 +769,11 @@ app.add_middleware(
 # bagimsizdir: hic kalem eklenmeden simulasyon aynen calisir.
 app.include_router(inventory_router)
 
+# Fabrika modulu de ayri bir router'dir. Kaydedilmis hicbir fabrika olmadan
+# `POST /api/simulations/run` aynen calisir; kalicilik mevcut akisin uzerine
+# eklenmistir, onun yerine gecmemistir.
+app.include_router(factory_router)
+
 
 @app.post(
     f"{API_PREFIX}/run",
@@ -919,6 +951,80 @@ async def compare_simulations(
 #: bu değişken yok sayılırsa platform uygulamaya ulaşamaz ve dağıtım
 #: "sağlıksız" olarak işaretlenir.
 DEFAULT_PORT: int = 8000
+
+
+@app.post(
+    f"{FACTORY_PREFIX}/{{factory_id}}/run",
+    response_model=SimulationRunResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Kayitli bir fabrikanin guncel surumunu calistirir",
+    tags=["factories"],
+)
+async def run_factory(
+    factory_id: str = Path(..., description="`/api/factories` ucundan donen kimlik"),
+    factories: FactoryStoreProtocol = Depends(get_factory_store),
+    store: SimulationStoreProtocol = Depends(get_store),
+) -> SimulationRunResponse:
+    """Kaydedilmiş bir fabrikanın güncel sürümünü çalıştırır.
+
+    Bu uç bir **uyarlayıcıdır** (adapter): kalıcı sürümden `SimulationConfig`
+    okunur ve mevcut çalıştırma hattına olduğu gibi verilir. Simülasyon
+    matematiğinde hiçbir değişiklik yoktur — `POST /api/simulations/run` ile
+    aynı `_execute_scenario` çağrılır, aynı sonuçlar üretilir. Tek fark, kaydın
+    hangi fabrika sürümünden geldiğinin işaretlenmesidir.
+
+    Bu işaret geçmişin bütünlüğünü sağlar: sürümler değişmez olduğu için, üç ay
+    sonra bu koşuma bakıldığında hangi tampon boyutlarıyla, hangi arıza
+    oranlarıyla üretildiği kesin olarak okunabilir. Fabrika o tarihten sonra ne
+    kadar değişirse değişsin sonuç yeniden yorumlanamaz.
+
+    Bu uç `simulation_service` içinde tanımlıdır çünkü çalıştırma hattı
+    buradadır; `factory_routes` içine konsaydı bu modülü içe aktarması gerekir
+    ve dairesel bir bağımlılık oluşurdu. Mantığı kopyalamak yerine ucun tanımı
+    kodun bulunduğu yere kondu.
+
+    Raises:
+        HTTPException: Fabrika bulunamazsa (404), fabrikanin henuz kaydedilmis
+            bir modeli yoksa (409), is yuku sinirini asarsa (422) veya
+            konfigurasyon motor tarafindan reddedilirse (400).
+    """
+    try:
+        version = factories.current_version(factory_id)
+    except FactoryNotFound as error:
+        raise factory_not_found(factory_id) from error
+    except FactoryHasNoVersion as error:
+        # 409, 404 degil: fabrika var, yalnizca henuz bir modeli yok. Ikisini
+        # ayni hataya indirgemek, arayuzun "fabrika silinmis" ile "once modeli
+        # kaydedin" durumlarini ayirt edememesi demek olurdu.
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"'{factory_id}' fabrikasinin henuz kaydedilmis bir modeli yok. "
+                f"Once editorde modeli kurup kaydedin."
+            ),
+        ) from error
+
+    _reject_if_too_large(version.config)
+    try:
+        record = await asyncio.to_thread(
+            _execute_scenario, version.config, version.factory_id, version.id
+        )
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
+        ) from error
+
+    store.save(record)
+    logger.info(
+        "Fabrika '%s' surum %d calistirildi: simulasyon '%s', %d replikasyon, "
+        "%.2f sn.",
+        factory_id,
+        version.version_number,
+        record.simulation_id,
+        record.monte_carlo.num_replications,
+        record.duration_seconds,
+    )
+    return _build_run_response(record)
 
 
 def main() -> None:

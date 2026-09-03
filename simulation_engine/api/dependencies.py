@@ -17,6 +17,11 @@ from __future__ import annotations
 
 from typing import Union
 
+from simulation_engine.api.factory_storage import (
+    DatabaseFactoryStore,
+    InMemoryFactoryStore,
+    create_factory_store,
+)
 from simulation_engine.api.storage import (
     DatabaseSimulationStore,
     SimulationStore,
@@ -24,6 +29,7 @@ from simulation_engine.api.storage import (
 )
 
 SimulationStoreProtocol = Union[SimulationStore, DatabaseSimulationStore]
+FactoryStoreProtocol = Union[InMemoryFactoryStore, DatabaseFactoryStore]
 
 #: Uygulama düzeyinde tekil depo. `DATABASE_URL` tanımlıysa kalıcı, değilse
 #: bellek içi bir depo oluşturulur (bkz. `api.storage`). İki deponun arayüzü
@@ -38,3 +44,18 @@ def get_store() -> SimulationStoreProtocol:
     deposunu geçirebilir.
     """
     return _store
+
+
+#: Uygulama düzeyinde tekil fabrika deposu.
+_factory_store: FactoryStoreProtocol = create_factory_store()
+
+
+def get_factory_store() -> FactoryStoreProtocol:
+    """Fabrika deposu bağımlılığı.
+
+    Simülasyon deposuyla aynı sebeple burada durur: hem `factory_routes` hem de
+    fabrikadan koşum başlatan uç (`simulation_service`) aynı depoya erişmek
+    zorundadır ve depo bunlardan birinin içinde tanımlansaydı diğeri onu içe
+    aktarmak zorunda kalıp dairesel bir bağımlılık oluştururdu.
+    """
+    return _factory_store

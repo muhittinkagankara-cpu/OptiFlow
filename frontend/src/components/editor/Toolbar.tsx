@@ -10,7 +10,13 @@
 
 import { SIMULATION_DEPTH_OPTIONS } from "../../types/simulationTypes";
 import type { SimulationDepth } from "../../types/simulationTypes";
-import { ArrowLeftIcon, ArrowRightIcon, PlayIcon, PlusIcon } from "../shared/icons";
+import {
+  ArrowLeftIcon,
+  ArrowRightIcon,
+  PlayIcon,
+  PlusIcon,
+  SaveIcon,
+} from "../shared/icons";
 import { Spinner } from "../wizard/WizardStep3_Confirmation";
 
 interface ToolbarProps {
@@ -32,6 +38,20 @@ interface ToolbarProps {
    * bırakırdı.
    */
   variant?: "run" | "continue";
+
+  /**
+   * Fabrikanın adı. Verilirse başlık yerine yazılır.
+   *
+   * Kullanıcı birden çok fabrika kaydedebildiğinden, hangisinin açık olduğunu
+   * ekranda görmek gerekir; "Süreç Şeması" başlığı üç fabrikası olan biri için
+   * hiçbir şey söylemez.
+   */
+  factoryName?: string | null;
+  /** Verilirse kaydetme düğmesi görünür. */
+  onSave?: () => void;
+  isSaving?: boolean;
+  /** Canvas, en son kaydedilenden farklı mı? */
+  isDirty?: boolean;
 }
 
 export function Toolbar({
@@ -43,6 +63,10 @@ export function Toolbar({
   isRunning,
   stationCount,
   variant = "run",
+  factoryName,
+  onSave,
+  isSaving = false,
+  isDirty = false,
 }: ToolbarProps) {
   const isContinue = variant === "continue";
   const selected =
@@ -64,9 +88,16 @@ export function Toolbar({
       <div className="hidden h-6 w-px bg-slate-200 sm:block" />
 
       <div className="min-w-0">
-        <h1 className="truncate text-sm font-semibold text-slate-900">Süreç Şeması</h1>
+        <h1 className="truncate text-sm font-semibold text-slate-900">
+          {factoryName ?? "Süreç Şeması"}
+        </h1>
         <p className="text-xs text-slate-500">
-          {stationCount} istasyon · kutuları sürükleyin, ok çizerek bağlayın
+          {stationCount} istasyon
+          {/* Kaydedilmemiş değişiklik yazıyla da belirtilir. Yalnızca düğmenin
+              rengiyle anlatılsaydı, renk körü bir kullanıcı için görünmez
+              olurdu. */}
+          {onSave &&
+            (isDirty ? " · kaydedilmemiş değişiklikler var" : " · kaydedildi")}
         </p>
       </div>
 
@@ -80,6 +111,23 @@ export function Toolbar({
           <PlusIcon className="h-4 w-4" />
           İstasyon Ekle
         </button>
+
+        {onSave && (
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={isRunning || isSaving || !isDirty}
+            title={isDirty ? undefined : "Kaydedilecek bir değişiklik yok"}
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:opacity-40 ${
+              isDirty
+                ? "border-brand-300 bg-brand-50 text-brand-700 hover:bg-brand-100"
+                : "border-slate-300 bg-white text-slate-500"
+            }`}
+          >
+            <SaveIcon className="h-4 w-4" />
+            {isSaving ? "Kaydediliyor…" : "Kaydet"}
+          </button>
+        )}
 
         <div className="flex flex-col">
           <label className="sr-only" htmlFor="simulation-depth">

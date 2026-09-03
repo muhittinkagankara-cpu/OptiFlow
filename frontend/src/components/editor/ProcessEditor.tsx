@@ -41,6 +41,12 @@ import {
   type StationNodeData,
 } from "../../lib/configBuilder";
 import { ApiError, runSimulation } from "../../lib/apiClient";
+import {
+  extractLayout,
+  hasUnsavedChanges,
+  type SavedSnapshot,
+} from "../../lib/factoryModel";
+import type { FactoryLayout } from "../../types/simulationTypes";
 import { GENERIC_ERROR_MESSAGE, summarizeWarning } from "../../lib/errorMessages";
 import { ParameterPanel } from "./ParameterPanel";
 import { Toolbar } from "./Toolbar";
@@ -92,6 +98,36 @@ interface ProcessEditorProps {
   ) => void;
   /** Daha önce bırakılmış canvas durumu; verilirse `initialConfig` yerine kullanılır. */
   initialFlow?: { nodes: FlowNode[]; edges: FlowEdge[] } | null;
+
+  /** Açık fabrikanın adı; üst çubukta gösterilir. */
+  factoryName?: string | null;
+  /**
+   * En son kaydedilen model ve yerleşim.
+   *
+   * Kaydedilmemiş değişiklik göstergesi buna göre hesaplanır. `null` ise model
+   * hiç kaydedilmemiştir ve her şey kaydedilmemiş sayılır.
+   */
+  savedSnapshot?: SavedSnapshot | null;
+  /**
+   * Verilirse üst çubukta "Kaydet" düğmesi görünür.
+   *
+   * Model **ve** yerleşim birlikte gönderilir: sürüm ikisinin anlık
+   * görüntüsüdür ve yalnızca biri kaydedilseydi "sürüm 3'ü aç" belirsiz bir
+   * istek hâline gelirdi.
+   */
+  onSave?: (config: SimulationConfig, layout: FactoryLayout) => Promise<void>;
+  /**
+   * Kayıtlı sürümü çalıştıran uç.
+   *
+   * Verildiğinde ve canvas'ta kaydedilmemiş değişiklik yokken bu kullanılır;
+   * sonuç, kendisini üreten fabrika sürümüyle işaretlenir ve aylar sonra hangi
+   * modelden geldiği kesin olarak okunabilir.
+   *
+   * Kaydedilmemiş değişiklik varken bilinçli olarak kullanılmaz: kayıtlı sürüm
+   * ekrandaki modelden farklıdır ve onu çalıştırmak, kullanıcının gördüğünden
+   * başka bir modelin sonucunu göstermek olurdu.
+   */
+  onRunSaved?: () => Promise<SimulationRunResponse>;
 }
 
 /**
@@ -142,6 +178,10 @@ function EditorCanvas({
   onSimulationComplete,
   onContinue,
   initialFlow: savedFlow,
+  factoryName,
+  savedSnapshot,
+  onSave,
+  onRunSaved,
 }: ProcessEditorProps) {
   const initialFlow = useMemo(() => {
     // Kullanıcı bu editörden daha önce çıkıp geri döndüyse kendi yerleşimi
@@ -163,6 +203,7 @@ function EditorCanvas({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [depth, setDepth] = useState<SimulationDepth>("standard");
   const [isRunning, setIsRunning] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
   const [warnings, setWarnings] = useState<string[]>([]);
 
@@ -288,6 +329,52 @@ function EditorCanvas({
   );
 
   /**
+   * Canvas'ın o anki yerleşimi.
+   *
+   * `SimulationConfig` kutu konumlarını taşımaz; bu yüzden kaydetme ve
+   * kaydedilmemiş değişiklik hesabı için ayrıca çıkarılır.
+   */
+  const currentLayout = useMemo(() => extractLayout(flowNodes), [flowNodes]);
+
+  /**
+   * Canvas'ın şemaya çevrilmiş hâli — **hata yazmadan**.
+   *
+   * `buildFromCanvas` hataları panele yazdığı için render sırasında
+   * çağrılamaz: her tuş vuruşunda hata kutusu açılıp kapanırdı. Bu türetme
+   * sessizdir ve yalnızca karşılaştırma için kullanılır.
+   */
+  const silentConfig = useMemo(() => {
+    const option =
+      SIMULATION_DEPTH_OPTIONS.find((item) => item.id === depth) ??
+      SIMULATION_DEPTH_OPTIONS[1];
+    const built = buildSimulationConfig(flowNodes, flowEdges, {
+      simulation_duration_minutes: option.simulation_duration_minutes,
+      warmup_period_minutes: option.warmup_period_minutes,
+      num_replications: option.num_replications,
+      random_seed: initialConfig.random_seed ?? 42,
+    });
+    return built.ok ? built.config : null;
+  }, [flowNodes, flowEdges, depth, initialConfig.random_seed]);
+
+  /**
+   * Kaydedilecek bir değişiklik var mı?
+   *
+   * Model geçersizken de "değişiklik var" sayılır: kullanıcı bir şeyler
+   * düzenlemiştir, yalnızca henüz geçerli değildir. Bu durumda kaydetme
+   * denenirse hata gösterilir — düğmenin sessizce pasif kalması, kullanıcının
+   * neden kaydedemediğini anlamaması demek olurdu.
+   */
+  const isDirty = useMemo(() => {
+    if (!silentConfig) {
+      return true;
+    }
+    return hasUnsavedChanges(
+      { config: silentConfig, layout: currentLayout },
+      savedSnapshot ?? null,
+    );
+  }, [silentConfig, currentLayout, savedSnapshot]);
+
+  /**
    * Canvas'ı şemaya çevirir ve hataları panele yazar.
    *
    * Hem çalıştırma hem "ileri" aynı doğrulamadan geçer: sihirbazda bozuk bir
@@ -324,6 +411,27 @@ function EditorCanvas({
     }
   }, [buildFromCanvas, onContinue, flowNodes, flowEdges]);
 
+  const handleSave = useCallback(async () => {
+    if (!onSave) {
+      return;
+    }
+    const config = buildFromCanvas();
+    if (!config) {
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await onSave(config, extractLayout(flowNodes));
+    } catch (error) {
+      setErrors(
+        error instanceof ApiError ? error.userMessages : [GENERIC_ERROR_MESSAGE],
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }, [onSave, buildFromCanvas, flowNodes]);
+
   const handleRun = useCallback(async () => {
     const config = buildFromCanvas();
     if (!config) {
@@ -332,7 +440,10 @@ function EditorCanvas({
 
     setIsRunning(true);
     try {
-      const result = await runSimulation(config);
+      // Model kayıtlıysa ve ekranda kaydedilmemiş değişiklik yoksa koşum
+      // sürümden başlatılır; böylece sonuç hangi modelden geldiğini taşır.
+      const result =
+        onRunSaved && !isDirty ? await onRunSaved() : await runSimulation(config);
 
       // Kutular kullanım oranına göre renklenir; kullanıcı sonuç ekranından
       // buraya döndüğünde darboğazı kendi şemasının üzerinde görür.
@@ -350,7 +461,7 @@ function EditorCanvas({
     } finally {
       setIsRunning(false);
     }
-  }, [buildFromCanvas, setNodes, onSimulationComplete]);
+  }, [buildFromCanvas, setNodes, onSimulationComplete, onRunSaved, isDirty]);
 
   return (
     <div className="flex h-full flex-col">
@@ -363,6 +474,10 @@ function EditorCanvas({
         isRunning={isRunning}
         stationCount={stationCount}
         variant={onContinue ? "continue" : "run"}
+        factoryName={factoryName}
+        onSave={onSave ? handleSave : undefined}
+        isSaving={isSaving}
+        isDirty={isDirty}
       />
 
       {(errors.length > 0 || warnings.length > 0) && (

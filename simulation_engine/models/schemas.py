@@ -19,6 +19,7 @@ Kaynaklar
 - Banks, J. et al. (2010). *Discrete-Event System Simulation*, 5th ed.
 """
 
+from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Literal, Optional, Tuple
 
@@ -1321,6 +1322,18 @@ class SimulationRunResponse(BaseModel):
     warnings: List[str] = Field(default_factory=list)
     headline: str = Field(description="Ana sonucun tek cumlelik ozeti")
 
+    # Koşum kayıtlı bir fabrikadan başlatıldıysa hangi modelden üretildiğini
+    # söyler. İki alan da isteğe bağlıdır: doğrudan `SimulationConfig` ile
+    # çalıştırılan koşumlar bir fabrikaya ait değildir ve bu alanları boş
+    # döndürür. İsteğe bağlı olmaları geriye dönük uyumluluğun da şartıdır —
+    # mevcut istemciler bu alanları hiç görmemiş gibi çalışmaya devam eder.
+    factory_id: Optional[str] = Field(
+        default=None, description="Kosumun uretildigi fabrika (varsa)"
+    )
+    factory_version_id: Optional[str] = Field(
+        default=None, description="Kosumun uretildigi fabrika surumu (varsa)"
+    )
+
 
 class AnalyticalStationComparison(BaseModel):
     """Bir istasyonun analitik kuyruk modeliyle karşılaştırması."""
@@ -1792,3 +1805,232 @@ class StockoutRiskReport(BaseModel):
         description="Kalem bir istasyona bagliysa ve kosum sonucu varsa doldurulur",
     )
     headline: str = Field(description="Sonucun tek cumlelik ozeti")
+
+
+# --------------------------------------------------------------------------- #
+# Fabrika modeli — kalıcı, sürümlenmiş şema
+# --------------------------------------------------------------------------- #
+#
+# `SimulationConfig` motorun ihtiyaç duyduğu her şeyi taşır ama kullanıcının
+# yaptığı işin tamamını taşımaz: editörde kutuların nereye konduğu şemada
+# yoktur. Yirmi istasyonluk bir modelde yerleşim, kullanıcının harcadığı emeğin
+# büyük bölümüdür ve yalnızca `SimulationConfig` saklanırsa her açılışta
+# otomatik yerleşime sıfırlanır.
+#
+# Bu yüzden bir sürüm iki parçadan oluşur:
+#
+#   config  — motora giden, tam doğrulanmış model
+#   layout  — yalnızca sunuma ait yerleşim; isteğe bağlı
+#
+# Ayrı tutulmaları bilinçlidir. `config` mevcut `SimulationConfig`
+# doğrulayıcılarından geçer, yani doğrulama kuralları tek yerde kalır. `layout`
+# ise hiçbir hesaba girmez; bozuk ya da eksik bir yerleşim modeli
+# çalıştırılamaz hâle getiremez, yalnızca otomatik yerleşime düşülür.
+
+
+#: Fabrika ve sürüm kimliklerinin azami uzunluğu (veritabanı sütunuyla uyumlu).
+MAX_FACTORY_ID_LENGTH: int = 64
+
+#: Fabrika adının azami uzunluğu.
+MAX_FACTORY_NAME_LENGTH: int = 200
+
+#: Sürüm notunun azami uzunluğu.
+MAX_VERSION_NOTE_LENGTH: int = 500
+
+#: SHA-256 özetinin onaltılık gösteriminin uzunluğu.
+SNAPSHOT_HASH_LENGTH: int = 64
+
+
+class NodePosition(BaseModel):
+    """Canvas üzerinde bir kutunun konumu."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    x: float
+    y: float
+
+
+class FactoryLayout(BaseModel):
+    """Editör canvas'ının yerleşimi — yalnızca sunum.
+
+    `stations` sözlüğünün anahtarları istasyon kimlikleridir. Modelde olmayan
+    bir kimlik burada bulunabilir (kullanıcı istasyonu sildi, yerleşim eski
+    kaldı) ve bu bir hata değildir: yerleşim uygulanırken bilinmeyen kimlikler
+    yok sayılır, eksik olanlar otomatik yerleştirilir. Yerleşimi katı biçimde
+    doğrulamak, sunuma ait bir ayrıntının modeli kaydedilemez hâle getirmesi
+    demek olurdu.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    stations: Dict[str, NodePosition] = Field(
+        default_factory=dict, description="Istasyon kimligi -> canvas konumu"
+    )
+    arrival: Optional[NodePosition] = Field(
+        default=None, description="Varis kutusunun konumu"
+    )
+
+
+class FactoryVersion(BaseModel):
+    """Bir fabrika modelinin değişmez anlık görüntüsü.
+
+    Sürümler **hiçbir zaman yerinde güncellenmez**. Bir simülasyon sonucunun
+    hangi modelden üretildiği bu sayede kesindir: sürüm 3'e işaret eden bir
+    koşum, fabrika sonradan ne kadar değişirse değişsin, sürüm 3'ün tanımladığı
+    modelden üretilmiştir.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=MAX_FACTORY_ID_LENGTH)
+    factory_id: str = Field(min_length=1, max_length=MAX_FACTORY_ID_LENGTH)
+    version_number: int = Field(ge=1, description="Fabrika icinde 1'den artan sira")
+    snapshot_hash: str = Field(
+        min_length=SNAPSHOT_HASH_LENGTH,
+        max_length=SNAPSHOT_HASH_LENGTH,
+        description=(
+            "config + layout uzerinden hesaplanan SHA-256. Ayni icerigin ikinci "
+            "kez yeni bir surum olusturmasini engeller."
+        ),
+    )
+    config: SimulationConfig = Field(description="Motora giden dogrulanmis model")
+    layout: Optional[FactoryLayout] = Field(
+        default=None, description="Editor yerlesimi; yoksa otomatik yerlesim kullanilir"
+    )
+    note: Optional[str] = Field(
+        default=None,
+        max_length=MAX_VERSION_NOTE_LENGTH,
+        description="Bu surumde neyin degistigine dair kisa not",
+    )
+    created_at: datetime
+
+
+class FactoryVersionSummary(BaseModel):
+    """Sürüm listesinde gösterilen özet; `config` taşımaz.
+
+    Sürüm geçmişi ekranı yalnızca "kaçıncı sürüm, ne zaman, hangi not" bilgisini
+    gösterir. Tam `SimulationConfig`'i her satır için göndermek, yirmi sürümlük
+    bir geçmişte yanıtı gereksiz yere büyütürdü.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str
+    version_number: int
+    snapshot_hash: str
+    station_count: int = Field(description="Bu surumdeki istasyon sayisi")
+    note: Optional[str] = None
+    created_at: datetime
+
+
+class Factory(BaseModel):
+    """Kullanıcının sahip olduğu, adlandırılmış fabrika.
+
+    Fabrika değişebilir bir işaretçidir: adı değişir, güncel sürümü değişir.
+    Modelin kendisi sürümlerde durur.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1, max_length=MAX_FACTORY_ID_LENGTH)
+    org_id: Optional[str] = Field(
+        default=None,
+        max_length=MAX_FACTORY_ID_LENGTH,
+        description=(
+            "Kiraci (organizasyon) kimligi. Faz 1'de kullanilmaz ve her zaman "
+            "bostur; cok kiracili destek eklendiginde canli veri uzerinde ikinci "
+            "bir goc gerektirmemesi icin simdiden ayrilmistir."
+        ),
+    )
+    name: str = Field(min_length=1, max_length=MAX_FACTORY_NAME_LENGTH)
+    sector: Optional[str] = Field(
+        default=None,
+        max_length=MAX_FACTORY_ID_LENGTH,
+        description="Hangi sektor sablonundan turedigi (gida, metal, tekstil...)",
+    )
+    current_version_id: Optional[str] = Field(
+        default=None,
+        max_length=MAX_FACTORY_ID_LENGTH,
+        description="Guncel surumun kimligi; hic surum yoksa bostur",
+    )
+    version_count: int = Field(
+        default=0, ge=0, description="Fabrikanin toplam surum sayisi"
+    )
+    created_at: datetime
+    updated_at: datetime
+
+
+class FactoryDetail(BaseModel):
+    """Bir fabrika ve onun güncel sürümü.
+
+    Tek istekte hem fabrikayı hem modeli döndürmek bilinçlidir: arayüzün
+    fabrikayı açabilmek için ikisine de ihtiyacı vardır ve iki ardışık istek,
+    ikincisi başarısız olduğunda yarı yüklenmiş bir ekran bırakırdı.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    factory: Factory
+    current_version: Optional[FactoryVersion] = None
+
+
+class FactoryCreateRequest(BaseModel):
+    """Yeni fabrika oluşturma isteği.
+
+    `config` verilirse ilk sürüm de birlikte oluşturulur. Verilmezse fabrika
+    sürümsüz doğar; kullanıcı editörde modeli kurup ilk kaydı yaptığında
+    sürüm 1 oluşur.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1, max_length=MAX_FACTORY_NAME_LENGTH)
+    sector: Optional[str] = Field(default=None, max_length=MAX_FACTORY_ID_LENGTH)
+    config: Optional[SimulationConfig] = None
+    layout: Optional[FactoryLayout] = None
+    note: Optional[str] = Field(default=None, max_length=MAX_VERSION_NOTE_LENGTH)
+
+    @model_validator(mode="after")
+    def _layout_needs_config(self) -> "FactoryCreateRequest":
+        """Yerleşim modelin bir parçasıdır; tek başına anlamı yoktur."""
+        if self.layout is not None and self.config is None:
+            raise ValueError(
+                "'layout' yalnizca 'config' ile birlikte verilebilir; yerlesim "
+                "modelin bir parcasidir ve tek basina surumlenmez."
+            )
+        return self
+
+
+class FactorySaveRequest(BaseModel):
+    """Fabrikayı kaydetme isteği — ad ve/veya model.
+
+    `name` verilirse fabrika yeniden adlandırılır. `config` verilirse anlık
+    görüntü alınır: özeti (`snapshot_hash`) güncel sürümünkiyle aynıysa yeni
+    sürüm **oluşturulmaz**, aynı sürüm geri döndürülür. Kullanıcının aynı modeli
+    iki kez kaydetmesi geçmişi kirletmemelidir.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(
+        default=None, min_length=1, max_length=MAX_FACTORY_NAME_LENGTH
+    )
+    sector: Optional[str] = Field(default=None, max_length=MAX_FACTORY_ID_LENGTH)
+    config: Optional[SimulationConfig] = None
+    layout: Optional[FactoryLayout] = None
+    note: Optional[str] = Field(default=None, max_length=MAX_VERSION_NOTE_LENGTH)
+
+    @model_validator(mode="after")
+    def _require_something(self) -> "FactorySaveRequest":
+        """Boş bir kaydetme isteği bir hatadır, sessiz bir başarı değil."""
+        if self.name is None and self.config is None and self.sector is None:
+            raise ValueError(
+                "Kaydedilecek bir sey verilmedi: 'name', 'sector' veya 'config' "
+                "alanlarindan en az biri bulunmalidir."
+            )
+        if self.layout is not None and self.config is None:
+            raise ValueError(
+                "'layout' yalnizca 'config' ile birlikte verilebilir; yerlesim "
+                "modelin bir parcasidir ve tek basina surumlenmez."
+            )
+        return self
