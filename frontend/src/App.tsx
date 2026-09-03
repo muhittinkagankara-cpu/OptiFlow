@@ -20,9 +20,26 @@
  *
  * Karşılaştırma referansı burada saklanır ve kalıcı değildir — karşılaştırma
  * tek oturumluk bir işlemdir.
+ *
+ * Kimlik doğrulama — Faz 2
+ * -------------------------
+ * Oturum yoksa yalnızca `LoginPage` gösterilir; hiçbir veri ucu çağrılmaz.
+ * Oturum açıldıktan sonra `GET /api/me` bir kez çağrılır — bu çağrı
+ * kullanıcının organizasyonunu (yoksa) kendiliğinden kurar ve "organizasyon
+ * yükleniyor" durumu tam olarak bu çağrının süresidir. Fabrika listesi ancak
+ * kimlik çözüldükten sonra yüklenir; aksi hâlde `listFactories()` oturum
+ * hazır olmadan çağrılıp 401 alırdı.
+ *
+ * Çıkış yapıldığında ya da farklı bir hesap oturum açtığında tüm uygulama
+ * durumu sıfırlanır (`resetAppState`). Bu, önceki organizasyonun verisinin
+ * bir an için ekranda kalıp yeni kullanıcıya görünmesini engeller — aynı
+ * tarayıcı sekmesinde hesap değiştirmek, önceki oturumun hiç kalıntı
+ * bırakmamasını gerektirir.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Session } from "@supabase/supabase-js";
+import { LoginPage } from "./components/auth/LoginPage";
 import { FactoryPicker } from "./components/factory/FactoryPicker";
 import { OnboardingWizard } from "./components/wizard/OnboardingWizard";
 import { ProcessEditor } from "./components/editor/ProcessEditor";
@@ -39,11 +56,18 @@ import {
   createFactory,
   deleteFactory,
   getFactory,
+  getMe,
   isBackendReachable,
   listFactories,
   runFactorySimulation,
   saveFactory,
 } from "./lib/apiClient";
+import {
+  getCurrentSession,
+  isAuthConfigured,
+  onAuthStateChange,
+  signOut,
+} from "./lib/authClient";
 import { GENERIC_ERROR_MESSAGE } from "./lib/errorMessages";
 import {
   applyLayout,
@@ -56,6 +80,7 @@ import type { FlowEdge, FlowNode } from "./lib/configBuilder";
 import type {
   Factory,
   FactoryLayout,
+  MeResponse,
   SimulationConfig,
   SimulationRunResponse,
 } from "./types/simulationTypes";
@@ -105,6 +130,21 @@ export default function App() {
   } | null>(null);
   const [isLoadingFactories, setIsLoadingFactories] = useState(true);
   const [factoryErrors, setFactoryErrors] = useState<string[]>([]);
+
+  /**
+   * Kimlik doğrulama durumu.
+   *
+   * `authLoading`, ilk `getCurrentSession()` çağrısı dönene kadar `true`dur —
+   * bu süre boyunca ne giriş ekranı ne ana uygulama gösterilir, aksi hâlde
+   * zaten oturumu olan bir kullanıcı bir an için giriş ekranını görürdü.
+   * `identity`, `GET /api/me` yanıtıdır; `identityLoading` yalnızca o çağrı
+   * sürerken `true`dur ("organizasyon yükleniyor" durumu tam olarak budur).
+   */
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [identity, setIdentity] = useState<MeResponse | null>(null);
+  const [identityLoading, setIdentityLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   /**
    * Editörü baştan kurmak için kullanılan anahtar.
    *
@@ -198,9 +238,117 @@ export default function App() {
     }
   }, [reportError]);
 
-  // Açılışta: kayıtlı fabrikalar yüklenir ve en son açılan varsa geri açılır.
-  // "Sayfa yenilendiğinde kaldığı yerden devam etme" gereksinimi buradadır.
+  /**
+   * Tüm uygulama durumunu sıfırlar.
+   *
+   * Çıkış yapıldığında ya da farklı bir hesap oturum açtığında çağrılır.
+   * Önceki organizasyonun modeli, sonucu ya da fabrika listesi bir an bile
+   * ekranda kalıp yeni kullanıcıya görünmemelidir.
+   */
+  const resetAppState = useCallback(() => {
+    setConfig(null);
+    setResult(null);
+    setBaseline(null);
+    setFactories([]);
+    setOpenFactory(null);
+    setInitialFlow(null);
+    setEditorKey((current) => current + 1);
+    setIsLoadingFactories(true);
+    setFactoryErrors([]);
+    setIdentity(null);
+    rememberFactory(null);
+    setView("wizard");
+    setProductionView("wizard");
+  }, []);
+
+  /**
+   * Oturum bootstrap'ı: mevcut oturum bir kez okunur, sonraki her değişiklik
+   * (giriş, çıkış, token yenileme) `onAuthStateChange` ile izlenir.
+   *
+   * `previousUserId`, hesabın değiştiğini (biri çıkıp başkası giriş yaptığını)
+   * anlamak için tutulur — yalnızca token yenilenmesinde (aynı kullanıcı,
+   * yeni token) uygulama durumunu sıfırlamak istemeyiz, yalnızca gerçekten
+   * farklı bir kullanıcı geldiğinde.
+   */
+  const previousUserId = useRef<string | null>(null);
+
   useEffect(() => {
+    let cancelled = false;
+
+    (async () => {
+      const current = await getCurrentSession();
+      if (cancelled) {
+        return;
+      }
+      previousUserId.current = current?.user.id ?? null;
+      setSession(current);
+      setAuthLoading(false);
+    })();
+
+    const unsubscribe = onAuthStateChange((next) => {
+      const nextUserId = next?.user.id ?? null;
+      if (nextUserId !== previousUserId.current) {
+        resetAppState();
+      }
+      previousUserId.current = nextUserId;
+      setSession(next);
+    });
+
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Oturum kurulduğunda kimlik çözülür; bu, kullanıcının organizasyonunu
+  // kendiliğinden kurar (bkz. `GET /api/me`). "Organizasyon yükleniyor"
+  // durumu tam olarak bu çağrının süresidir.
+  useEffect(() => {
+    if (!session) {
+      return;
+    }
+    let cancelled = false;
+    setIdentityLoading(true);
+    setAuthError(null);
+
+    (async () => {
+      try {
+        const me = await getMe();
+        if (!cancelled) {
+          setIdentity(me);
+        }
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        // Token gecersiz hale gelmis olabilir (ör. sunucu tarafinda iptal
+        // edilmis); kullanicinin takilip kalmamasi icin oturum kapatilir ve
+        // giris ekranina donulur.
+        setAuthError(
+          error instanceof ApiError ? error.userMessages[0] : GENERIC_ERROR_MESSAGE,
+        );
+        await signOut();
+      } finally {
+        if (!cancelled) {
+          setIdentityLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [session]);
+
+  // Kimlik çözüldükten sonra: kayıtlı fabrikalar yüklenir ve en son açılan
+  // varsa geri açılır. "Sayfa yenilendiğinde kaldığı yerden devam etme"
+  // gereksinimi buradadır. Kimlikten önce çalışamaz: `listFactories()`
+  // oturum hazır olmadan çağrılırsa 401 alır.
+  useEffect(() => {
+    if (!identity) {
+      return;
+    }
     let cancelled = false;
 
     (async () => {
@@ -231,10 +379,10 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-    // Yalnızca ilk kurulumda çalışır; bağımlılığa eklenirse liste her
-    // tazelemede fabrikayı yeniden açardı.
+    // `identity` degistiginde (farkli bir hesap) yeniden calismali;
+    // `openFactoryById` referansi `reportError` uzerinden sabittir.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [identity]);
 
   /**
    * Editörden gelen kaydetme isteği.
@@ -323,6 +471,38 @@ export default function App() {
     setView("editor");
   };
 
+  const handleLogout = useCallback(() => {
+    void signOut();
+    // `onAuthStateChange` bu cagriya tepki verip `resetAppState`'i zaten
+    // calistiracaktir; burada ayrica cagirmak cift sifirlama olurdu.
+  }, []);
+
+  if (!isAuthConfigured) {
+    return (
+      <div className="flex h-full items-center justify-center bg-slate-50 px-4">
+        <div className="max-w-md rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+          <WarningIcon className="mx-auto mb-3 h-6 w-6 text-amber-600" />
+          <p className="text-sm text-amber-900">
+            Kimlik doğrulama yapılandırılmamış. <code>VITE_SUPABASE_URL</code> ve{" "}
+            <code>VITE_SUPABASE_ANON_KEY</code> ortam değişkenlerini tanımlayın.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (authLoading) {
+    return <FullPageStatus message="Yükleniyor…" />;
+  }
+
+  if (!session) {
+    return <LoginPage />;
+  }
+
+  if (identityLoading || !identity) {
+    return <FullPageStatus message="Organizasyon yükleniyor…" error={authError} />;
+  }
+
   return (
     <div className="flex h-full flex-col">
       <TopBar
@@ -331,6 +511,8 @@ export default function App() {
           setView("factories");
         }}
         factoryName={openFactory?.name ?? null}
+        orgName={identity.org_name}
+        onLogout={handleLogout}
         current={view}
         onSelect={(next) => {
           if (next === "inventory") {
@@ -435,11 +617,16 @@ function TopBar({
   onSelect,
   onOpenFactories,
   factoryName,
+  orgName,
+  onLogout,
 }: {
   current: View;
   onSelect: (area: "production" | "inventory") => void;
   onOpenFactories: () => void;
   factoryName: string | null;
+  /** Açık organizasyonun adı; her ekranda görünür kalır. */
+  orgName: string;
+  onLogout: () => void;
 }) {
   const isInventory = current === "inventory";
 
@@ -481,7 +668,42 @@ function TopBar({
         <FolderIcon className="h-4 w-4" />
         Fabrikalarım
       </button>
+
+      <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
+        <span className="hidden text-sm text-slate-600 sm:inline" title="Organizasyon">
+          {orgName}
+        </span>
+        <button
+          type="button"
+          onClick={onLogout}
+          className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        >
+          Çıkış yap
+        </button>
+      </div>
     </header>
+  );
+}
+
+/**
+ * Kimlik doğrulama sırasında tam sayfa durum göstergesi.
+ *
+ * Ana uygulama kabuğu (üst çubuk, sekmeler) henüz gösterilmez: hangi
+ * organizasyonun açık olduğu belli olmadan bir arayüz göstermek, yanlış
+ * organizasyona ait bir ekranın bir an için görünmesi riskini taşırdı.
+ */
+function FullPageStatus({
+  message,
+  error,
+}: {
+  message: string;
+  error?: string | null;
+}) {
+  return (
+    <div className="flex h-full flex-col items-center justify-center gap-2 bg-slate-50 px-4 text-center">
+      <p className="text-sm text-slate-600">{message}</p>
+      {error && <p className="text-sm text-red-700">{error}</p>}
+    </div>
   );
 }
 

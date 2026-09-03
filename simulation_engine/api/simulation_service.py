@@ -87,6 +87,8 @@ from simulation_engine.api.dependencies import (
     get_factory_store,
     get_store,
 )
+from simulation_engine.auth.dependencies import get_current_org
+from simulation_engine.api.auth_routes import router as auth_router
 from simulation_engine.api.inventory_routes import router as inventory_router
 from simulation_engine.api.storage import (
     MAX_STORED_SIMULATIONS,
@@ -356,6 +358,7 @@ def _build_station_metrics(
 
 def _execute_scenario(
     config: SimulationConfig,
+    org_id: Optional[str] = None,
     factory_id: Optional[str] = None,
     factory_version_id: Optional[str] = None,
 ) -> StoredSimulation:
@@ -363,11 +366,12 @@ def _execute_scenario(
 
     Bu fonksiyon CPU yoğundur ve `asyncio.to_thread` içinden çağrılmalıdır.
 
-    `factory_id` ve `factory_version_id` yalnızca koşum kayıtlı bir fabrikadan
-    başlatıldığında doldurulur. Kaydın hangi modelden üretildiğini burada,
-    sonucun oluşturulduğu tek yerde işaretlemek bilinçlidir: çağıran tarafın
-    sonradan alana atama yapması gerekseydi, yeni bir çağrı yolunda bunu
-    unutmak sessizce sahipsiz bir koşum bırakırdı.
+    `org_id`, koşumu başlatan kullanıcının organizasyonudur; `factory_id` ve
+    `factory_version_id` yalnızca koşum kayıtlı bir fabrikadan başlatıldığında
+    doldurulur. Üçünün de burada, sonucun oluşturulduğu tek yerde
+    işaretlenmesi bilinçlidir: çağıran tarafın sonradan alana atama yapması
+    gerekseydi, yeni bir çağrı yolunda bunu unutmak sessizce sahipsiz ya da
+    başka bir organizasyona görünmez bir koşum bırakırdı.
     """
     replications, master_seed, elapsed = run_replications(config)
     monte_carlo = summarize_replications(replications, master_seed, elapsed)
@@ -385,6 +389,7 @@ def _execute_scenario(
         bottleneck=bottleneck_analytics.analyze(representative, config),
         oee=compute_oee_report(representative),
         duration_seconds=elapsed,
+        org_id=org_id,
         factory_id=factory_id,
         factory_version_id=factory_version_id,
     )
@@ -762,7 +767,10 @@ app.add_middleware(
     # PUT ve DELETE envanter kalemlerinin guncellenmesi/silinmesi icin gerekli;
     # simulasyon uclari yalnizca GET ve POST kullanir.
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type"],
+    # `Authorization` Supabase erisim token'ini tasir. Eklenmeseydi, tarayici
+    # bu basligi on-ucus (preflight) isteginde reddedilmis sayar ve kimlik
+    # dogrulama gerektiren hicbir cagri tarayicidan yapilamazdi.
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Envanter modulu ayri bir router olarak takilir. Uretim simulasyonundan
@@ -774,6 +782,10 @@ app.include_router(inventory_router)
 # eklenmistir, onun yerine gecmemistir.
 app.include_router(factory_router)
 
+# Kimlik ucu (`GET /api/me`) ayri bir router'dir. Herhangi bir is verisine
+# dokunmaz; yalnizca dogrulanmis kullanicinin kimligini dondurur.
+app.include_router(auth_router)
+
 
 @app.post(
     f"{API_PREFIX}/run",
@@ -784,6 +796,7 @@ app.include_router(factory_router)
 )
 async def run_simulation(
     config: SimulationConfig = Body(...),
+    org_id: str = Depends(get_current_org),
     store: SimulationStoreProtocol = Depends(get_store),
 ) -> SimulationRunResponse:
     """Senaryoyu `num_replications` kez çalıştırıp güven aralıklı sonuç döndürür.
@@ -792,13 +805,17 @@ async def run_simulation(
     `completed` olur, ancak `warnings` alanında açık bir kararsızlık uyarısı
     bulunur. Sessizce anlamsız sayı üretmemek şartnamenin TEST 3 gereğidir.
 
+    Kayıt, çağrıyı yapan kullanıcının organizasyonuna işaretlenir; bu koşumu
+    yalnızca aynı organizasyon `validation-report` ya da `trace` uçlarından
+    okuyabilir.
+
     Raises:
         HTTPException: İş yükü sınırı aşılırsa (422) veya konfigürasyon motor
             tarafından reddedilirse (400).
     """
     _reject_if_too_large(config)
     try:
-        record = await asyncio.to_thread(_execute_scenario, config)
+        record = await asyncio.to_thread(_execute_scenario, config, org_id)
     except ValueError as error:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)
@@ -823,6 +840,7 @@ async def run_simulation(
 )
 async def get_validation_report(
     simulation_id: str = Path(..., description="`/run` ucundan donen kimlik"),
+    org_id: str = Depends(get_current_org),
     store: SimulationStoreProtocol = Depends(get_store),
 ) -> ValidationReportResponse:
     """Bir koşumun analitik doğrulama sonuçlarını döndürür.
@@ -836,15 +854,15 @@ async def get_validation_report(
         HTTPException: Kimlik bulunamazsa (404).
     """
     try:
-        record = store.get(simulation_id)
+        record = store.get(org_id, simulation_id)
     except KeyError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
                 f"'{simulation_id}' kimlikli simulasyon bulunamadi. Sonuclar surec "
-                f"belleginde tutulur; sunucu yeniden baslatildiysa veya depo "
-                f"kapasitesi ({MAX_STORED_SIMULATIONS}) asildiysa kayit dusurulmus "
-                f"olabilir."
+                f"belleginde tutulur; sunucu yeniden baslatildiysa, depo kapasitesi "
+                f"({MAX_STORED_SIMULATIONS}) asildiysa ya da kayit baska bir "
+                f"organizasyona aitse kayit gorunmez."
             ),
         ) from error
     return _build_validation_report(record)
@@ -859,6 +877,7 @@ async def get_validation_report(
 )
 async def get_simulation_trace(
     simulation_id: str = Path(..., description="`/run` ucundan donen kimlik"),
+    org_id: str = Depends(get_current_org),
     store: SimulationStoreProtocol = Depends(get_store),
 ) -> SimulationTrace:
     """Bir koşumun ilk penceresindeki olayları görselleştirme için döndürür.
@@ -877,7 +896,7 @@ async def get_simulation_trace(
         HTTPException: Kimlik bulunamazsa (404).
     """
     try:
-        record = store.get(simulation_id)
+        record = store.get(org_id, simulation_id)
     except KeyError as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -901,6 +920,7 @@ async def get_simulation_trace(
 )
 async def compare_simulations(
     configs: List[SimulationConfig] = Body(..., min_length=2),
+    org_id: str = Depends(get_current_org),
     store: SimulationStoreProtocol = Depends(get_store),
 ) -> ComparisonResponse:
     """Senaryoları çalıştırıp karşılaştırmalı tablo ve anlamlılık testi üretir.
@@ -929,7 +949,7 @@ async def compare_simulations(
     started_at = time.perf_counter()
     try:
         records = await asyncio.to_thread(
-            lambda: [_execute_scenario(config) for config in configs]
+            lambda: [_execute_scenario(config, org_id) for config in configs]
         )
     except ValueError as error:
         raise HTTPException(
@@ -962,6 +982,7 @@ DEFAULT_PORT: int = 8000
 )
 async def run_factory(
     factory_id: str = Path(..., description="`/api/factories` ucundan donen kimlik"),
+    org_id: str = Depends(get_current_org),
     factories: FactoryStoreProtocol = Depends(get_factory_store),
     store: SimulationStoreProtocol = Depends(get_store),
 ) -> SimulationRunResponse:
@@ -989,7 +1010,7 @@ async def run_factory(
             konfigurasyon motor tarafindan reddedilirse (400).
     """
     try:
-        version = factories.current_version(factory_id)
+        version = factories.current_version(org_id, factory_id)
     except FactoryNotFound as error:
         raise factory_not_found(factory_id) from error
     except FactoryHasNoVersion as error:
@@ -1007,7 +1028,7 @@ async def run_factory(
     _reject_if_too_large(version.config)
     try:
         record = await asyncio.to_thread(
-            _execute_scenario, version.config, version.factory_id, version.id
+            _execute_scenario, version.config, org_id, version.factory_id, version.id
         )
     except ValueError as error:
         raise HTTPException(

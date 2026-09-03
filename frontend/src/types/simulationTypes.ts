@@ -659,3 +659,15 @@ export interface FactorySaveRequest {
   layout?: FactoryLayout;
   note?: string | null;
 }
+
+// --------------------------------------------------------------------------- //
+// Kimlik — Faz 2
+// --------------------------------------------------------------------------- //
+
+/** `GET /api/me` yanıtı. */
+export interface MeResponse {
+  user_id: string;
+  email?: string | null;
+  org_id: string;
+  org_name: string;
+}

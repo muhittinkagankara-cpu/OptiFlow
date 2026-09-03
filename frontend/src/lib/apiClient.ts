@@ -17,6 +17,7 @@ import type {
   FactoryVersionSummary,
   InventoryAnalysis,
   InventoryItem,
+  MeResponse,
   SimulationConfig,
   SimulationRunResponse,
   SimulationTrace,
@@ -28,6 +29,7 @@ import {
   NETWORK_ERROR_MESSAGE,
   translateErrorDetails,
 } from "./errorMessages";
+import { getAccessToken } from "./authClient";
 
 /** Geliştirme ortamında kullanılan varsayılan backend adresi. */
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
@@ -120,11 +122,24 @@ async function parseResponse<T>(response: Response): Promise<T> {
 }
 
 /** JSON gövdeli istek gönderir ve ağ hatalarını normalleştirir. */
+/**
+ * Şu anki oturumun erişim token'ını `Authorization` başlığı olarak döndürür.
+ *
+ * Oturum yoksa boş bir nesne döner (başlık hiç eklenmez): backend'in kendisi
+ * bunu 401 ile reddeder ve hata mesajı zaten kullanıcı dostu bir Türkçe
+ * metne çevrilir (bkz. `translateErrorDetails`). Buradan sahte bir hata
+ * fırlatmak, aynı durumu iki farklı yerde ele almak olurdu.
+ */
+async function authHeaders(): Promise<Record<string, string>> {
+  const token = await getAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...(await authHeaders()) },
       ...init,
     });
   } catch (cause) {
@@ -179,6 +194,17 @@ export function compareSimulations(
  * OpenAPI şeması her FastAPI uygulamasında bulunduğu için ayrı bir sağlık ucu
  * eklemeye gerek kalmadan kullanılabilir.
  */
+/**
+ * Doğrulanmış kullanıcının kimliğini ve organizasyonunu getirir.
+ *
+ * Oturum açtıktan sonra ana uygulamayı göstermeden önce bir kez çağrılır.
+ * Backend, kullanıcının henüz organizasyonu yoksa (ilk giriş) bu çağrı
+ * sırasında kendiliğinden kurar; ayrı bir "organizasyon oluştur" adımı yoktur.
+ */
+export function getMe(): Promise<MeResponse> {
+  return request<MeResponse>("/api/me");
+}
+
 export async function isBackendReachable(): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/openapi.json`, { method: "GET" });
@@ -243,7 +269,10 @@ export async function deleteInventoryItem(itemId: string): Promise<void> {
   try {
     response = await fetch(
       `${API_BASE_URL}${INVENTORY_PATH}/items/${encodeURIComponent(itemId)}`,
-      { method: "DELETE", headers: { "Content-Type": "application/json" } },
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+      },
     );
   } catch (cause) {
     throw ApiError.network(cause);
@@ -351,7 +380,10 @@ export async function deleteFactory(factoryId: string): Promise<void> {
   try {
     response = await fetch(
       `${API_BASE_URL}${FACTORIES_PATH}/${encodeURIComponent(factoryId)}`,
-      { method: "DELETE", headers: { "Content-Type": "application/json" } },
+      {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+      },
     );
   } catch (cause) {
     throw ApiError.network(cause);

@@ -32,6 +32,7 @@ from simulation_engine.api.factory_storage import (
     InMemoryFactoryStore,
 )
 from simulation_engine.api.simulation_service import app
+from simulation_engine.validation.conftest import TEST_ORG_ID
 from simulation_engine.models.schemas import (
     Factory,
     FactoryCreateRequest,
@@ -173,14 +174,21 @@ def test_identifier_is_generated_by_the_server(client: TestClient) -> None:
     assert len(created["factory"]["id"]) > 0
 
 
-def test_org_id_is_reserved_but_unused(client: TestClient) -> None:
-    """`org_id` Faz 1'de her zaman bostur.
+def test_org_id_comes_from_the_session_not_the_request_body(
+    client: TestClient,
+) -> None:
+    """`org_id` istemciden gelmez; oturumdan çözülür.
 
-    Sütun çok kiracılı desteğe hazırlık olarak açıldı; şimdi doldurulmaya
-    çalışılması sessizce kabul edilmemelidir.
+    Faz 1'de bu sütun her zaman boştu (kimlik doğrulama yoktu). Faz 2 ile
+    birlikte gerçekten doldurulur — ama değeri her zaman `get_current_org`
+    bağımlılığından gelir, gövdedeki bir alandan değil. `FactoryCreateRequest`
+    şemasında zaten `org_id` diye bir alan yoktur; onu göndermeye çalışmak
+    `extra="forbid"` tarafından reddedilir. Bu, bir kullanıcının kendi
+    isteğine başka bir organizasyonun kimliğini yazıp o organizasyona veri
+    sokmasını mimari düzeyde imkânsız kılar.
     """
     body = client.post(FACTORIES, json={"name": "A"}).json()
-    assert body["factory"]["org_id"] is None
+    assert body["factory"]["org_id"] == TEST_ORG_ID
 
     rejected = client.post(FACTORIES, json={"name": "B", "org_id": "kiraci-1"})
     assert rejected.status_code == 422
@@ -446,39 +454,66 @@ def test_unknown_field_is_rejected(client: TestClient) -> None:
 # --------------------------------------------------------------------------- #
 
 
+#: Bu bölümdeki depo testleri bir organizasyon bağlamında çalışır; hangi
+#: kimlik olduğu önemsizdir çünkü hiçbiri kiracı yalıtımını sınamaz (o,
+#: `test_version_of_another_factory_is_not_readable` ve
+#: `test_auth_tenant_isolation.py` içindedir).
+ORG_ID = "test-org"
+
+
 def test_store_raises_typed_errors() -> None:
     """Depo, HTTP katmanindan bagimsiz olarak tiplenmis hata yukseltir."""
     store = InMemoryFactoryStore()
 
     with pytest.raises(FactoryNotFound):
-        store.get("yok")
+        store.get(ORG_ID, "yok")
     with pytest.raises(FactoryNotFound):
-        store.delete("yok")
+        store.delete(ORG_ID, "yok")
     with pytest.raises(FactoryNotFound):
-        store.current_version("yok")
+        store.current_version(ORG_ID, "yok")
 
-    detail = store.create(FactoryCreateRequest(name="Bos"))
+    detail = store.create(ORG_ID, FactoryCreateRequest(name="Bos"))
     with pytest.raises(FactoryHasNoVersion):
-        store.current_version(detail.factory.id)
+        store.current_version(ORG_ID, detail.factory.id)
 
 
 def test_version_of_another_factory_is_not_readable() -> None:
     """Baska bir fabrikanin surumu 'bulunamadi' sayilir.
 
     Aksi hâlde kimlik denemeleriyle başka bir fabrikanın modeli okunabilirdi.
-    Faz 1'de kimlik doğrulama yok; bu sınır yine de şimdiden korunur, çünkü
-    çok kiracılı desteğe geçildiğinde burası hazır olmalıdır.
     """
     store = InMemoryFactoryStore()
     from simulation_engine.models.schemas import SimulationConfig
 
     model = SimulationConfig.model_validate(config())
-    first = store.create(FactoryCreateRequest(name="A", config=model))
-    second = store.create(FactoryCreateRequest(name="B", config=model))
+    first = store.create(ORG_ID, FactoryCreateRequest(name="A", config=model))
+    second = store.create(ORG_ID, FactoryCreateRequest(name="B", config=model))
 
     assert first.current_version is not None
     with pytest.raises(FactoryVersionNotFound):
-        store.get_version(second.factory.id, first.current_version.id)
+        store.get_version(ORG_ID, second.factory.id, first.current_version.id)
+
+
+def test_factory_of_another_organization_is_not_readable() -> None:
+    """Baska bir organizasyonun fabrikasi hicbir sekilde okunamaz.
+
+    Kiracı yalıtımının depo katmanındaki asıl sınavı budur: aynı fabrika
+    kimliği, sahibi olmayan bir organizasyon için hiç var olmamış gibi
+    davranmalıdır (403 değil 404 — bkz. `_require_factory`).
+    """
+    store = InMemoryFactoryStore()
+    from simulation_engine.models.schemas import SimulationConfig
+
+    model = SimulationConfig.model_validate(config())
+    created = store.create("org-a", FactoryCreateRequest(name="A", config=model))
+    factory_id = created.factory.id
+
+    with pytest.raises(FactoryNotFound):
+        store.get("org-b", factory_id)
+    with pytest.raises(FactoryNotFound):
+        store.delete("org-b", factory_id)
+    assert store.list("org-b") == []
+    assert store.list("org-a") != []
 
 
 def test_layout_tolerates_unknown_and_missing_stations() -> None:

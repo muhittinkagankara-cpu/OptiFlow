@@ -31,6 +31,7 @@ from simulation_engine.api.storage import (
     DATABASE_URL_ENV,
     JSON_TYPE,
     normalize_database_url,
+    require_org_id,
 )
 from simulation_engine.models.schemas import InventoryItem
 
@@ -57,6 +58,7 @@ class InventoryRecord(Base):
     __tablename__ = "inventory_items"
 
     id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    org_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
     payload: Mapped[Dict[str, Any]] = mapped_column(JSON_TYPE)
 
 
@@ -65,30 +67,51 @@ class InMemoryInventoryStore:
 
     Sunucu yeniden başladığında içerik kaybolur. Yerel geliştirme ve
     `DATABASE_URL` tanımlı olmayan kurulumlar için kullanılır.
+
+    Her kalem, sahibi organizasyonun kimliğiyle birlikte tutulur
+    (`_org_of: Dict[item_id, org_id]`). Ayrı bir sözlük kullanılması bilinçlidir:
+    `InventoryItem` şeması `org_id` taşımaz — kiracılık bir depolama katmanı
+    kaygısıdır, iş nesnesinin bir parçası değildir (Faz 1'deki `factory_id` /
+    `factory_version_id` ayrımıyla aynı ilke).
     """
 
     def __init__(self) -> None:
         self._items: Dict[str, InventoryItem] = {}
+        self._org_of: Dict[str, str] = {}
 
-    def add(self, item: InventoryItem) -> InventoryItem:
+    def add(self, org_id: str, item: InventoryItem) -> InventoryItem:
+        require_org_id(org_id)
         if item.id in self._items:
             raise InventoryItemExists(item.id)
         self._items[item.id] = item
+        self._org_of[item.id] = org_id
         return item
 
-    def list(self) -> List[InventoryItem]:
+    def list(self, org_id: str) -> List[InventoryItem]:
+        require_org_id(org_id)
         # Ad sırası kullanıcının aradığını bulmasını kolaylaştırır; ekleme sırası
         # birkaç kalemden sonra anlamsızlaşır.
-        return sorted(self._items.values(), key=lambda item: item.name.casefold())
+        items = [
+            item
+            for item_id, item in self._items.items()
+            if self._org_of.get(item_id) == org_id
+        ]
+        return sorted(items, key=lambda item: item.name.casefold())
 
-    def get(self, item_id: str) -> InventoryItem:
+    def get(self, org_id: str, item_id: str) -> InventoryItem:
+        require_org_id(org_id)
+        if self._org_of.get(item_id) != org_id:
+            # Baska bir organizasyonun kalemi de "bulunamadi" sayilir; 403
+            # yerine 404, kimlik denemeleriyle varligin bile sizmasini engeller.
+            raise InventoryItemNotFound(item_id)
         try:
             return self._items[item_id]
         except KeyError as error:
             raise InventoryItemNotFound(item_id) from error
 
-    def update(self, item_id: str, item: InventoryItem) -> InventoryItem:
-        if item_id not in self._items:
+    def update(self, org_id: str, item_id: str, item: InventoryItem) -> InventoryItem:
+        require_org_id(org_id)
+        if self._org_of.get(item_id) != org_id:
             raise InventoryItemNotFound(item_id)
         # Kimlik gövdeden değil yoldan alınır; aksi hâlde bir güncelleme isteği
         # sessizce yeni bir kalem oluşturabilirdi.
@@ -96,12 +119,16 @@ class InMemoryInventoryStore:
         self._items[item_id] = stored
         return stored
 
-    def delete(self, item_id: str) -> None:
-        if self._items.pop(item_id, None) is None:
+    def delete(self, org_id: str, item_id: str) -> None:
+        require_org_id(org_id)
+        if self._org_of.get(item_id) != org_id:
             raise InventoryItemNotFound(item_id)
+        self._items.pop(item_id, None)
+        self._org_of.pop(item_id, None)
 
     def clear(self) -> None:
         self._items.clear()
+        self._org_of.clear()
 
     def dispose(self) -> None:
         """Bellek deposunda kapatılacak bir kaynak yoktur."""
@@ -121,41 +148,54 @@ class DatabaseInventoryStore:
             Base.metadata.create_all(self._engine, tables=[InventoryRecord.__table__])
         self._session_factory = sessionmaker(bind=self._engine, future=True)
 
-    def add(self, item: InventoryItem) -> InventoryItem:
+    def add(self, org_id: str, item: InventoryItem) -> InventoryItem:
+        require_org_id(org_id)
         with self._session_factory() as session:
             if session.get(InventoryRecord, item.id) is not None:
                 raise InventoryItemExists(item.id)
-            session.add(InventoryRecord(id=item.id, payload=item.model_dump()))
+            session.add(
+                InventoryRecord(id=item.id, org_id=org_id, payload=item.model_dump())
+            )
             session.commit()
         return item
 
-    def list(self) -> List[InventoryItem]:
+    def list(self, org_id: str) -> List[InventoryItem]:
+        require_org_id(org_id)
         with self._session_factory() as session:
-            rows = session.execute(select(InventoryRecord)).scalars().all()
+            rows = (
+                session.execute(
+                    select(InventoryRecord).where(InventoryRecord.org_id == org_id)
+                )
+                .scalars()
+                .all()
+            )
         items = [InventoryItem.model_validate(row.payload) for row in rows]
         return sorted(items, key=lambda item: item.name.casefold())
 
-    def get(self, item_id: str) -> InventoryItem:
+    def get(self, org_id: str, item_id: str) -> InventoryItem:
+        require_org_id(org_id)
         with self._session_factory() as session:
             row = session.get(InventoryRecord, item_id)
-        if row is None:
+        if row is None or row.org_id != org_id:
             raise InventoryItemNotFound(item_id)
         return InventoryItem.model_validate(row.payload)
 
-    def update(self, item_id: str, item: InventoryItem) -> InventoryItem:
+    def update(self, org_id: str, item_id: str, item: InventoryItem) -> InventoryItem:
+        require_org_id(org_id)
         stored = item.model_copy(update={"id": item_id})
         with self._session_factory() as session:
             row = session.get(InventoryRecord, item_id)
-            if row is None:
+            if row is None or row.org_id != org_id:
                 raise InventoryItemNotFound(item_id)
             row.payload = stored.model_dump()
             session.commit()
         return stored
 
-    def delete(self, item_id: str) -> None:
+    def delete(self, org_id: str, item_id: str) -> None:
+        require_org_id(org_id)
         with self._session_factory() as session:
             row = session.get(InventoryRecord, item_id)
-            if row is None:
+            if row is None or row.org_id != org_id:
                 raise InventoryItemNotFound(item_id)
             session.delete(row)
             session.commit()

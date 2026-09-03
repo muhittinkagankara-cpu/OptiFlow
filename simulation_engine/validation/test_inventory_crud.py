@@ -27,6 +27,12 @@ from simulation_engine.api.simulation_service import app
 from simulation_engine.models.schemas import InventoryItem
 
 
+#: Depo katmaninin kiraci filtresini sinamak icin sabit bir test organizasyonu.
+#: HTTP uzerinden gelen testler `conftest.TEST_ORG_ID` kullanir (autouse override);
+#: burada depo dogrudan cagrildigi icin ayni sabit elle verilir.
+ORG_ID = "test-org"
+
+
 def sample(**overrides) -> dict:
     """Tekstil hattinin ham kumas kalemi."""
     payload = {
@@ -148,43 +154,45 @@ def test_unknown_fields_are_rejected() -> None:
 def test_memory_store_round_trip() -> None:
     memory = InMemoryInventoryStore()
     item = InventoryItem.model_validate(sample())
-    memory.add(item)
-    assert memory.get("ham-kumas").name == "Ham Kumaş"
+    memory.add(ORG_ID, item)
+    assert memory.get(ORG_ID, "ham-kumas").name == "Ham Kumaş"
     assert len(memory) == 1
 
 
 def test_duplicate_id_is_rejected() -> None:
     """Sessizce uzerine yazmak, kullanicinin farkinda olmadan veri kaybetmesidir."""
     memory = InMemoryInventoryStore()
-    memory.add(InventoryItem.model_validate(sample()))
+    memory.add(ORG_ID, InventoryItem.model_validate(sample()))
     with pytest.raises(InventoryItemExists):
-        memory.add(InventoryItem.model_validate(sample(name="Baska Kumas")))
+        memory.add(ORG_ID, InventoryItem.model_validate(sample(name="Baska Kumas")))
 
 
 def test_missing_item_raises() -> None:
     memory = InMemoryInventoryStore()
     with pytest.raises(InventoryItemNotFound):
-        memory.get("yok")
+        memory.get(ORG_ID, "yok")
     with pytest.raises(InventoryItemNotFound):
-        memory.delete("yok")
+        memory.delete(ORG_ID, "yok")
 
 
 def test_update_keeps_path_id() -> None:
     """Govdedeki kimlik yok sayilir; aksi halde guncelleme ikinci bir kayit yaratirdi."""
     memory = InMemoryInventoryStore()
-    memory.add(InventoryItem.model_validate(sample()))
-    memory.update("ham-kumas", InventoryItem.model_validate(sample(id="baska-kimlik")))
+    memory.add(ORG_ID, InventoryItem.model_validate(sample()))
+    memory.update(
+        ORG_ID, "ham-kumas", InventoryItem.model_validate(sample(id="baska-kimlik"))
+    )
 
     assert len(memory) == 1
-    assert memory.get("ham-kumas").id == "ham-kumas"
+    assert memory.get(ORG_ID, "ham-kumas").id == "ham-kumas"
 
 
 def test_listing_is_sorted_by_name() -> None:
     memory = InMemoryInventoryStore()
     for item_id, name in [("c", "Vida"), ("a", "Ham Kumaş"), ("b", "iplik")]:
-        memory.add(InventoryItem.model_validate(sample(id=item_id, name=name)))
+        memory.add(ORG_ID, InventoryItem.model_validate(sample(id=item_id, name=name)))
 
-    assert [item.name for item in memory.list()] == ["Ham Kumaş", "iplik", "Vida"]
+    assert [item.name for item in memory.list(ORG_ID)] == ["Ham Kumaş", "iplik", "Vida"]
 
 
 def test_database_store_persists_across_instances(tmp_path) -> None:
@@ -197,14 +205,16 @@ def test_database_store_persists_across_instances(tmp_path) -> None:
 
     first = DatabaseInventoryStore(url)
     try:
-        first.add(InventoryItem.model_validate(sample()))
-        first.update("ham-kumas", InventoryItem.model_validate(sample(current_stock=42.0)))
+        first.add(ORG_ID, InventoryItem.model_validate(sample()))
+        first.update(
+            ORG_ID, "ham-kumas", InventoryItem.model_validate(sample(current_stock=42.0))
+        )
     finally:
         first.dispose()
 
     second = DatabaseInventoryStore(url)
     try:
-        restored = second.get("ham-kumas")
+        restored = second.get(ORG_ID, "ham-kumas")
         assert restored.current_stock == 42.0
         assert restored.name == "Ham Kumaş"
     finally:
@@ -215,9 +225,9 @@ def test_database_store_rejects_duplicates(tmp_path) -> None:
     url = f"sqlite:///{tmp_path / 'envanter.db'}"
     store = DatabaseInventoryStore(url)
     try:
-        store.add(InventoryItem.model_validate(sample()))
+        store.add(ORG_ID, InventoryItem.model_validate(sample()))
         with pytest.raises(InventoryItemExists):
-            store.add(InventoryItem.model_validate(sample()))
+            store.add(ORG_ID, InventoryItem.model_validate(sample()))
     finally:
         store.dispose()
 

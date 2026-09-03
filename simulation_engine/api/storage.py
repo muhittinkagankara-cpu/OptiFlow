@@ -95,6 +95,40 @@ DATABASE_URL_ENV: str = "DATABASE_URL"
 JSON_INFINITY_SENTINEL: float = 1e308
 
 
+class TenantScopeError(ValueError):
+    """Kiracı kapsamı olmadan kiracı verisine erişilmeye çalışıldı.
+
+    Bu bir programlama hatasıdır, kullanıcı hatası değildir: depo katmanına
+    boş bir `org_id` ulaşması, çağıran tarafın organizasyon çözümünü
+    atladığı anlamına gelir.
+    """
+
+
+def require_org_id(org_id: Optional[str]) -> str:
+    """Kiracı kapsamının gerçekten verildiğini garanti eder.
+
+    Neden gerekli
+    -------------
+    Filtreleme her yerde `satir.org_id != org_id` biçiminde tam eşleşmedir.
+    `org_id` boş (`None`) olsaydı, kimlik doğrulama öncesinden kalma ve
+    `org_id` sütunu NULL olan **eski satırlar** bu karşılaştırmayı geçerdi
+    (`None != None` yanlıştır) ve sahipsiz veri herkese görünür hâle gelirdi.
+
+    Bugün bu yol HTTP üzerinden erişilebilir değildir — `get_current_org`
+    her zaman dolu bir kimlik döndürür. Denetim yine de buraya konur: ileride
+    bir arka plan işi ya da betik depoyu doğrudan çağırdığında, sessizce
+    açılan bir kapı yerine gürültülü bir hata alınır.
+
+    Raises:
+        TenantScopeError: `org_id` boşsa.
+    """
+    if not org_id:
+        raise TenantScopeError(
+            "Kiraci kapsami olmadan kiraci verisine erisilemez: 'org_id' bos."
+        )
+    return org_id
+
+
 class Base(DeclarativeBase):
     """SQLAlchemy taban sınıfı."""
 
@@ -126,6 +160,12 @@ class SimulationRecord(Base):
         String(64), nullable=True, index=True
     )
 
+    # Kosumu baslatan kullanicinin organizasyonu. Kimlik dogrulama olmadan
+    # yazilmis eski kayitlarda bostur ve bu kayitlar hicbir organizasyona
+    # gorunmez hale gelir (var olmaya devam ederler, yalnizca `get()` artik
+    # tam eslesme arar).
+    org_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, index=True)
+
 
 @dataclass
 class StoredSimulation:
@@ -144,6 +184,10 @@ class StoredSimulation:
     #: çalıştırılmayan koşumlarda boştur.
     factory_id: Optional[str] = None
     factory_version_id: Optional[str] = None
+
+    #: Koşumu başlatan kullanıcının organizasyonu. Kimlik doğrulama
+    #: gerektirmeyen (test, betik) çağrılarda boş bırakılabilir.
+    org_id: Optional[str] = None
 
 
 # --------------------------------------------------------------------------- #
@@ -194,6 +238,7 @@ def deserialize_record(
     results: Dict[str, Any],
     factory_id: Optional[str] = None,
     factory_version_id: Optional[str] = None,
+    org_id: Optional[str] = None,
 ) -> StoredSimulation:
     """Veritabanı satırını `StoredSimulation` nesnesine geri çevirir."""
     return StoredSimulation(
@@ -209,6 +254,7 @@ def deserialize_record(
         created_at=results.get("created_at", time.time()),
         factory_id=factory_id,
         factory_version_id=factory_version_id,
+        org_id=org_id,
     )
 
 
@@ -253,13 +299,20 @@ class SimulationStore:
                 "Depo kapasitesi doldu; '%s' kimlikli simulasyon dusuruldu.", evicted_id
             )
 
-    def get(self, simulation_id: str) -> StoredSimulation:
+    def get(self, org_id: str, simulation_id: str) -> StoredSimulation:
         """Kimliğe göre kaydı döndürür.
 
         Raises:
-            KeyError: Kayıt bulunamazsa.
+            KeyError: Kayıt bulunamazsa ya da başka bir organizasyona aitse.
+                İkisi aynı hatayı üretir; API katmanı bunu 404'e çevirirken
+                hangi durumun geçerli olduğunu bilmesine gerek kalmaz — ve
+                istemciye de sızdırılmaz.
         """
-        return self._entries[simulation_id]
+        require_org_id(org_id)
+        record = self._entries[simulation_id]
+        if record.org_id != org_id:
+            raise KeyError(simulation_id)
+        return record
 
     def clear(self) -> None:
         """Depoyu boşaltır (testler için)."""
@@ -330,21 +383,23 @@ class DatabaseSimulationStore:
                     status="completed",
                     factory_id=record.factory_id,
                     factory_version_id=record.factory_version_id,
+                    org_id=record.org_id,
                 )
             )
             self._delete_expired(session)
 
-    def get(self, simulation_id: str) -> StoredSimulation:
+    def get(self, org_id: str, simulation_id: str) -> StoredSimulation:
         """Kimliğe göre kaydı döndürür.
 
         Raises:
-            KeyError: Kayıt bulunamazsa. Bellek deposuyla aynı hatayı
-                yükseltmek zorunludur; API katmanı bu hatayı yakalayıp 404
-                döndürür ve deponun türünü bilmez.
+            KeyError: Kayıt bulunamazsa ya da başka bir organizasyona aitse.
+                Bellek deposuyla aynı hatayı yükseltmek zorunludur; API katmanı
+                bu hatayı yakalayıp 404 döndürür ve deponun türünü bilmez.
         """
+        require_org_id(org_id)
         with self._session_factory() as session:
             row = session.get(SimulationRecord, simulation_id)
-            if row is None:
+            if row is None or row.org_id != org_id:
                 raise KeyError(simulation_id)
             return deserialize_record(
                 row.id,
@@ -352,6 +407,7 @@ class DatabaseSimulationStore:
                 row.results,
                 row.factory_id,
                 row.factory_version_id,
+                row.org_id,
             )
 
     def clear(self) -> None:

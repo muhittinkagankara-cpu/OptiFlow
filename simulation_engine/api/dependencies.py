@@ -22,6 +22,11 @@ from simulation_engine.api.factory_storage import (
     InMemoryFactoryStore,
     create_factory_store,
 )
+from simulation_engine.api.org_storage import (
+    DatabaseOrgStore,
+    InMemoryOrgStore,
+    create_org_store,
+)
 from simulation_engine.api.storage import (
     DatabaseSimulationStore,
     SimulationStore,
@@ -30,6 +35,7 @@ from simulation_engine.api.storage import (
 
 SimulationStoreProtocol = Union[SimulationStore, DatabaseSimulationStore]
 FactoryStoreProtocol = Union[InMemoryFactoryStore, DatabaseFactoryStore]
+OrgStoreProtocol = Union[InMemoryOrgStore, DatabaseOrgStore]
 
 #: Uygulama düzeyinde tekil depo. `DATABASE_URL` tanımlıysa kalıcı, değilse
 #: bellek içi bir depo oluşturulur (bkz. `api.storage`). İki deponun arayüzü
@@ -59,3 +65,16 @@ def get_factory_store() -> FactoryStoreProtocol:
     aktarmak zorunda kalıp dairesel bir bağımlılık oluştururdu.
     """
     return _factory_store
+
+
+#: Uygulama düzeyinde tekil organizasyon deposu.
+_org_store: OrgStoreProtocol = create_org_store()
+
+
+def get_org_store() -> OrgStoreProtocol:
+    """Organizasyon deposu bağımlılığı.
+
+    `simulation_engine.auth.dependencies.get_current_org` bunu kullanarak
+    doğrulanmış kullanıcının organizasyonunu bulur ya da (ilk girişte) kurar.
+    """
+    return _org_store

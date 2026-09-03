@@ -14,3 +14,12 @@ uvicorn[standard]>=0.29
 sqlalchemy>=2.0
 psycopg2-binary>=2.9
 alembic>=1.13
+
+# Kimlik dogrulama: Supabase erisim token'larinin (JWT) dogrulanmasi.
+#
+# `[crypto]` ZORUNLUDUR, istege bagli degil: Supabase'in 1 Mayis 2025'ten
+# sonra acilan projelerdeki varsayilani asimetrik imzalamadir (RS256/ES256) ve
+# PyJWT bu algoritmalari yalnizca `cryptography` kuruluysa kaydeder. Sade
+# `pyjwt` ile dagitim yapilirsa her giris denemesi calisma zamaninda
+# "Algorithm not supported" ile duser.
+pyjwt[crypto]>=2.8,<3.0

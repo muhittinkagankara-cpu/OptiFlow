@@ -2034,3 +2034,26 @@ class FactorySaveRequest(BaseModel):
                 "modelin bir parcasidir ve tek basina surumlenmez."
             )
         return self
+
+
+# --------------------------------------------------------------------------- #
+# Kimlik ve organizasyon — Faz 2
+# --------------------------------------------------------------------------- #
+
+
+class MeResponse(BaseModel):
+    """`GET /api/me` yanıtı: doğrulanmış kullanıcının kimliği ve organizasyonu.
+
+    Kullanıcının kendisi bu uygulamada saklanmaz (Supabase Auth'un
+    sorumluluğudur); bu yanıt yalnızca token'dan çözülen bilgiyi ve eşlik eden
+    organizasyon kaydını bir araya getirir. Frontend, oturum açtıktan sonra
+    ana uygulamayı göstermeden önce bunu bir kez çağırır — "organizasyon
+    yükleniyor" durumu tam olarak bu isteğin süresidir.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str = Field(description="Supabase kullanici kimligi (sub)")
+    email: Optional[str] = None
+    org_id: str
+    org_name: str

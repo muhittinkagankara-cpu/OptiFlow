@@ -35,6 +35,7 @@ from simulation_engine.api.storage import (  # noqa: E402
 # Tablo eşlemeleri metadata'ya bu içe aktarmalarla kaydolur.
 import simulation_engine.api.factory_storage  # noqa: F401,E402
 import simulation_engine.api.inventory_storage  # noqa: F401,E402
+import simulation_engine.api.org_storage  # noqa: F401,E402
 
 config = context.config
 

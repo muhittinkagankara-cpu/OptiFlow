@@ -136,7 +136,7 @@ npm run build
 
 ## Testleri çalıştırma
 
-### Backend (502 test)
+### Backend (647 test)
 
 Proje kök dizininde:
 
@@ -155,7 +155,7 @@ python -m pytest simulation_engine/validation/ -v -s
 > çok daha hızlıdır, örneğin:
 > `python -m pytest simulation_engine/validation/test_queueing_theory.py -q`
 
-### Frontend (243 test)
+### Frontend (265 test)
 
 `frontend/` dizininde:
 
@@ -251,6 +251,57 @@ Birden çok adres virgülle ayrılabilir (Vercel her dala ayrı bir önizleme
 adresi verir). Adres kodda sabit değildir; bu yüzden yeni bir adres eklemek
 için kaynak kodu düzenlemek ve yeniden dağıtmak gerekmez.
 
+### 5. Kimlik doğrulama — Supabase (Faz 2)
+
+Kimlik doğrulama Supabase Auth üzerinden yapılır. Kullanıcı bu uygulamada
+saklanmaz — parola, oturum, token yenileme tamamen Supabase'in sorumluluğudur.
+Bu uygulama yalnızca hangi Supabase kullanıcısının hangi organizasyona ait
+olduğunu tutar ve her isteği o organizasyona filtreler.
+
+**Supabase panelinden alınacak değerler** (Project Settings → API):
+
+| Değer | Nereye | Gizli mi? |
+|---|---|---|
+| Project URL | Frontend — `VITE_SUPABASE_URL` | hayır |
+| Project URL | Backend (Railway) — `SUPABASE_URL` | hayır |
+| `anon` / `publishable` anahtarı | Frontend — `VITE_SUPABASE_ANON_KEY` | hayır |
+| JWT Secret (yalnızca eski projeler) | Backend — `SUPABASE_JWT_SECRET` | **evet** |
+
+#### Hangi imzalama biçimi?
+
+Supabase JWT'leri iki biçimde imzalayabilir ve **hangisinin geçerli olduğu
+projenin ne zaman açıldığına bağlıdır**:
+
+* **Asimetrik (RS256/ES256) — 1 Mayıs 2025'ten sonra açılan projelerin
+  varsayılanı.** Doğrulama, projenin herkese açık anahtar kümesiyle
+  (`/auth/v1/.well-known/jwks.json`) yapılır. Backend'e **yalnızca
+  `SUPABASE_URL` verin**; gizli hiçbir değer paylaşılmaz. Önerilen yol budur.
+* **Simetrik (HS256) — eski projeler.** Doğrulama için `SUPABASE_JWT_SECRET`
+  gerekir. Bu değer gizlidir ve yalnızca ortam değişkeni olarak tanımlanmalıdır.
+
+Backend **ikisini de** destekler ve hangisini kullanacağını kendi
+yapılandırmasından belirler; token'ın kendi `alg` başlığına asla bakmaz
+(algoritma karışıklığı saldırısına kapalıdır). Eski sırdan yeni anahtarlara
+geçiş yapıyorsanız geçiş penceresi boyunca ikisini birden tanımlayabilirsiniz:
+önce asimetrik denenir, olmazsa HS256'ya düşülür.
+
+Hangi biçimi kullandığınızı bilmiyorsanız: panelde **Project Settings → JWT
+Keys** altında "JWT Signing Keys" görüyorsanız asimetrik, yalnızca tek bir
+"JWT Secret" alanı görüyorsanız simetrik kullanıyorsunuz demektir.
+
+#### Gizlilik
+
+`VITE_SUPABASE_ANON_KEY` bir sır **değildir** — Supabase'in tasarımı gereği
+tarayıcıya açıkça gönderilmek üzere üretilir; gerçek yetkilendirme backend'de
+JWT doğrulaması ve satır filtrelemesiyle yapılır. `SUPABASE_JWT_SECRET` ise
+gizlidir ve **asla** `VITE_` önekiyle tanımlanmamalıdır: o önek değeri tarayıcı
+paketine gömer.
+
+`VITE_SUPABASE_URL` ve `VITE_SUPABASE_ANON_KEY` tanımlı değilse frontend
+"kimlik doğrulama yapılandırılmamış" ekranını gösterir; backend'de hiçbir
+doğrulama yolu yapılandırılmamışsa istekler 500 ile reddedilir — iki durumda da
+sessizce açık kalmaz.
+
 ### Ortam değişkenleri
 
 | Değişken | Nerede | Açıklama |
@@ -258,10 +309,16 @@ için kaynak kodu düzenlemek ve yeniden dağıtmak gerekmez.
 | `PORT` | Railway | Platform otomatik atar; elle tanımlamayın |
 | `DATABASE_URL` | Railway | PostgreSQL servisi eklenince otomatik tanımlanır. Yoksa sonuçlar bellekte tutulur |
 | `FRONTEND_ORIGINS` | Railway | CORS'a eklenecek frontend adresleri (virgülle ayrılmış) |
+| `SUPABASE_URL` | Railway | Supabase proje adresi; asimetrik (JWKS) doğrulama için — önerilen |
+| `SUPABASE_JWT_SECRET` | Railway | Yalnızca eski (HS256) projeler için paylaşımlı sır (**gizli**) |
 | `VITE_API_BASE_URL` | Vercel / `.env.production` | Arayüzün bağlanacağı backend adresi |
+| `VITE_SUPABASE_URL` | Vercel | Supabase proje adresi |
+| `VITE_SUPABASE_ANON_KEY` | Vercel | Supabase herkese açık anon anahtarı (sır değildir) |
 
 > `VITE_` önekli değişkenler derleme sırasında paketin içine gömülür ve
-> tarayıcıya iner. Bu dosyalara **hiçbir zaman** gizli anahtar yazmayın.
+> tarayıcıya iner. Bu dosyalara **hiçbir zaman** gizli anahtar yazmayın —
+> `VITE_SUPABASE_ANON_KEY` istisnadır, çünkü zaten herkese açık olmak üzere
+> tasarlanmıştır.
 
 ## Proje yapısı
 

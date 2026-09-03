@@ -26,6 +26,7 @@ from simulation_engine.analytics.inventory import (
     simulate_stockout_risk,
 )
 from simulation_engine.api.dependencies import SimulationStoreProtocol, get_store
+from simulation_engine.auth.dependencies import get_current_org
 from simulation_engine.api.inventory_storage import (
     DatabaseInventoryStore,
     InMemoryInventoryStore,
@@ -63,15 +64,18 @@ router = APIRouter(prefix=INVENTORY_PREFIX, tags=["inventory"])
 )
 def create_item(
     item: InventoryItem = Body(...),
+    org_id: str = Depends(get_current_org),
     store: InventoryStoreProtocol = Depends(get_inventory_store),
 ) -> InventoryItem:
     """Yeni bir kalem kaydeder.
+
+    Kalem, çağrıyı yapan kullanıcının organizasyonuna yazılır.
 
     Raises:
         HTTPException: Aynı kimlikte bir kalem zaten varsa (409).
     """
     try:
-        return store.add(item)
+        return store.add(org_id, item)
     except InventoryItemExists as error:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -88,10 +92,11 @@ def create_item(
     summary="Envanter kalemlerini listeler",
 )
 def list_items(
+    org_id: str = Depends(get_current_org),
     store: InventoryStoreProtocol = Depends(get_inventory_store),
 ) -> List[InventoryItem]:
-    """Tüm kalemleri ada göre sıralı döndürür."""
-    return store.list()
+    """Çağrıyı yapan kullanıcının organizasyonuna ait kalemleri ada göre sıralı döndürür."""
+    return store.list(org_id)
 
 
 @router.get(
@@ -101,15 +106,17 @@ def list_items(
 )
 def read_item(
     item_id: str = Path(..., min_length=1),
+    org_id: str = Depends(get_current_org),
     store: InventoryStoreProtocol = Depends(get_inventory_store),
 ) -> InventoryItem:
     """Kalemi kimliğine göre getirir.
 
     Raises:
-        HTTPException: Kalem bulunamazsa (404).
+        HTTPException: Kalem bulunamazsa ya da başka bir organizasyona aitse
+            (404).
     """
     try:
-        return store.get(item_id)
+        return store.get(org_id, item_id)
     except InventoryItemNotFound as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -125,6 +132,7 @@ def read_item(
 def update_item(
     item_id: str = Path(..., min_length=1),
     item: InventoryItem = Body(...),
+    org_id: str = Depends(get_current_org),
     store: InventoryStoreProtocol = Depends(get_inventory_store),
 ) -> InventoryItem:
     """Kalemi tümüyle değiştirir.
@@ -133,10 +141,11 @@ def update_item(
     güncelleme isteği kimliği değiştirip ortada iki kayıt bırakabilirdi.
 
     Raises:
-        HTTPException: Kalem bulunamazsa (404).
+        HTTPException: Kalem bulunamazsa ya da başka bir organizasyona aitse
+            (404).
     """
     try:
-        return store.update(item_id, item)
+        return store.update(org_id, item_id, item)
     except InventoryItemNotFound as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -151,15 +160,17 @@ def update_item(
 )
 def delete_item(
     item_id: str = Path(..., min_length=1),
+    org_id: str = Depends(get_current_org),
     store: InventoryStoreProtocol = Depends(get_inventory_store),
 ) -> None:
     """Kalemi kalıcı olarak siler.
 
     Raises:
-        HTTPException: Kalem bulunamazsa (404).
+        HTTPException: Kalem bulunamazsa ya da başka bir organizasyona aitse
+            (404).
     """
     try:
-        store.delete(item_id)
+        store.delete(org_id, item_id)
     except InventoryItemNotFound as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -185,6 +196,7 @@ def analyze_item(
         lt=1.0,
         description="Hizmet seviyesi oran olarak (0.95 = %95)",
     ),
+    org_id: str = Depends(get_current_org),
     store: InventoryStoreProtocol = Depends(get_inventory_store),
 ) -> InventoryAnalysis:
     """Kalemin klasik envanter teorisi göstergelerini döndürür.
@@ -194,9 +206,10 @@ def analyze_item(
     kaydı değiştirmek gerekirdi.
 
     Raises:
-        HTTPException: Kalem bulunamazsa (404).
+        HTTPException: Kalem bulunamazsa ya da başka bir organizasyona aitse
+            (404).
     """
-    item = _require_item(store, item_id)
+    item = _require_item(store, org_id, item_id)
     return analyze(item, service_level=service_level)
 
 
@@ -226,6 +239,7 @@ def stockout_risk(
             "bu kosumda o istasyon varsa kayip uretim de hesaplanir."
         ),
     ),
+    org_id: str = Depends(get_current_org),
     store: InventoryStoreProtocol = Depends(get_inventory_store),
     simulations: SimulationStoreProtocol = Depends(get_store),
 ) -> StockoutRiskReport:
@@ -246,9 +260,10 @@ def stockout_risk(
     üretim tarafına bağımlı hâle gelmesi, modülün bağımsızlığını bozardı.
 
     Raises:
-        HTTPException: Kalem bulunamazsa (404).
+        HTTPException: Kalem bulunamazsa ya da başka bir organizasyona aitse
+            (404).
     """
-    item = _require_item(store, item_id)
+    item = _require_item(store, org_id, item_id)
     report = simulate_stockout_risk(
         item,
         horizon_days=horizon_days,
@@ -260,10 +275,11 @@ def stockout_risk(
         return report
 
     try:
-        record = simulations.get(simulation_id)
+        record = simulations.get(org_id, simulation_id)
     except KeyError:
-        # Koşum bulunamadı (silinmiş ya da sunucu yeniden başlamış olabilir).
-        # Risk raporu kendi başına eksiksizdir; üretim etkisi olmadan döner.
+        # Kosum bulunamadi (silinmis, sunucu yeniden baslamis, ya da baska bir
+        # organizasyona ait olabilir). Risk raporu kendi basina eksiksizdir;
+        # uretim etkisi olmadan doner.
         return report
 
     impact = estimate_production_impact(
@@ -272,10 +288,12 @@ def stockout_risk(
     return report.model_copy(update={"production_impact": impact})
 
 
-def _require_item(store: InventoryStoreProtocol, item_id: str) -> InventoryItem:
-    """Kalemi getirir; yoksa 404 üretir."""
+def _require_item(
+    store: InventoryStoreProtocol, org_id: str, item_id: str
+) -> InventoryItem:
+    """Kalemi getirir; yoksa ya da başka bir organizasyona aitse 404 üretir."""
     try:
-        return store.get(item_id)
+        return store.get(org_id, item_id)
     except InventoryItemNotFound as error:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

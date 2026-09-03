@@ -37,6 +37,7 @@ from simulation_engine.api.simulation_service import (
     get_store,
 )
 from simulation_engine.models.schemas import SimulationConfig
+from simulation_engine.validation.conftest import TEST_ORG_ID
 
 #: M/M/1: lambda = 0.8, mu = 1.0, rho = 0.8 -> L = 4, W = 5, Wq = 4, Lq = 3.2
 MM1_ANALYTIC = {"rho": 0.8, "L": 4.0, "W": 5.0, "Wq": 4.0, "Lq": 3.2}
@@ -121,7 +122,11 @@ def client() -> TestClient:
     app.dependency_overrides[get_store] = lambda: store
     with TestClient(app) as test_client:
         yield test_client
-    app.dependency_overrides.clear()
+    # Yalnizca bu fixture'in ekledigi anahtar kaldirilir. Blanket `.clear()`,
+    # `conftest.py`'nin oturum kapsaminda kurdugu `get_current_org`
+    # gecersiz kilmasini da silerdi ve o override bir daha hic kurulmazdi
+    # (oturum fixture'i yalnizca bir kez calisir) — sonraki her test 401 alirdi.
+    app.dependency_overrides.pop(get_store, None)
 
 
 @pytest.fixture(scope="module")
@@ -468,6 +473,7 @@ def test_store_evicts_oldest_entries() -> None:
             bottleneck=None,  # type: ignore[arg-type]
             oee=None,  # type: ignore[arg-type]
             duration_seconds=0.0,
+            org_id=TEST_ORG_ID,
         )
         for index in range(3)
     ]
@@ -476,8 +482,8 @@ def test_store_evicts_oldest_entries() -> None:
 
     assert len(store) == 2
     with pytest.raises(KeyError):
-        store.get("id-0")
-    assert store.get("id-2").simulation_id == "id-2"
+        store.get(TEST_ORG_ID, "id-0")
+    assert store.get(TEST_ORG_ID, "id-2").simulation_id == "id-2"
 
 
 # --------------------------------------------------------------------------- #

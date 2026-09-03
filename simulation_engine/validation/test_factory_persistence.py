@@ -47,6 +47,7 @@ from simulation_engine.api.storage import (
     SimulationRecord,
     SimulationStore,
     StoredSimulation,
+    TenantScopeError,
     new_simulation_id,
 )
 from simulation_engine.models.schemas import (
@@ -54,9 +55,14 @@ from simulation_engine.models.schemas import (
     FactorySaveRequest,
     SimulationConfig,
 )
+from simulation_engine.validation.conftest import TEST_ORG_ID
 from simulation_engine.validation.test_factory_crud import config, layout
 
 FACTORIES = "/api/factories"
+
+#: Bolum 1 (dogrudan depo cagrilari) icin sabit test organizasyonu.
+#: Bolum 2-4 HTTP uzerinden gectigi icin conftest'in TEST_ORG_ID'sini kullanir.
+ORG_ID = "test-org"
 
 
 def model(**overrides: Any) -> SimulationConfig:
@@ -91,14 +97,14 @@ def test_factory_survives_store_restart(database_url: str) -> None:
     """
     first = open_store(database_url)
     created = first.create(
-        FactoryCreateRequest(name="Gıda Hattı", sector="gida", config=model())
+        ORG_ID, FactoryCreateRequest(name="Gıda Hattı", sector="gida", config=model())
     )
     factory_id = created.factory.id
     first.dispose()
 
     second = open_store(database_url)
     try:
-        reopened = second.get(factory_id)
+        reopened = second.get(ORG_ID, factory_id)
         assert reopened.factory.name == "Gıda Hattı"
         assert reopened.factory.sector == "gida"
         assert reopened.current_version is not None
@@ -119,13 +125,13 @@ def test_layout_survives_store_restart(database_url: str) -> None:
     positions = FactoryLayout.model_validate(layout())
     first = open_store(database_url)
     created = first.create(
-        FactoryCreateRequest(name="Hat", config=model(), layout=positions)
+        ORG_ID, FactoryCreateRequest(name="Hat", config=model(), layout=positions)
     )
     first.dispose()
 
     second = open_store(database_url)
     try:
-        version = second.current_version(created.factory.id)
+        version = second.current_version(ORG_ID, created.factory.id)
         assert version.layout is not None
         assert version.layout.stations["kesim"].x == 0.0
         assert version.layout.stations["montaj"].x == 320.0
@@ -137,11 +143,12 @@ def test_layout_survives_store_restart(database_url: str) -> None:
 
 def test_version_history_survives_store_restart(database_url: str) -> None:
     first = open_store(database_url)
-    created = first.create(FactoryCreateRequest(name="Hat", config=model()))
+    created = first.create(ORG_ID, FactoryCreateRequest(name="Hat", config=model()))
     for servers in (3, 4, 5):
         changed = config()
         changed["stations"][1]["num_servers"] = servers
         first.save(
+            ORG_ID,
             created.factory.id,
             FactorySaveRequest(
                 config=SimulationConfig.model_validate(changed), note=f"{servers} makine"
@@ -151,10 +158,10 @@ def test_version_history_survives_store_restart(database_url: str) -> None:
 
     second = open_store(database_url)
     try:
-        history = second.list_versions(created.factory.id)
+        history = second.list_versions(ORG_ID, created.factory.id)
         assert [item.version_number for item in history] == [4, 3, 2, 1]
         assert [item.note for item in history][0] == "5 makine"
-        assert second.get(created.factory.id).factory.version_count == 4
+        assert second.get(ORG_ID, created.factory.id).factory.version_count == 4
     finally:
         second.dispose()
 
@@ -166,14 +173,14 @@ def test_duplicate_prevention_works_across_restart(database_url: str) -> None:
     kaydetme yeni bir sürüm yaratır ve sorun ancak canlıda fark edilirdi.
     """
     first = open_store(database_url)
-    created = first.create(FactoryCreateRequest(name="Hat", config=model()))
+    created = first.create(ORG_ID, FactoryCreateRequest(name="Hat", config=model()))
     first.dispose()
 
     second = open_store(database_url)
     try:
-        second.save(created.factory.id, FactorySaveRequest(config=model()))
-        second.save(created.factory.id, FactorySaveRequest(config=model()))
-        assert len(second.list_versions(created.factory.id)) == 1
+        second.save(ORG_ID, created.factory.id, FactorySaveRequest(config=model()))
+        second.save(ORG_ID, created.factory.id, FactorySaveRequest(config=model()))
+        assert len(second.list_versions(ORG_ID, created.factory.id)) == 1
     finally:
         second.dispose()
 
@@ -181,8 +188,8 @@ def test_duplicate_prevention_works_across_restart(database_url: str) -> None:
 def test_delete_removes_versions_from_the_database(database_url: str) -> None:
     """Fabrika silindiginde surumleri de gider; oksuz satir kalmaz."""
     store = open_store(database_url)
-    created = store.create(FactoryCreateRequest(name="Hat", config=model()))
-    store.delete(created.factory.id)
+    created = store.create(ORG_ID, FactoryCreateRequest(name="Hat", config=model()))
+    store.delete(ORG_ID, created.factory.id)
     store.dispose()
 
     engine = create_engine(database_url)
@@ -204,9 +211,11 @@ def test_two_stores_see_the_same_data(database_url: str) -> None:
     writer = open_store(database_url)
     reader = open_store(database_url)
     try:
-        created = writer.create(FactoryCreateRequest(name="Paylasilan", config=model()))
-        assert reader.get(created.factory.id).factory.name == "Paylasilan"
-        assert len(reader.list()) == 1
+        created = writer.create(
+            ORG_ID, FactoryCreateRequest(name="Paylasilan", config=model())
+        )
+        assert reader.get(ORG_ID, created.factory.id).factory.name == "Paylasilan"
+        assert len(reader.list(ORG_ID)) == 1
     finally:
         writer.dispose()
         reader.dispose()
@@ -266,7 +275,7 @@ def test_run_from_factory_stamps_the_version(client: TestClient, stores) -> None
     assert body["factory_id"] == factory_id
     assert body["factory_version_id"] == version_id
 
-    stored = simulations.get(body["simulation_id"])
+    stored = simulations.get(TEST_ORG_ID, body["simulation_id"])
     assert stored.factory_id == factory_id
     assert stored.factory_version_id == version_id
 
@@ -338,16 +347,19 @@ def test_editing_the_factory_does_not_reinterpret_an_old_run(
     client.put(f"{FACTORIES}/{factory_id}", json={"config": changed})
 
     # Kosum hala ilk surumu isaret eder ve o surum degismemistir.
-    stored = simulations.get(simulation_id)
+    stored = simulations.get(TEST_ORG_ID, simulation_id)
     assert stored.factory_version_id == version_id
     assert stored.config.stations[1].num_servers == 2
 
-    original = factories.get_version(factory_id, version_id)
+    original = factories.get_version(TEST_ORG_ID, factory_id, version_id)
     assert original.config.stations[1].num_servers == 2
     assert original.config.stations[1].buffer_capacity_before == 10
 
     # Guncel surum ise yeni degerleri tasir.
-    assert factories.current_version(factory_id).config.stations[1].num_servers == 9
+    assert (
+        factories.current_version(TEST_ORG_ID, factory_id).config.stations[1].num_servers
+        == 9
+    )
 
 
 def test_deleting_the_factory_keeps_the_run(client: TestClient, stores) -> None:
@@ -363,7 +375,7 @@ def test_deleting_the_factory_keeps_the_run(client: TestClient, stores) -> None:
 
     client.delete(f"{FACTORIES}/{factory_id}")
 
-    stored = simulations.get(run["simulation_id"])
+    stored = simulations.get(TEST_ORG_ID, run["simulation_id"])
     assert stored.factory_id == factory_id
     assert client.get(
         f"/api/simulations/{run['simulation_id']}/validation-report"
@@ -390,6 +402,7 @@ def build_record(**overrides: Any) -> StoredSimulation:
         bottleneck=analyze_bottleneck(replications[0], parsed),
         oee=compute_oee_report(replications[0]),
         duration_seconds=elapsed,
+        org_id=ORG_ID,
     )
     for key, value in overrides.items():
         setattr(record, key, value)
@@ -424,7 +437,7 @@ def test_expired_run_without_a_factory_is_deleted(tmp_path: Path) -> None:
     store.save(build_record())  # temizlik ekleme aninda calisir
 
     with pytest.raises(KeyError):
-        store.get(old.simulation_id)
+        store.get(ORG_ID, old.simulation_id)
     store.dispose()
 
 
@@ -442,7 +455,7 @@ def test_expired_run_attached_to_a_version_is_kept(tmp_path: Path) -> None:
 
     store.save(build_record())
 
-    kept = store.get(attached.simulation_id)
+    kept = store.get(ORG_ID, attached.simulation_id)
     assert kept.factory_id == "fab-1"
     assert kept.factory_version_id == "sur-1"
     store.dispose()
@@ -457,21 +470,47 @@ def test_factory_reference_survives_a_database_round_trip(tmp_path: Path) -> Non
 
     second = DatabaseSimulationStore(url)
     try:
-        restored = second.get(record.simulation_id)
+        restored = second.get(ORG_ID, record.simulation_id)
         assert restored.factory_id == "fab-9"
         assert restored.factory_version_id == "sur-9"
     finally:
         second.dispose()
 
 
-def test_legacy_record_without_references_still_loads(tmp_path: Path) -> None:
-    """Sutunlar eklenmeden once yazilmis kayitlar okunmaya devam eder."""
+def test_record_without_factory_references_still_loads(tmp_path: Path) -> None:
+    """Fabrika sutunlari eklenmeden once yazilmis kayitlar okunmaya devam eder."""
     url = f"sqlite:///{tmp_path / 'sims.db'}"
     store = DatabaseSimulationStore(url)
     record = build_record()
     store.save(record)
 
-    restored = store.get(record.simulation_id)
+    restored = store.get(ORG_ID, record.simulation_id)
     assert restored.factory_id is None
     assert restored.factory_version_id is None
+    store.dispose()
+
+
+def test_record_without_an_organization_is_invisible(tmp_path: Path) -> None:
+    """Kimlik dogrulama oncesinden kalma (org_id NULL) kayit kimseye gorunmez.
+
+    Faz 2'den once yazilmis kayitlarin sahibi bilinmiyor. Bunlari rastgele bir
+    organizasyona atamak, o organizasyonun hic gormedigi veriye erisim iddia
+    etmek olurdu; bu yuzden **kapali tarafa** dusulur: satir veritabaninda
+    durur ama API uzerinden hicbir organizasyona gorunmez.
+    """
+    url = f"sqlite:///{tmp_path / 'sims.db'}"
+    store = DatabaseSimulationStore(url)
+    orphan = build_record(org_id=None)
+    store.save(orphan)
+
+    with pytest.raises(KeyError):
+        store.get(ORG_ID, orphan.simulation_id)
+    with pytest.raises(KeyError):
+        store.get("baska-org", orphan.simulation_id)
+    # Bos kapsamla erisim denemesi de reddedilir (fail-closed).
+    with pytest.raises(TenantScopeError):
+        store.get(None, orphan.simulation_id)
+
+    # Satir gercekten duruyor: veri silinmedi, yalnizca erisilemez.
+    assert len(store) == 1
     store.dispose()

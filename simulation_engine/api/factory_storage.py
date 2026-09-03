@@ -61,6 +61,7 @@ from simulation_engine.api.storage import (
     JSON_TYPE,
     Base,
     normalize_database_url,
+    require_org_id,
 )
 from simulation_engine.models.schemas import (
     Factory,
@@ -181,7 +182,7 @@ class FactoryStoreBase:
         """Fabrikayı ve ona ait tüm sürümleri siler."""
         raise NotImplementedError
 
-    def _read_all_factories(self) -> List[Factory]:
+    def _read_all_factories(self, org_id: str) -> List[Factory]:
         raise NotImplementedError
 
     def _read_version(self, version_id: str) -> Optional[FactoryVersion]:
@@ -199,12 +200,13 @@ class FactoryStoreBase:
 
     # -- Genel arayüz ------------------------------------------------------ #
 
-    def create(self, request: FactoryCreateRequest) -> FactoryDetail:
+    def create(self, org_id: str, request: FactoryCreateRequest) -> FactoryDetail:
         """Yeni bir fabrika oluşturur; model verilmişse ilk sürümü de yazar."""
+        require_org_id(org_id)
         now = _now()
         factory = Factory(
             id=new_factory_id(),
-            org_id=None,
+            org_id=org_id,
             name=request.name.strip(),
             sector=request.sector,
             current_version_id=None,
@@ -223,28 +225,33 @@ class FactoryStoreBase:
         factory = self._point_at(factory, version, now)
         return FactoryDetail(factory=factory, current_version=version)
 
-    def list(self) -> List[Factory]:
-        """Fabrikaları en son güncellenen başta olmak üzere döndürür.
+    def list(self, org_id: str) -> List[Factory]:
+        """Bir organizasyona ait fabrikaları en son güncellenen başta döndürür.
 
         Sıralama ada göre değil güncellenme zamanına göredir: kullanıcı
         neredeyse her zaman en son üzerinde çalıştığı fabrikayı açmak ister.
+        Filtre depo katmanında uygulanır (Python'da sonradan değil): başka bir
+        organizasyonun fabrikaları bu çağrının sonucuna hiç girmez.
         """
-        factories = self._read_all_factories()
+        require_org_id(org_id)
+        factories = self._read_all_factories(org_id)
         return sorted(factories, key=lambda item: item.updated_at, reverse=True)
 
-    def get(self, factory_id: str) -> FactoryDetail:
+    def get(self, org_id: str, factory_id: str) -> FactoryDetail:
         """Fabrikayı ve güncel sürümünü döndürür.
 
         Raises:
-            FactoryNotFound: Fabrika yoksa.
+            FactoryNotFound: Fabrika yoksa ya da baska bir organizasyona aitse.
         """
-        factory = self._require_factory(factory_id)
+        factory = self._require_factory(org_id, factory_id)
         current: Optional[FactoryVersion] = None
         if factory.current_version_id is not None:
             current = self._read_version(factory.current_version_id)
         return FactoryDetail(factory=factory, current_version=current)
 
-    def save(self, factory_id: str, request: FactorySaveRequest) -> FactoryDetail:
+    def save(
+        self, org_id: str, factory_id: str, request: FactorySaveRequest
+    ) -> FactoryDetail:
         """Fabrikayı günceller; model değiştiyse yeni bir sürüm oluşturur.
 
         Özet güncel sürümünkiyle aynıysa **yeni sürüm oluşturulmaz**. Bu,
@@ -253,9 +260,9 @@ class FactoryStoreBase:
         yaratmamalıdır.
 
         Raises:
-            FactoryNotFound: Fabrika yoksa.
+            FactoryNotFound: Fabrika yoksa ya da baska bir organizasyona aitse.
         """
-        factory = self._require_factory(factory_id)
+        factory = self._require_factory(org_id, factory_id)
         now = _now()
         changed = False
 
@@ -294,7 +301,7 @@ class FactoryStoreBase:
             self._write_factory(factory)
         return FactoryDetail(factory=factory, current_version=current)
 
-    def delete(self, factory_id: str) -> None:
+    def delete(self, org_id: str, factory_id: str) -> None:
         """Fabrikayı ve tüm sürümlerini siler.
 
         Bu fabrikadan üretilmiş simülasyon kayıtları **silinmez**. Kayıtlardaki
@@ -303,29 +310,33 @@ class FactoryStoreBase:
         bir ölçümdür ve fabrikanın silinmesi geçmişi yeniden yazmamalıdır.
 
         Raises:
-            FactoryNotFound: Fabrika yoksa.
+            FactoryNotFound: Fabrika yoksa ya da baska bir organizasyona aitse.
         """
-        self._require_factory(factory_id)
+        self._require_factory(org_id, factory_id)
         self._remove_factory(factory_id)
 
-    def list_versions(self, factory_id: str) -> List[FactoryVersionSummary]:
+    def list_versions(
+        self, org_id: str, factory_id: str
+    ) -> List[FactoryVersionSummary]:
         """Sürüm geçmişini en yeniden en eskiye döndürür.
 
         Raises:
-            FactoryNotFound: Fabrika yoksa.
+            FactoryNotFound: Fabrika yoksa ya da baska bir organizasyona aitse.
         """
-        self._require_factory(factory_id)
+        self._require_factory(org_id, factory_id)
         versions = self._read_versions_of(factory_id)
         return [summarize_version(item) for item in reversed(versions)]
 
-    def get_version(self, factory_id: str, version_id: str) -> FactoryVersion:
+    def get_version(
+        self, org_id: str, factory_id: str, version_id: str
+    ) -> FactoryVersion:
         """Belirli bir sürümü tam olarak döndürür.
 
         Raises:
-            FactoryNotFound: Fabrika yoksa.
+            FactoryNotFound: Fabrika yoksa ya da baska bir organizasyona aitse.
             FactoryVersionNotFound: Sürüm yoksa ya da başka bir fabrikaya aitse.
         """
-        self._require_factory(factory_id)
+        self._require_factory(org_id, factory_id)
         version = self._read_version(version_id)
         if version is None or version.factory_id != factory_id:
             # Başka bir fabrikanın sürümü de "bulunamadı" sayılır: aksi hâlde
@@ -333,14 +344,14 @@ class FactoryStoreBase:
             raise FactoryVersionNotFound(version_id)
         return version
 
-    def current_version(self, factory_id: str) -> FactoryVersion:
+    def current_version(self, org_id: str, factory_id: str) -> FactoryVersion:
         """Fabrikanın güncel sürümünü döndürür.
 
         Raises:
-            FactoryNotFound: Fabrika yoksa.
+            FactoryNotFound: Fabrika yoksa ya da baska bir organizasyona aitse.
             FactoryHasNoVersion: Fabrikanın henüz kaydedilmiş modeli yoksa.
         """
-        factory = self._require_factory(factory_id)
+        factory = self._require_factory(org_id, factory_id)
         if factory.current_version_id is None:
             raise FactoryHasNoVersion(factory_id)
         version = self._read_version(factory.current_version_id)
@@ -350,9 +361,13 @@ class FactoryStoreBase:
 
     # -- Yardımcılar ------------------------------------------------------- #
 
-    def _require_factory(self, factory_id: str) -> Factory:
+    def _require_factory(self, org_id: str, factory_id: str) -> Factory:
+        require_org_id(org_id)
         factory = self._read_factory(factory_id)
-        if factory is None:
+        if factory is None or factory.org_id != org_id:
+            # Baska bir organizasyonun fabrikasi da "bulunamadi" sayilir: 403
+            # yerine 404 vermek, kimlik denemeleriyle "bu id var ama benim
+            # degil" bilgisinin bile sizmasini engeller.
             raise FactoryNotFound(factory_id)
         return factory
 
@@ -424,8 +439,8 @@ class InMemoryFactoryStore(FactoryStoreBase):
         ]:
             del self._versions[version_id]
 
-    def _read_all_factories(self) -> List[Factory]:
-        return list(self._factories.values())
+    def _read_all_factories(self, org_id: str) -> List[Factory]:
+        return [item for item in self._factories.values() if item.org_id == org_id]
 
     def _read_version(self, version_id: str) -> Optional[FactoryVersion]:
         return self._versions.get(version_id)
@@ -611,9 +626,15 @@ class DatabaseFactoryStore(FactoryStoreBase):
             )
             session.commit()
 
-    def _read_all_factories(self) -> List[Factory]:
+    def _read_all_factories(self, org_id: str) -> List[Factory]:
         with self._session_factory() as session:
-            rows = session.execute(select(FactoryRecord)).scalars().all()
+            rows = (
+                session.execute(
+                    select(FactoryRecord).where(FactoryRecord.org_id == org_id)
+                )
+                .scalars()
+                .all()
+            )
             counts = dict(
                 session.execute(
                     select(

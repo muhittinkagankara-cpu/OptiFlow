@@ -69,6 +69,12 @@ def build_config() -> SimulationConfig:
     )
 
 
+#: Depo mekanigini sinayan testler bir organizasyon baglaminda calisir.
+#: Bos bir `org_id` artik depo katmaninda reddedilir (bkz. `require_org_id`):
+#: kimlik dogrulama oncesinden kalma NULL satirlarin kimseye gorunmemesi icin.
+ORG_ID = "test-org"
+
+
 @pytest.fixture(scope="module")
 def record() -> StoredSimulation:
     """Gercek bir simulasyon kosumundan uretilmis kayit."""
@@ -82,6 +88,7 @@ def record() -> StoredSimulation:
         bottleneck=analyze_bottleneck(replications[0], config),
         oee=compute_oee_report(replications[0]),
         duration_seconds=elapsed,
+        org_id=ORG_ID,
     )
 
 
@@ -108,7 +115,7 @@ def test_record_survives_store_restart(record: StoredSimulation, database_url: s
 
     # "Sunucu yeniden basladi": tamamen yeni bir depo ornegi, yeni bir bağlantı.
     reader = DatabaseSimulationStore(database_url)
-    restored = reader.get(record.simulation_id)
+    restored = reader.get(ORG_ID, record.simulation_id)
 
     assert restored.simulation_id == record.simulation_id
     assert restored.config == record.config
@@ -125,7 +132,7 @@ def test_restored_record_supports_validation_report(
     bilgisini replikasyonlardan okur.
     """
     DatabaseSimulationStore(database_url).save(record)
-    restored = DatabaseSimulationStore(database_url).get(record.simulation_id)
+    restored = DatabaseSimulationStore(database_url).get(ORG_ID, record.simulation_id)
 
     from simulation_engine.api.simulation_service import _build_validation_report
 
@@ -143,7 +150,7 @@ def test_restored_record_reproduces_run_response(
 ) -> None:
     """Geri yuklenen kayittan uretilen yanit, ozgunuyle ayni olmali."""
     DatabaseSimulationStore(database_url).save(record)
-    restored = DatabaseSimulationStore(database_url).get(record.simulation_id)
+    restored = DatabaseSimulationStore(database_url).get(ORG_ID, record.simulation_id)
 
     from simulation_engine.api.simulation_service import _build_run_response
 
@@ -164,7 +171,7 @@ def test_missing_record_raises_key_error(database_url: str) -> None:
     """
     store = DatabaseSimulationStore(database_url)
     with pytest.raises(KeyError):
-        store.get("olmayan-kimlik")
+        store.get(ORG_ID, "olmayan-kimlik")
 
 
 def test_save_is_idempotent(record: StoredSimulation, database_url: str) -> None:
@@ -257,11 +264,14 @@ def test_unreachable_station_config_can_be_stored(database_url: str) -> None:
         bottleneck=analyze_bottleneck(replications[0], config),
         oee=compute_oee_report(replications[0]),
         duration_seconds=elapsed,
+        org_id=ORG_ID,
     )
 
     store = DatabaseSimulationStore(database_url)
     store.save(record)
-    assert store.get(record.simulation_id).simulation_id == record.simulation_id
+    assert (
+        store.get(ORG_ID, record.simulation_id).simulation_id == record.simulation_id
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -319,14 +329,15 @@ def test_expired_records_are_deleted_on_save(
         bottleneck=record.bottleneck,
         oee=record.oee,
         duration_seconds=record.duration_seconds,
+        org_id=ORG_ID,
     )
     store.save(fresh)
 
     # Eski kayit silindi, yenisi duruyor.
     assert len(store) == 1
     with pytest.raises(KeyError):
-        store.get(record.simulation_id)
-    assert store.get(fresh.simulation_id).simulation_id == fresh.simulation_id
+        store.get(ORG_ID, record.simulation_id)
+    assert store.get(ORG_ID, fresh.simulation_id).simulation_id == fresh.simulation_id
 
 
 def test_recent_records_are_kept(record: StoredSimulation, database_url: str) -> None:
@@ -342,6 +353,7 @@ def test_recent_records_are_kept(record: StoredSimulation, database_url: str) ->
         bottleneck=record.bottleneck,
         oee=record.oee,
         duration_seconds=record.duration_seconds,
+        org_id=ORG_ID,
     )
     store.save(fresh)
 
@@ -432,7 +444,9 @@ def test_dispose_releases_connections(record: StoredSimulation, database_url: st
 
     # Kapatildiktan sonra yeni bir depo ayni veriyi okuyabilmeli: `dispose`
     # veriyi degil yalnizca baglantilari serbest birakir.
-    assert DatabaseSimulationStore(database_url).get(record.simulation_id) is not None
+    assert (
+        DatabaseSimulationStore(database_url).get(ORG_ID, record.simulation_id) is not None
+    )
 
 
 def test_memory_store_dispose_is_harmless() -> None:

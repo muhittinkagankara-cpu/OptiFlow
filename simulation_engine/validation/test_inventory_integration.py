@@ -86,7 +86,12 @@ def stores():
     app.dependency_overrides[get_inventory_store] = lambda: inventory
     app.dependency_overrides[get_store] = lambda: simulations
     yield inventory, simulations
-    app.dependency_overrides.clear()
+    # Yalnizca bu fixture'in ekledigi anahtarlar kaldirilir. Blanket `.clear()`,
+    # `conftest.py`'nin oturum kapsaminda kurdugu `get_current_org`
+    # gecersiz kilmasini da silerdi ve o override bir daha hic kurulmazdi
+    # (oturum fixture'i yalnizca bir kez calisir) — sonraki her test 401 alirdi.
+    app.dependency_overrides.pop(get_inventory_store, None)
+    app.dependency_overrides.pop(get_store, None)
 
 
 @pytest.fixture

@@ -33,6 +33,7 @@ from simulation_engine.api.factory_storage import (
     FactoryNotFound,
     FactoryVersionNotFound,
 )
+from simulation_engine.auth.dependencies import get_current_org
 from simulation_engine.models.schemas import (
     Factory,
     FactoryCreateRequest,
@@ -63,6 +64,7 @@ def factory_not_found(factory_id: str) -> HTTPException:
 )
 def create_factory(
     request: FactoryCreateRequest = Body(...),
+    org_id: str = Depends(get_current_org),
     store: FactoryStoreProtocol = Depends(get_factory_store),
 ) -> FactoryDetail:
     """Yeni bir fabrika kaydeder.
@@ -71,8 +73,9 @@ def create_factory(
     sürümsüz doğar ve kullanıcı editörde ilk kaydı yaptığında sürüm 1 oluşur.
     Kimlik sunucuda üretilir — istemcinin kimlik seçmesine izin verilseydi iki
     sekmede aynı anda kurulan iki fabrika birbirinin üzerine yazabilirdi.
+    Fabrika, çağrıyı yapan kullanıcının organizasyonuna yazılır.
     """
-    return store.create(request)
+    return store.create(org_id, request)
 
 
 @router.get(
@@ -81,15 +84,17 @@ def create_factory(
     summary="Fabrikalari listeler",
 )
 def list_factories(
+    org_id: str = Depends(get_current_org),
     store: FactoryStoreProtocol = Depends(get_factory_store),
 ) -> List[Factory]:
-    """Fabrikaları en son güncellenen başta olmak üzere döndürür.
+    """Çağrıyı yapan kullanıcının organizasyonuna ait fabrikaları döndürür.
 
-    Yanıt modeli taşımaz: liste ekranı yalnızca ad, sektör ve sürüm sayısını
-    gösterir. Her satır için tam `SimulationConfig` göndermek, on fabrikalı bir
-    hesapta liste ekranını gereksiz yere ağırlaştırırdı.
+    En son güncellenen başta gelir. Yanıt modeli taşımaz: liste ekranı yalnızca
+    ad, sektör ve sürüm sayısını gösterir. Her satır için tam `SimulationConfig`
+    göndermek, on fabrikalı bir hesapta liste ekranını gereksiz yere
+    ağırlaştırırdı. Başka bir organizasyonun fabrikaları bu listeye hiç girmez.
     """
-    return store.list()
+    return store.list(org_id)
 
 
 @router.get(
@@ -99,15 +104,19 @@ def list_factories(
 )
 def read_factory(
     factory_id: str = Path(..., min_length=1),
+    org_id: str = Depends(get_current_org),
     store: FactoryStoreProtocol = Depends(get_factory_store),
 ) -> FactoryDetail:
     """Fabrikayı güncel modeliyle birlikte döndürür.
 
     Raises:
-        HTTPException: Fabrika bulunamazsa (404).
+        HTTPException: Fabrika bulunamazsa **ya da başka bir organizasyona
+            aitse** (404). İkisi aynı yanıtı üretir; aksi hâlde bir yanıt kodu
+            farkı bile başka bir organizasyonun kimliğinin var olduğunu ele
+            verirdi.
     """
     try:
-        return store.get(factory_id)
+        return store.get(org_id, factory_id)
     except FactoryNotFound as error:
         raise factory_not_found(factory_id) from error
 
@@ -120,6 +129,7 @@ def read_factory(
 def save_factory(
     factory_id: str = Path(..., min_length=1),
     request: FactorySaveRequest = Body(...),
+    org_id: str = Depends(get_current_org),
     store: FactoryStoreProtocol = Depends(get_factory_store),
 ) -> FactoryDetail:
     """Fabrikayı günceller.
@@ -130,10 +140,11 @@ def save_factory(
     istemci kaydın yeni bir sürüm yaratıp yaratmadığını anlayabilir.
 
     Raises:
-        HTTPException: Fabrika bulunamazsa (404).
+        HTTPException: Fabrika bulunamazsa ya da başka bir organizasyona
+            aitse (404).
     """
     try:
-        return store.save(factory_id, request)
+        return store.save(org_id, factory_id, request)
     except FactoryNotFound as error:
         raise factory_not_found(factory_id) from error
 
@@ -145,6 +156,7 @@ def save_factory(
 )
 def delete_factory(
     factory_id: str = Path(..., min_length=1),
+    org_id: str = Depends(get_current_org),
     store: FactoryStoreProtocol = Depends(get_factory_store),
 ) -> None:
     """Fabrikayı siler.
@@ -153,10 +165,11 @@ def delete_factory(
     geçerli bir ölçümdür ve fabrikanın silinmesi geçmişi yeniden yazmamalıdır.
 
     Raises:
-        HTTPException: Fabrika bulunamazsa (404).
+        HTTPException: Fabrika bulunamazsa ya da başka bir organizasyona
+            aitse (404).
     """
     try:
-        store.delete(factory_id)
+        store.delete(org_id, factory_id)
     except FactoryNotFound as error:
         raise factory_not_found(factory_id) from error
 
@@ -168,15 +181,17 @@ def delete_factory(
 )
 def list_versions(
     factory_id: str = Path(..., min_length=1),
+    org_id: str = Depends(get_current_org),
     store: FactoryStoreProtocol = Depends(get_factory_store),
 ) -> List[FactoryVersionSummary]:
     """Sürüm geçmişini en yeniden en eskiye döndürür.
 
     Raises:
-        HTTPException: Fabrika bulunamazsa (404).
+        HTTPException: Fabrika bulunamazsa ya da başka bir organizasyona
+            aitse (404).
     """
     try:
-        return store.list_versions(factory_id)
+        return store.list_versions(org_id, factory_id)
     except FactoryNotFound as error:
         raise factory_not_found(factory_id) from error
 
@@ -189,15 +204,17 @@ def list_versions(
 def read_version(
     factory_id: str = Path(..., min_length=1),
     version_id: str = Path(..., min_length=1),
+    org_id: str = Depends(get_current_org),
     store: FactoryStoreProtocol = Depends(get_factory_store),
 ) -> FactoryVersion:
     """Sürümü modeliyle birlikte döndürür.
 
     Raises:
-        HTTPException: Fabrika ya da sürüm bulunamazsa (404).
+        HTTPException: Fabrika, sürüm bulunamazsa ya da fabrika başka bir
+            organizasyona aitse (404).
     """
     try:
-        return store.get_version(factory_id, version_id)
+        return store.get_version(org_id, factory_id, version_id)
     except FactoryNotFound as error:
         raise factory_not_found(factory_id) from error
     except FactoryVersionNotFound as error:

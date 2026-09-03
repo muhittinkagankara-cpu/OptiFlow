@@ -50,6 +50,11 @@ def store() -> InMemoryFactoryStore:
     return InMemoryFactoryStore()
 
 
+#: Bu dosyadaki tum testler tek bir organizasyon baglaminda calisir;
+#: surumleme kurallari kiracidan bagimsizdir (kiracı yalıtımı test_factory_crud.py ve test_auth_tenant_isolation.py icindedir).
+ORG_ID = "test-org"
+
+
 # --------------------------------------------------------------------------- #
 # 1. Anlık görüntü özeti
 # --------------------------------------------------------------------------- #
@@ -159,30 +164,30 @@ def test_saving_the_same_model_twice_creates_one_version(
 
     "Kaydet" düğmesine yanlışlıkla iki kez basmak bir sürüm yaratmamalıdır.
     """
-    created = store.create(
+    created = store.create(ORG_ID,
         FactoryCreateRequest(name="Hat", config=model(), layout=positions())
     )
     factory_id = created.factory.id
 
     for _ in range(5):
-        saved = store.save(
+        saved = store.save(ORG_ID,
             factory_id, FactorySaveRequest(config=model(), layout=positions())
         )
 
     assert saved.current_version is not None
     assert saved.current_version.version_number == 1
     assert saved.factory.version_count == 1
-    assert len(store.list_versions(factory_id)) == 1
+    assert len(store.list_versions(ORG_ID, factory_id)) == 1
 
 
 def test_duplicate_save_returns_the_existing_version(
     store: InMemoryFactoryStore,
 ) -> None:
-    created = store.create(FactoryCreateRequest(name="Hat", config=model()))
+    created = store.create(ORG_ID, FactoryCreateRequest(name="Hat", config=model()))
     assert created.current_version is not None
     original_id = created.current_version.id
 
-    repeated = store.save(created.factory.id, FactorySaveRequest(config=model()))
+    repeated = store.save(ORG_ID, created.factory.id, FactorySaveRequest(config=model()))
     assert repeated.current_version is not None
     assert repeated.current_version.id == original_id
 
@@ -195,20 +200,20 @@ def test_duplicate_save_does_not_move_the_factory_in_the_list(
     Değişseydi liste sırası oynar ve kullanıcıya yanlış biçimde "kaydedildi"
     izlenimi verirdi.
     """
-    created = store.create(FactoryCreateRequest(name="Hat", config=model()))
+    created = store.create(ORG_ID, FactoryCreateRequest(name="Hat", config=model()))
     before = created.factory.updated_at
 
-    store.save(created.factory.id, FactorySaveRequest(config=model()))
-    assert store.get(created.factory.id).factory.updated_at == before
+    store.save(ORG_ID, created.factory.id, FactorySaveRequest(config=model()))
+    assert store.get(ORG_ID, created.factory.id).factory.updated_at == before
 
 
 def test_rename_does_not_create_a_version(store: InMemoryFactoryStore) -> None:
-    created = store.create(FactoryCreateRequest(name="Ilk", config=model()))
-    store.save(created.factory.id, FactorySaveRequest(name="Ikinci"))
-    store.save(created.factory.id, FactorySaveRequest(name="Ucuncu"))
+    created = store.create(ORG_ID, FactoryCreateRequest(name="Ilk", config=model()))
+    store.save(ORG_ID, created.factory.id, FactorySaveRequest(name="Ikinci"))
+    store.save(ORG_ID, created.factory.id, FactorySaveRequest(name="Ucuncu"))
 
-    assert len(store.list_versions(created.factory.id)) == 1
-    assert store.get(created.factory.id).factory.name == "Ucuncu"
+    assert len(store.list_versions(ORG_ID, created.factory.id)) == 1
+    assert store.get(ORG_ID, created.factory.id).factory.name == "Ucuncu"
 
 
 def test_returning_to_a_previous_model_still_creates_a_version(
@@ -220,20 +225,20 @@ def test_returning_to_a_previous_model_still_creates_a_version(
     hâlde "sürüm 2'ye geri döndüm" işlemi hiçbir iz bırakmaz ve sürüm listesi
     kullanıcının ne zaman ne yaptığını anlatmaz hâle gelirdi.
     """
-    created = store.create(FactoryCreateRequest(name="Hat", config=model()))
+    created = store.create(ORG_ID, FactoryCreateRequest(name="Hat", config=model()))
     factory_id = created.factory.id
 
     changed = config()
     changed["stations"][1]["num_servers"] = 5
-    store.save(
+    store.save(ORG_ID,
         factory_id,
         FactorySaveRequest(config=SimulationConfig.model_validate(changed)),
     )
-    back = store.save(factory_id, FactorySaveRequest(config=model()))
+    back = store.save(ORG_ID, factory_id, FactorySaveRequest(config=model()))
 
     assert back.current_version is not None
     assert back.current_version.version_number == 3
-    assert len(store.list_versions(factory_id)) == 3
+    assert len(store.list_versions(ORG_ID, factory_id)) == 3
 
 
 # --------------------------------------------------------------------------- #
@@ -249,18 +254,18 @@ def test_version_numbers_increase_by_one(store: InMemoryFactoryStore) -> None:
     olur ve sürüm yaratmazdı — sayıların ondan sonra kaymaması, numaralandırma
     ile yinelenme engelinin birbirini bozmadığının da kanıtıdır.
     """
-    created = store.create(FactoryCreateRequest(name="Hat", config=model()))
+    created = store.create(ORG_ID, FactoryCreateRequest(name="Hat", config=model()))
     factory_id = created.factory.id
 
     for servers in (3, 4, 5, 6):
         changed = config()
         changed["stations"][1]["num_servers"] = servers
-        store.save(
+        store.save(ORG_ID,
             factory_id,
             FactorySaveRequest(config=SimulationConfig.model_validate(changed)),
         )
 
-    numbers = [item.version_number for item in store.list_versions(factory_id)]
+    numbers = [item.version_number for item in store.list_versions(ORG_ID, factory_id)]
     assert numbers == [5, 4, 3, 2, 1]
 
 
@@ -269,26 +274,26 @@ def test_history_is_newest_first(store: InMemoryFactoryStore) -> None:
 
     Kullanıcının aradığı neredeyse her zaman son değişikliktir.
     """
-    created = store.create(
+    created = store.create(ORG_ID,
         FactoryCreateRequest(name="Hat", config=model(), note="ilk")
     )
     changed = config()
     changed["stations"][1]["num_servers"] = 7
-    store.save(
+    store.save(ORG_ID,
         created.factory.id,
         FactorySaveRequest(
             config=SimulationConfig.model_validate(changed), note="montaj buyudu"
         ),
     )
 
-    history = store.list_versions(created.factory.id)
+    history = store.list_versions(ORG_ID, created.factory.id)
     assert [item.note for item in history] == ["montaj buyudu", "ilk"]
 
 
 def test_version_numbering_is_per_factory(store: InMemoryFactoryStore) -> None:
     """Iki fabrikanin surum numaralari birbirinden bagimsizdir."""
-    first = store.create(FactoryCreateRequest(name="A", config=model()))
-    second = store.create(FactoryCreateRequest(name="B", config=model()))
+    first = store.create(ORG_ID, FactoryCreateRequest(name="A", config=model()))
+    second = store.create(ORG_ID, FactoryCreateRequest(name="B", config=model()))
 
     assert first.current_version is not None
     assert second.current_version is not None
@@ -299,7 +304,7 @@ def test_version_numbering_is_per_factory(store: InMemoryFactoryStore) -> None:
 def test_summary_omits_the_model_but_keeps_the_station_count(
     store: InMemoryFactoryStore,
 ) -> None:
-    created = store.create(FactoryCreateRequest(name="Hat", config=model()))
+    created = store.create(ORG_ID, FactoryCreateRequest(name="Hat", config=model()))
     assert created.current_version is not None
 
     summary = summarize_version(created.current_version)
@@ -322,7 +327,7 @@ def test_editing_the_factory_does_not_alter_earlier_versions(
     boyutlarıyla üretildiği, fabrika o tarihten sonra ne kadar değişirse
     değişsin kesin olarak okunabilmelidir.
     """
-    created = store.create(
+    created = store.create(ORG_ID,
         FactoryCreateRequest(name="Hat", config=model(), layout=positions())
     )
     assert created.current_version is not None
@@ -332,12 +337,12 @@ def test_editing_the_factory_does_not_alter_earlier_versions(
     for servers in (4, 6, 8):
         changed = config()
         changed["stations"][1]["num_servers"] = servers
-        store.save(
+        store.save(ORG_ID,
             created.factory.id,
             FactorySaveRequest(config=SimulationConfig.model_validate(changed)),
         )
 
-    original = store.get_version(created.factory.id, first_id)
+    original = store.get_version(ORG_ID, created.factory.id, first_id)
     assert original.snapshot_hash == first_hash
     assert original.config.stations[1].num_servers == 2
     assert original.version_number == 1
@@ -348,17 +353,17 @@ def test_editing_the_factory_does_not_alter_earlier_versions(
 def test_current_version_pointer_follows_the_newest(
     store: InMemoryFactoryStore,
 ) -> None:
-    created = store.create(FactoryCreateRequest(name="Hat", config=model()))
+    created = store.create(ORG_ID, FactoryCreateRequest(name="Hat", config=model()))
     changed = config()
     changed["stations"][1]["num_servers"] = 9
-    saved = store.save(
+    saved = store.save(ORG_ID,
         created.factory.id,
         FactorySaveRequest(config=SimulationConfig.model_validate(changed)),
     )
 
     assert saved.current_version is not None
     assert saved.factory.current_version_id == saved.current_version.id
-    assert store.current_version(created.factory.id).id == saved.current_version.id
+    assert store.current_version(ORG_ID, created.factory.id).id == saved.current_version.id
 
 
 # --------------------------------------------------------------------------- #
@@ -377,19 +382,19 @@ def test_stored_version_reconstructs_the_exact_config(
     kaydedilmeden alınandan farklı çıkardı.
     """
     original = model()
-    created = store.create(FactoryCreateRequest(name="Hat", config=original))
+    created = store.create(ORG_ID, FactoryCreateRequest(name="Hat", config=original))
     assert created.current_version is not None
 
-    restored = store.current_version(created.factory.id).config
+    restored = store.current_version(ORG_ID, created.factory.id).config
     assert restored.model_dump() == original.model_dump()
 
 
 def test_all_simulation_relevant_fields_survive(store: InMemoryFactoryStore) -> None:
     """Sartnamede sayilan her alan kaydedilip geri okunur."""
-    created = store.create(
+    created = store.create(ORG_ID,
         FactoryCreateRequest(name="Hat", config=model(), layout=positions())
     )
-    version = store.current_version(created.factory.id)
+    version = store.current_version(ORG_ID, created.factory.id)
 
     montaj = version.config.stations[1]
     assert montaj.id == "montaj"
