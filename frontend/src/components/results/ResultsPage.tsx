@@ -3,8 +3,8 @@
  *
  * Üç bölümü birleştirir: özet kartları (A), istasyon tablosu ve kullanım
  * grafiği (B), doğrulama paneli (C). Sıralama, kullanıcının sorularının doğal
- * sırasını izler: "ne kadar üretiyorum?" → "nerede tıkanıyorum?" → "bu
- * sayılara neden güveneyim?".
+ * sırasını izler: "ne kadar üretiyorum?" → "nerede tıkanıyorum?" → "bu bana ne
+ * kadara mal oluyor?" → "bu sayılara neden güveneyim?".
  *
  * `ResultsPlaceholder.tsx` bu bileşenle tamamen değiştirilmiştir.
  */
@@ -16,6 +16,7 @@ import { summarizeFactory } from "../../lib/factoryOverview";
 import { ArrowLeftIcon, ArrowRightIcon } from "../shared/icons";
 import { FactoryAnimation } from "./FactoryAnimation";
 import { FactoryOverview } from "./FactoryOverview";
+import { FinancialImpactPanel } from "./FinancialImpactPanel";
 import { FlowSankey } from "./FlowSankey";
 import { SummaryCards } from "./SummaryCards";
 import { StationMetricsTable } from "./StationMetricsTable";
@@ -147,6 +148,12 @@ export function ResultsPage({
         {/* Akis ve kayip analizi: tablo her istasyonun sayisini verir ama
             "giren isin ne kadari sona ulasiyor" sorusuna Sankey cevap verir. */}
         <FlowSankey stations={results.station_metrics} config={config} />
+
+        {/* Finansal etki, akis analizinin hemen ardindan gelir: kullanici once
+            isin nerede kayboldugunu gorur, sonra bunun ne kadara mal oldugunu.
+            Varsayilan olarak kapali durur cunku maliyet oranlari girilmeden
+            gosterilecek bir rakam yoktur. */}
+        <FinancialImpactPanel result={result} />
 
         {/* Animasyon tablonun altinda ve varsayilan olarak kapali durur: izi
             uretmek sunucuda simulasyonu yeniden calistirmayi gerektirir ve

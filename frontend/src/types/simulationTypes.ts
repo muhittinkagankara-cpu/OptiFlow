@@ -671,3 +671,80 @@ export interface MeResponse {
   org_id: string;
   org_name: string;
 }
+
+// --------------------------------------------------------------------------- //
+// Finansal etki — Sprint 1
+// --------------------------------------------------------------------------- //
+
+/** Bir değerin nereden geldiği: sayım mı, aritmetik mi, kestirim mi? */
+export type MetricProvenance = "observed" | "calculated" | "estimated";
+
+/** Fabrika düzeyindeki maliyet oranları. Hepsi isteğe bağlıdır. */
+export interface FinancialSettings {
+  selling_price?: number | null;
+  contribution_margin?: number | null;
+  labor_cost_per_hour?: number | null;
+  machine_cost_per_hour?: number | null;
+  scrap_cost_per_unit?: number | null;
+  overtime_cost_per_hour?: number | null;
+  /** Günlük projeksiyon için; verilmezse günlük rakam gösterilmez. */
+  production_minutes_per_day?: number | null;
+}
+
+/** Tek bir kayıp kaleminin tutarı ve kaynağı. */
+export interface LossComponent {
+  name: string;
+  label: string;
+  amount: number;
+  provenance: MetricProvenance;
+  quantity: number;
+  quantity_unit: string;
+  rate_name: string;
+  rate_value?: number | null;
+  /** Gerekli oran verildi mi? Verilmediyse tutar 0 kabul EDİLMEZ. */
+  is_available: boolean;
+  basis: string;
+}
+
+export interface FinancialImpact {
+  downtime_loss: number;
+  waiting_loss: number;
+  scrap_loss: number;
+  opportunity_loss: number;
+  total_loss: number;
+  confidence: number;
+  data_completeness: number;
+  components: LossComponent[];
+  missing_inputs: string[];
+  notes: string[];
+}
+
+export interface StationFinancialImpact {
+  station_id: string;
+  station_name: string;
+  downtime_loss: number;
+  waiting_loss: number;
+  scrap_loss: number;
+  opportunity_loss: number;
+  total_loss: number;
+  is_bottleneck: boolean;
+}
+
+export interface ImprovementSuggestion {
+  station_id: string;
+  station_name: string;
+  dominant_loss: string;
+  recoverable_amount: number;
+  action: string;
+  rationale: string;
+}
+
+export interface FinancialReport {
+  impact: FinancialImpact;
+  stations: StationFinancialImpact[];
+  suggestions: ImprovementSuggestion[];
+  recoverable_loss: number;
+  /** Yalnızca `production_minutes_per_day` verildiğinde dolar. */
+  daily_loss?: number | null;
+  window_minutes: number;
+}

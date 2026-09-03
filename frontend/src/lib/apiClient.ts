@@ -16,6 +16,8 @@ import type {
   FactoryVersion,
   FactoryVersionSummary,
   InventoryAnalysis,
+  FinancialReport,
+  FinancialSettings,
   InventoryItem,
   MeResponse,
   SimulationConfig,
@@ -430,5 +432,27 @@ export function runFactorySimulation(
   return request<SimulationRunResponse>(
     `${FACTORIES_PATH}/${encodeURIComponent(factoryId)}/run`,
     { method: "POST" },
+  );
+}
+
+
+// --------------------------------------------------------------------------- //
+// Finansal etki
+// --------------------------------------------------------------------------- //
+
+/**
+ * Kaydedilmiş bir koşumun finansal kayıp raporunu getirir.
+ *
+ * Maliyet oranları istekle birlikte gönderilir; backend bunları saklamaz.
+ * Eksik bırakılan oranlar hata değildir — ilgili kalem hesaplanmaz ve
+ * `missing_inputs` içinde bildirilir.
+ */
+export function getFinancialImpact(
+  simulationId: string,
+  settings: FinancialSettings,
+): Promise<FinancialReport> {
+  return request<FinancialReport>(
+    `/api/finance/impact/${encodeURIComponent(simulationId)}`,
+    { method: "POST", body: JSON.stringify(settings) },
   );
 }

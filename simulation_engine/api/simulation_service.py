@@ -89,6 +89,7 @@ from simulation_engine.api.dependencies import (
 )
 from simulation_engine.auth.dependencies import get_current_org
 from simulation_engine.api.auth_routes import router as auth_router
+from simulation_engine.api.finance_routes import router as finance_router
 from simulation_engine.api.inventory_routes import router as inventory_router
 from simulation_engine.api.storage import (
     MAX_STORED_SIMULATIONS,
@@ -785,6 +786,10 @@ app.include_router(factory_router)
 # Kimlik ucu (`GET /api/me`) ayri bir router'dir. Herhangi bir is verisine
 # dokunmaz; yalnizca dogrulanmis kullanicinin kimligini dondurur.
 app.include_router(auth_router)
+
+# Finans katmani da ayri bir router'dir. Simulasyon matematigine dokunmaz:
+# kaydedilmis bir kosumun metriklerini okuyup maliyet oranlariyla carpar.
+app.include_router(finance_router)
 
 
 @app.post(
