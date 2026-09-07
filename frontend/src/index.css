@@ -3,25 +3,143 @@
 /* React Flow'un kendi stilleri; canvas'ın çalışması için zorunlu. */
 @import "reactflow/dist/style.css";
 
+/* ==========================================================================
+   OptiFlow tasarım dili — premium koyu tema (Sprint UX-1)
+   ==========================================================================
+
+   Karanlık tema, tek tek bileşenlerin sınıfları değiştirilerek DEĞİL, Tailwind
+   ölçeğinin kendisi yeniden tanımlanarak kuruldu. Sebebi ölçülebilir: arayüzde
+   ~800 renk sınıfı kullanımı var (305 `text-slate-*`, 97 `border-slate-*`,
+   154 `brand-*`, 63 `bg-white`...). Bunların hepsini elle değiştirmek hem
+   devasa bir fark üretir hem de her yeni bileşende aynı işin tekrar yapılmasını
+   gerektirirdi. Ölçeği burada bir kez çevirmek, mevcut tüm ekranları tutarlı
+   biçimde koyu temaya taşır ve bundan sonra yazılacak kodun da kendiliğinden
+   doğru renkleri kullanmasını sağlar.
+
+   Ölçek "ters çevrilmiştir": Tailwind'de küçük numaralar açık (arka plan),
+   büyük numaralar koyu (metin) demektir. Koyu temada bu ilişki tersine döner —
+   `bg-slate-50` en koyu yüzey, `text-slate-900` en parlak metin olur. Böylece
+   mevcut bileşenlerin renk NİYETİ (arka plan mı, metin mi, kenarlık mı)
+   korunur; yalnızca karşılığı değişir.
+
+   Palet:
+     Arka plan  #0B0F14   Yüzey       #111827   Kenarlık  #1F2937
+     Birincil   #2563EB   Başarı      #22C55E   Uyarı     #F59E0B
+     Tehlike    #EF4444   Metin       #F9FAFB   İkincil   #9CA3AF
+   ========================================================================== */
+
 @theme {
-  /* Ürünün ana rengi: güven verici, sakin bir mavi. Teknik olmayan
-     kullanıcıyı ürküten yüksek doygunluklu renklerden kaçınıldı. */
-  --color-brand-50: #eef4ff;
-  --color-brand-100: #dbe6fe;
-  --color-brand-200: #bfd3fe;
-  --color-brand-300: #93b4fd;
-  --color-brand-400: #608cfa;
-  --color-brand-500: #3b66f6;
-  --color-brand-600: #2547eb;
-  --color-brand-700: #1d35d8;
-  --color-brand-800: #1e2eaf;
-  --color-brand-900: #1e2d8a;
+  /* -- Nötr ölçek (ters çevrilmiş) ---------------------------------------- */
+  /* 50-100: çukur/yükseltilmiş yüzeyler · 200-300: kenarlıklar
+     400-500: soluk ve ikincil metin · 600-950: gövde ve başlık metni */
+  --color-slate-50: #0f1620;
+  --color-slate-100: #161f2b;
+  --color-slate-200: #1f2937;
+  --color-slate-300: #2a3644;
+  --color-slate-400: #6b7280;
+  --color-slate-500: #9ca3af;
+  --color-slate-600: #b6bdc8;
+  --color-slate-700: #d1d6de;
+  --color-slate-800: #e8ebf0;
+  --color-slate-900: #f9fafb;
+  --color-slate-950: #ffffff;
+
+  /* -- Birincil renk ------------------------------------------------------ */
+  /* 600 birincil düğme zeminidir ve palette verilen değerdir. 700 hem
+     `hover:bg-brand-700` hem `text-brand-700` olarak kullanılıyor; bu yüzden
+     iki rolde de çalışan, 600'den bir tık açık bir mavi seçildi. */
+  --color-brand-50: #101c33;
+  --color-brand-100: #15294a;
+  --color-brand-200: #1c3a66;
+  --color-brand-300: #24487f;
+  --color-brand-400: #2f5da8;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #3b82f6;
+  --color-brand-800: #93b4fd;
+  --color-brand-900: #c7d9ff;
+  --color-brand-950: #eaf1ff;
+
+  /* -- Durum renkleri ----------------------------------------------------- */
+  /* Her ailede 50-100 koyu bir renk tonu (panel zemini), 500-600 dolu
+     göstergeler, 700-900 ise o zeminin üzerinde okunan parlak metindir. */
+  --color-red-50: #1f1315;
+  --color-red-100: #2e181b;
+  --color-red-200: #3f2226;
+  --color-red-300: #57292e;
+  --color-red-400: #7f3a40;
+  --color-red-500: #ef4444;
+  --color-red-600: #ef4444;
+  --color-red-700: #f87171;
+  --color-red-800: #fca5a5;
+  --color-red-900: #fecaca;
+
+  --color-amber-50: #1e1708;
+  --color-amber-100: #2b2110;
+  --color-amber-200: #3d2e12;
+  --color-amber-300: #54401a;
+  --color-amber-400: #7a5d22;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #f59e0b;
+  --color-amber-700: #fbbf24;
+  --color-amber-800: #fcd34d;
+  --color-amber-900: #fde68a;
+
+  --color-emerald-50: #0c1a12;
+  --color-emerald-100: #12261a;
+  --color-emerald-200: #17371f;
+  --color-emerald-300: #1d4a2a;
+  --color-emerald-400: #276b3a;
+  --color-emerald-500: #22c55e;
+  --color-emerald-600: #22c55e;
+  --color-emerald-700: #4ade80;
+  --color-emerald-800: #86efac;
+  --color-emerald-900: #bbf7d0;
+
+  /* -- Anlamsal takma adlar ----------------------------------------------- */
+  /* Yeni yazılan bileşenler bunları kullanır; ters çevrilmiş ölçeğe
+     bakmadan "zemin", "yüzey", "kenarlık" demek yeterlidir. */
+  --color-canvas: #0b0f14;
+  --color-surface: #111827;
+  --color-surface-raised: #161f2b;
+  --color-hairline: #1f2937;
+
+  /* -- Yuvarlaklık --------------------------------------------------------- */
+  /* Tasarım dili 16px köşe istiyor; `rounded-xl` uygulamada en çok kullanılan
+     sınıf olduğu için asıl değer oraya verildi. */
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 20px;
+  --radius-3xl: 28px;
+
+  /* -- Gölgeler ------------------------------------------------------------ */
+  /* Koyu zeminde klasik gri gölge görünmez. Derinlik bunun yerine siyah bir
+     gölge ve üst kenardaki ince bir aydınlık çizgiyle kurulur. */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 12px -2px rgb(0 0 0 / 0.5);
+  --shadow-lg: 0 12px 32px -8px rgb(0 0 0 / 0.6);
+  --shadow-xl: 0 24px 56px -16px rgb(0 0 0 / 0.7);
+
+  /* -- Tipografi ----------------------------------------------------------- */
+  --font-sans:
+    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 html,
 body,
 #root {
   height: 100%;
+}
+
+/* `bg-white` uygulamada 63 yerde "kart zemini" anlamında kullanılıyor. Koyu
+   temada bunun yüzey rengine dönmesi gerekir — ama `text-white` (19 kullanım,
+   mavi düğmelerin üzerindeki yazı) beyaz KALMALIDIR. İkisi aynı değişkeni
+   paylaştığı için ayrım burada, yalnızca zemin yardımcı sınıfı geçersiz
+   kılınarak yapılır. */
+@layer utilities {
+  .bg-white {
+    background-color: var(--color-surface);
+  }
 }
 
 /* Uygulama sabit yükseklikli bir kabuktur: gezinme çubuğu üstte sabit durur ve
@@ -36,14 +154,49 @@ body,
    gerçek bir düzen hatasını gizlemek için değil. */
 body {
   overflow: hidden;
-  @apply bg-slate-50 text-slate-800 antialiased;
-  font-family:
-    "Inter",
-    ui-sans-serif,
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    sans-serif;
+  @apply antialiased;
+  background-color: var(--color-canvas);
+  color: var(--color-slate-800);
+  font-family: var(--font-sans);
+  /* Inter'in optik olarak daha dengeli rakamları ve alternatif harfleri. */
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Tarayıcıya sayfanın koyu olduğunu söyler: form denetimleri, kaydırma
+   çubukları ve otomatik doldurma katmanı buna göre çizilir. Bu satır olmadan
+   `<select>` ve tarih seçiciler koyu zeminde beyaz kalır. */
+:root {
+  color-scheme: dark;
+}
+
+/* Odak halkası tek yerde tanımlanır: klavyeyle gezinen kullanıcı her zaman
+   nerede olduğunu görür, fare kullanıcısı ise halkayı hiç görmez. */
+:focus-visible {
+  outline: 2px solid var(--color-brand-500);
+  outline-offset: 2px;
+}
+
+/* Kaydırma çubuğu koyu yüzeye uydurulur; varsayılan açık gri çubuk, tam
+   ekran koyu bir arayüzde en çok göze batan ayrıntıdır. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-slate-300) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: var(--color-slate-300);
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: var(--color-slate-400);
 }
 
 /* Sayı girişlerindeki artırma/azaltma oklarını gizle: dar panelde
@@ -55,6 +208,522 @@ input[type="number"]::-webkit-inner-spin-button {
 }
 input[type="number"] {
   -moz-appearance: textfield;
+}
+
+/* --------------------------------------------------------------------------
+   React Flow — koyu tema uyarlaması
+   --------------------------------------------------------------------------
+   Kütüphanenin kendi stilleri açık tema için yazılmıştır ve canvas'ı beyaz
+   bırakır. Aşağıdaki kurallar yalnızca RENK değiştirir; hiçbir konum, ölçü ya
+   da etkileşim davranışına dokunmaz — düzenleyicinin çalışma biçimi aynıdır.
+   -------------------------------------------------------------------------- */
+
+.react-flow__background {
+  background-color: var(--color-canvas);
+}
+.react-flow__background pattern circle {
+  fill: #253044;
+}
+.react-flow__edge-path {
+  stroke: #3a4757;
+}
+.react-flow__edge.selected .react-flow__edge-path,
+.react-flow__edge:focus .react-flow__edge-path {
+  stroke: var(--color-brand-500);
+}
+.react-flow__edge-text {
+  fill: var(--color-slate-600);
+}
+.react-flow__edge-textbg {
+  fill: var(--color-surface);
+}
+.react-flow__handle {
+  background-color: #4b5c72;
+  border-color: var(--color-canvas);
+}
+.react-flow__handle:hover {
+  background-color: var(--color-brand-500);
+}
+.react-flow__controls {
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-hairline);
+  color: var(--color-slate-700);
+}
+.react-flow__controls-button:hover {
+  background-color: var(--color-surface-raised);
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
+.react-flow__minimap {
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-lg);
+}
+.react-flow__attribution {
+  background: transparent;
+  color: var(--color-slate-400);
+}
+.react-flow__attribution a {
+  color: var(--color-slate-400);
+}
+
+/* --------------------------------------------------------------------------
+   Mikro animasyonlar
+   --------------------------------------------------------------------------
+   Tümü dekoratiftir ve hiçbir veri taşımaz; `prefers-reduced-motion` altında
+   kapatıldıklarında ekranda hiçbir bilgi kaybolmaz.
+   -------------------------------------------------------------------------- */
+
+@keyframes optiflow-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Kartların ilk çizimde alttan belirmesi. Gecikme, kart sırasına göre satır
+   içi `animation-delay` ile verilir; hepsi aynı anda belirseydi hareket bir
+   sıralama duygusu vermez, yalnızca bir titreme olurdu. */
+.optiflow-enter {
+  animation: optiflow-fade-up 320ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Yükselen kart: hover'da yukarı kayar ve kenarlığı belirginleşir. */
+.optiflow-lift {
+  transition:
+    transform 200ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 200ms ease,
+    box-shadow 200ms ease,
+    background-color 200ms ease;
+}
+.optiflow-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-lg);
+}
+
+/* Canlı olduğunu gösteren nokta (canlı üretim, çalışan koşum). */
+@keyframes optiflow-ping {
+  0% {
+    transform: scale(1);
+    opacity: 0.65;
+  }
+  75%,
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+.optiflow-live-dot::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background-color: currentColor;
+  animation: optiflow-ping 1.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* Dar ekrandaki gezinme çekmecesi.
+ *
+ * Açık/kapalı durumu, Tailwind'in `translate-x-0` / `-translate-x-full`
+ * yardımcı sınıflarıyla değil, burada bir veri özniteliğiyle anlatılır.
+ * Sebebi ölçülmüş bir davranış: iki yardımcı sınıf aynı `translate` özelliğini
+ * yazıyor ve hangisinin kazanacağı sınıf dizisindeki sıraya değil, üretilen
+ * stil sayfasındaki sıraya bağlı. Bu yüzden çekmece "açık" durumuna geçtiği
+ * hâlde kapalı konumda kalabiliyordu. Tek bir kural, tek bir kazanan:
+ * belirsizlik ortadan kalkar.
+ *
+ * Kural yalnızca `lg` altında geçerlidir; geniş ekranda kenar çubuğu akışın
+ * bir parçasıdır (`lg:static`) ve hiçbir dönüşüm uygulanmaz. */
+.optiflow-drawer {
+  transition: transform 200ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Kapalı durum TEK bir kuralla anlatılır ve açık durumun karşılığı yoktur:
+   sınıf ya vardır ya yoktur. İki rakip kural (açık/kapalı) yazılsaydı hangisinin
+   kazanacağı, sınıf dizisindeki sıraya değil üretilen stil sayfasındaki sıraya
+   bağlı kalır ve çekmece "açık" durumdayken kapalı konumda takılabilirdi —
+   geliştirme sırasında tam olarak bu yaşandı. */
+@media (max-width: 1023.98px) {
+  .optiflow-drawer-closed {
+    transform: translateX(-100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .optiflow-drawer {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Kurulum akışı (Sprint UX-3)
+   --------------------------------------------------------------------------
+   Buradaki kuralların tamamı dekoratiftir; hiçbiri veri taşımaz ve
+   `prefers-reduced-motion` altında kapatıldıklarında ekranda görünen hiçbir
+   bilgi kaybolmaz.
+   -------------------------------------------------------------------------- */
+
+/* Cam yüzey.
+ *
+ * Koyu zeminde "cam" etkisi üç şeyin birleşimidir: yarı saydam bir zemin,
+ * arkasındaki bulanıklık ve üst kenarda ince bir aydınlık çizgi. Yalnızca
+ * saydamlık kullanılsaydı yüzey camdan çok soluk bir kart gibi görünürdü.
+ * Aydınlık çizgi `inset` bir gölgeyle verilir — ayrı bir sözde öğe eklemek,
+ * kartın içindeki düzeni etkilerdi. */
+.optiflow-glass {
+  background-color: rgb(17 24 39 / 0.62);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  box-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+    var(--shadow-lg);
+}
+
+/* Arka plandaki yumuşak ışık lekeleri. Hero ekranının derinlik hissini
+   kuran tek öğedir ve tıklamayı engellememesi için `pointer-events: none`
+   taşır. */
+.optiflow-aurora {
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.optiflow-aurora::before,
+.optiflow-aurora::after {
+  content: "";
+  position: absolute;
+  width: 40rem;
+  height: 40rem;
+  border-radius: 9999px;
+  filter: blur(120px);
+  opacity: 0.5;
+}
+.optiflow-aurora::before {
+  top: -14rem;
+  right: -10rem;
+  background: radial-gradient(circle, #2563eb 0%, transparent 70%);
+}
+.optiflow-aurora::after {
+  bottom: -18rem;
+  left: -12rem;
+  background: radial-gradient(circle, #22c55e 0%, transparent 70%);
+  opacity: 0.28;
+}
+
+/* Simge nabzı — sektör kartının seçili hâlinde kullanılır. */
+@keyframes optiflow-icon-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(37 99 235 / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgb(37 99 235 / 0);
+  }
+}
+.optiflow-icon-pulse {
+  animation: optiflow-icon-pulse 2s ease-out infinite;
+}
+
+/* İlerleme çubuğunun üzerinde kayan parıltı. */
+@keyframes optiflow-progress-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+.optiflow-progress-shimmer::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  width: 33%;
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.35),
+    transparent
+  );
+  animation: optiflow-progress-shimmer 1.4s ease-in-out infinite;
+}
+
+/* Fabrika illüstrasyonundaki parçaların hat boyunca akışı. */
+@keyframes optiflow-part-flow {
+  0% {
+    opacity: 0;
+    transform: translateX(0);
+  }
+  10%,
+  90% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(196px);
+  }
+}
+.optiflow-part {
+  animation: optiflow-part-flow 3.2s linear infinite;
+}
+
+/* İllüstrasyondaki kutuların sırayla "çalışması". */
+@keyframes optiflow-machine-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+.optiflow-machine {
+  animation: optiflow-machine-breathe 2.4s ease-in-out infinite;
+}
+
+/* Dosya bırakma alanının etkin hâli.
+ *
+ * Sürükleme sırasında alan hem parlar hem de yumuşakça nefes alır. İki sinyal
+ * birden verilmesi bilinçlidir: yalnızca renk değişseydi, sürüklenen dosyanın
+ * altında kalan alanın tepki verdiği fark edilmeyebilirdi. */
+@keyframes optiflow-drop-pulse {
+  0%,
+  100% {
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+      0 0 0 0 rgb(37 99 235 / 0.35);
+  }
+  50% {
+    box-shadow:
+      inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+      0 0 0 12px rgb(37 99 235 / 0);
+  }
+}
+.optiflow-drop-active {
+  animation: optiflow-drop-pulse 1.4s ease-out infinite;
+  background-color: rgb(37 99 235 / 0.08);
+}
+
+/* Sebep zinciri — halkaların sırayla belirmesi.
+ *
+ * Zincir bir neden-sonuç anlatısıdır ve sırayla okunması gerekir; hepsi aynı
+ * anda belirseydi hareket bir sıralama duygusu vermez, yalnızca titreme
+ * olurdu. Gecikme satır içi `animation-delay` ile verilir. */
+@keyframes optiflow-timeline-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.optiflow-timeline-step {
+  animation: optiflow-timeline-reveal 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Zincirin dikey çizgisinin yukarıdan aşağı çizilmesi. */
+@keyframes optiflow-timeline-line {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.optiflow-timeline-line {
+  transform-origin: top;
+  animation: optiflow-timeline-line 520ms ease-out both;
+}
+
+/* Önce/sonra çubuğunun hedefe doğru dolması. */
+.optiflow-progress-fill {
+  transition: width 900ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Sprint UX-6 — operatör ekranının mikro animasyonları.
+   Telefonda geri bildirim daha önemlidir: dokunmatik ekranda düğmeye
+   basıldığının anlaşılması için görsel bir karşılık gerekir. */
+
+/* Görev tamamlandığında beliren onay işareti. */
+@keyframes optiflow-check-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  60% {
+    transform: scale(1.08);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.optiflow-check-pop {
+  animation: optiflow-check-pop 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Tamamlanan görev kartının bir kez yeşil parlaması. */
+@keyframes optiflow-task-done {
+  0% {
+    box-shadow: 0 0 0 0 rgb(34 197 94 / 0.45);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgb(34 197 94 / 0);
+  }
+}
+.optiflow-task-done {
+  animation: optiflow-task-done 900ms ease-out both;
+}
+
+/* Sprint UX-7 — canlı üretim merkezi.
+   Bir MES ekranı saatlerce açık kalır; buradaki hareketler bu yüzden yavaş ve
+   düşük genliklidir. Yanıp sönme (blink) bilinçli olarak kullanılmaz: sekiz
+   saat boyunca yanıp sönen bir kenarlık, operatörün alarmı görmezden gelmeyi
+   öğrenmesine yol açar. */
+
+/* Alarm kartının kenarlık nabzı — dolgu ve metin sabit kalır. */
+@keyframes optiflow-alarm-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(239 68 68 / 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgb(239 68 68 / 0);
+  }
+}
+.optiflow-alarm-pulse {
+  animation: optiflow-alarm-pulse 2.4s ease-out infinite;
+}
+
+/* Darboğaz düğümünün turuncu halkası. */
+@keyframes optiflow-node-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(245 158 11 / 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgb(245 158 11 / 0);
+  }
+}
+.optiflow-node-glow {
+  animation: optiflow-node-glow 2.6s ease-out infinite;
+}
+
+/* Kuyruk çubuğunun üzerinde soldan sağa akan dalga. */
+@keyframes optiflow-queue-wave {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+.optiflow-queue-wave::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.25),
+    transparent
+  );
+  animation: optiflow-queue-wave 1.8s linear infinite;
+}
+
+/* Sayaç değişiminde küçük bir çevirme. */
+@keyframes optiflow-count-flip {
+  from {
+    opacity: 0.35;
+    transform: translateY(-38%);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.optiflow-count-flip {
+  animation: optiflow-count-flip 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Zaman çizgisine yukarıdan kayarak giren yeni olay. */
+@keyframes optiflow-feed-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.optiflow-feed-in {
+  animation: optiflow-feed-in 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* QR vizöründeki tarama çizgisi. */
+@keyframes optiflow-scanline {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(13rem);
+  }
+}
+.optiflow-scanline {
+  animation: optiflow-scanline 2.4s ease-in-out infinite;
+}
+
+/* Alt ekrandan gelen ekran geçişi. */
+@keyframes optiflow-screen-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.optiflow-screen {
+  animation: optiflow-screen-in 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* Yükleniyor iskeleti. */
+@keyframes optiflow-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+.optiflow-skeleton {
+  position: relative;
+  overflow: hidden;
+  background-color: var(--color-slate-100);
+}
+.optiflow-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(
+    90deg,
+    transparent,
+    rgb(255 255 255 / 0.04),
+    transparent
+  );
+  animation: optiflow-shimmer 1.6s infinite;
 }
 
 /* --------------------------------------------------------------------------
@@ -126,5 +795,80 @@ input[type="number"] {
   }
   .optiflow-heat-pulse {
     animation: none;
+  }
+
+  /* Sprint UX-1'in mikro animasyonları da aynı tercihe uyar. Kart girişleri
+     ve nabızlar tümüyle dekoratiftir; kapatıldıklarında görünen içerik
+     değişmez, yalnızca hareket kalkar. Yükselme efektinde `transform`
+     bırakılmaz ama kenarlık/gölge geçişi kalır: renk geçişi vestibüler
+     rahatsızlık kaynağı değildir ve imlecin nerede olduğunu gösterir. */
+  .optiflow-enter {
+    animation: none;
+  }
+  .optiflow-lift:hover {
+    transform: none;
+  }
+  .optiflow-live-dot::after {
+    animation: none;
+    opacity: 0;
+  }
+  .optiflow-skeleton::after {
+    animation: none;
+  }
+
+  /* Sprint UX-3'ün kurulum animasyonları. Hepsi dekoratiftir; kapandığında
+     illüstrasyon durur, ilerleme çubuğu parıltısız akar ve seçili sektörün
+     nabzı söner — ama seçili olduğu çerçeve ve onay simgesiyle okunmaya
+     devam eder. */
+  .optiflow-icon-pulse,
+  .optiflow-progress-shimmer::after,
+  .optiflow-part,
+  .optiflow-machine,
+  .optiflow-drop-active,
+  .optiflow-timeline-step,
+  .optiflow-timeline-line {
+    animation: none;
+  }
+  /* Önce/sonra çubuğu yine hedefe ulaşır, yalnızca anında: dolgu bir durumdur,
+     süs değildir. */
+  .optiflow-progress-fill {
+    transition: none;
+  }
+  /* Akan parça hareketsizken görünmez kalmalı: donmuş bir nokta, hattın
+     ortasında duran bir hata gibi okunurdu. */
+  .optiflow-part {
+    opacity: 0;
+  }
+  .optiflow-machine {
+    opacity: 1;
+  }
+
+  /* Sprint UX-6'nın operatör animasyonları. Onay işareti hareketsiz de olsa
+     görünür kalmalıdır — görevin bittiğini söyleyen tek işaret odur, süs
+     değil. Bu yüzden animasyon kapatılırken görünürlük elle geri verilir. */
+  .optiflow-check-pop,
+  .optiflow-task-done,
+  .optiflow-scanline,
+  .optiflow-screen {
+    animation: none;
+  }
+
+  /* Sprint UX-7'nin canlı ekranı. Alarm nabzı, düğüm halkası ve kuyruk dalgası
+     tümüyle dekoratiftir: seviye zaten renk, simge ve yazılı etiketle
+     taşınıyor. Sayaç çevirmesi ve akış girişi kapandığında değer yerinde
+     belirir — bilgi kaybolmaz, yalnızca hareket kalkar. */
+  .optiflow-alarm-pulse,
+  .optiflow-node-glow,
+  .optiflow-queue-wave::after,
+  .optiflow-count-flip,
+  .optiflow-feed-in {
+    animation: none;
+  }
+  .optiflow-queue-wave::after {
+    display: none;
+  }
+  .optiflow-check-pop {
+    opacity: 1;
+    transform: none;
   }
 }

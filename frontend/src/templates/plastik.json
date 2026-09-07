@@ -1,0 +1,84 @@
+{
+  "stations": [
+    {
+      "id": "enjeksiyon",
+      "name": "Enjeksiyon Presi",
+      "line_name": "Kalıplama",
+      "num_servers": 2,
+      "service_time_distribution": {
+        "type": "normal",
+        "params": { "mean": 4, "std": 0.6 }
+      },
+      "failure_rate": 0.004,
+      "repair_time_distribution": {
+        "type": "exponential",
+        "params": { "mean": 25 }
+      },
+      "buffer_capacity_before": -1,
+      "scrap_rate": 0.03
+    },
+    {
+      "id": "sogutma",
+      "name": "Soğutma Hattı",
+      "line_name": "Kalıplama",
+      "num_servers": 3,
+      "service_time_distribution": {
+        "type": "constant",
+        "params": { "value": 6 }
+      },
+      "buffer_capacity_before": 20,
+      "scrap_rate": 0
+    },
+    {
+      "id": "capak",
+      "name": "Çapak Alma",
+      "line_name": "Bitirme",
+      "num_servers": 2,
+      "service_time_distribution": {
+        "type": "triangular",
+        "params": { "min": 2, "mode": 3, "max": 5 }
+      },
+      "buffer_capacity_before": 15,
+      "scrap_rate": 0.01
+    },
+    {
+      "id": "kalite",
+      "name": "Kalite Kontrol",
+      "line_name": "Bitirme",
+      "num_servers": 1,
+      "service_time_distribution": {
+        "type": "exponential",
+        "params": { "mean": 2.5 }
+      },
+      "buffer_capacity_before": 10,
+      "scrap_rate": 0.02
+    }
+  ],
+  "connections": [
+    {
+      "from_station_id": "enjeksiyon",
+      "to_station_id": "sogutma",
+      "routing_probability": 1
+    },
+    {
+      "from_station_id": "sogutma",
+      "to_station_id": "capak",
+      "routing_probability": 1
+    },
+    {
+      "from_station_id": "capak",
+      "to_station_id": "kalite",
+      "routing_probability": 1
+    }
+  ],
+  "arrival_process": {
+    "distribution": {
+      "type": "exponential",
+      "params": { "mean": 3 }
+    },
+    "entry_station_id": "enjeksiyon"
+  },
+  "simulation_duration_minutes": 10000,
+  "warmup_period_minutes": 500,
+  "num_replications": 30
+}

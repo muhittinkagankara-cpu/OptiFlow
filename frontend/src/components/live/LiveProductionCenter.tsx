@@ -1,0 +1,302 @@
+/**
+ * Canlı Üretim Merkezi (Sprint UX-7).
+ *
+ * Ekranın tek kurulum noktası burasıdır: sağlayıcı burada örneklenir, store
+ * burada kurulur, ikisi burada birbirine bağlanır. Alt bileşenlerin hiçbiri
+ * sağlayıcı tipini bilmez — hepsi ya `LiveFactoryState` ya da `ReplayControls`
+ * görür. Yarın OPC-UA eklendiğinde değişecek tek dosya bu olacak, ekranlar
+ * değil.
+ *
+ * Veri akışı tek yönlüdür:
+ *
+ *   sağlayıcı → olay paketi → store (saf indirgeyici) → React
+ *
+ * Bileşenlerin hiçbiri durumu doğrudan değiştirmez; hiçbirinde olay mantığı
+ * yoktur. Bu, gerçek bir sahada en çok işe yarayan özelliktir: ekranda görünen
+ * her sayının nereden geldiği tek bir indirgeyiciye kadar izlenebilir.
+ */
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import { Radio, Wifi, WifiOff } from "lucide-react";
+import type {
+  SimulationConfig,
+  SimulationResults,
+} from "../../types/simulationTypes";
+import {
+  CONNECTION_LABEL,
+  DemoLiveProvider,
+  LiveFactoryStore,
+  ReplayProvider,
+  SCENARIOS,
+  SHIFT_START_MINUTES,
+  asReplayControls,
+  initialLiveState,
+  liveTotals,
+  providerCatalog,
+  recordScenario,
+  seedsFromConfig,
+  useLiveFactory,
+  type ScenarioId,
+} from "../../lib/live";
+import { EmptyState } from "../ui/Primitives";
+import { AlarmCenter } from "./AlarmCenter";
+import { EventTimeline } from "./EventTimeline";
+import { LiveFlowCanvas } from "./LiveFlowCanvas";
+import { LiveKpiPanel } from "./LiveKpiPanel";
+import { LiveStationList } from "./LiveStationList";
+import { ReplayControls } from "./ReplayControls";
+import { StationDrawer } from "./StationDrawer";
+import { useLiveTrends } from "./useLiveTrends";
+
+/** Bugün seçilebilen iki kaynak. */
+type SourceId = "demo" | "replay";
+
+interface LiveProductionCenterProps {
+  config: SimulationConfig | null;
+  results: SimulationResults | null;
+  onStartSimulation: () => void;
+  /**
+   * Açılışta seçili kaynak ve senaryo.
+   *
+   * Demo modu bunları kullanır: ziyaretçi hiçbir şey seçmeden gerçek
+   * `ReplayProvider` çalışır ve o dakikanın anlatısına uyan senaryo oynar.
+   * Yalnızca **başlangıç** değeridir; kullanıcı istediği an değiştirebilir.
+   */
+  initialSource?: SourceId;
+  initialScenario?: ScenarioId;
+}
+
+export function LiveProductionCenter({
+  config,
+  results,
+  onStartSimulation,
+  initialSource = "demo",
+  initialScenario = "normal",
+}: LiveProductionCenterProps) {
+  const [sourceId, setSourceId] = useState<SourceId>(initialSource);
+  const [scenario, setScenario] = useState<ScenarioId>(initialScenario);
+  const [selectedStationId, setSelectedStationId] = useState<string | null>(null);
+
+  const seeds = useMemo(
+    () => seedsFromConfig(config, results),
+    [config, results],
+  );
+
+  /*
+   * Store ve sağlayıcı **birlikte** kurulur; ikisi tek bir oturum oluşturur.
+   * Ayrı ayrı üretilselerdi, yalnızca biri yenilendiğinde eski sağlayıcı yeni
+   * store'a olay yayımlamaya devam eder ve iki senaryo birbirine karışırdı.
+   * Yeni bir sağlayıcı her zaman temiz bir hatla başlar.
+   */
+  const { store, provider } = useMemo(() => {
+    const nextStore = new LiveFactoryStore(initialLiveState(seeds));
+    const nextProvider =
+      sourceId === "replay"
+        ? new ReplayProvider(
+            recordScenario(scenario, seeds, SHIFT_START_MINUTES, 3),
+          )
+        : new DemoLiveProvider(seeds, scenario, SHIFT_START_MINUTES);
+    return { store: nextStore, provider: nextProvider };
+  }, [seeds, sourceId, scenario]);
+
+  const state = useLiveFactory(store);
+
+  /* Bağlantı durumu doğrudan sağlayıcıdan okunur; ayrı bir kopyası tutulmaz. */
+  const status = useSyncExternalStore(
+    useCallback((notify: () => void) => provider.onStatus(notify), [provider]),
+    useCallback(() => provider.status, [provider]),
+  );
+
+  useEffect(() => {
+    const unsubscribe = provider.subscribe(store.dispatch);
+
+    // Kayıttan oynatmada geri sarma, durumun sıfırlanmasını gerektirir.
+    const controls = asReplayControls(provider);
+    const unsubscribeReset = controls?.onReset(() =>
+      store.reset(initialLiveState(seeds)),
+    );
+
+    void provider.connect();
+
+    return () => {
+      unsubscribe();
+      unsubscribeReset?.();
+      void provider.disconnect();
+    };
+  }, [provider, store, seeds]);
+
+  const totals = useMemo(() => liveTotals(state), [state]);
+  const trends = useLiveTrends(state);
+  const replayControls = useMemo(() => asReplayControls(provider), [provider]);
+
+  const selectedStation = useMemo(
+    () =>
+      state.stations.find((item) => item.stationId === selectedStationId) ?? null,
+    [state.stations, selectedStationId],
+  );
+
+  const lastAlarm = useMemo(
+    () =>
+      selectedStationId === null
+        ? null
+        : (state.alarms.find((alarm) => alarm.stationId === selectedStationId) ??
+          null),
+    [state.alarms, selectedStationId],
+  );
+
+  const handleSelectStation = useCallback(
+    (stationId: string) => setSelectedStationId(stationId),
+    [],
+  );
+  const handleCloseDrawer = useCallback(() => setSelectedStationId(null), []);
+
+  if (!config || seeds.length === 0) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-4 py-10 sm:px-6">
+        <EmptyState
+          icon={Radio}
+          title="İzlenecek bir hat yok"
+          description="Canlı üretim merkezi, açık bir fabrika modelinin istasyonlarını izler. Bir model kurduğunuzda hattın anlık durumu burada görünür."
+          action={
+            <button
+              type="button"
+              onClick={onStartSimulation}
+              className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus:outline-none"
+            >
+              Model kur
+            </button>
+          }
+        />
+      </div>
+    );
+  }
+
+  const isConnected = status === "connected";
+
+  return (
+    <div className="flex h-full flex-col overflow-hidden">
+      {/* Kaynağın canlı olmadığı kalıcı olarak yazılır: sahte sensör verisini
+          gerçek sanan bir yönetici, olmayan bir arızaya ekip gönderebilir. */}
+      <p className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-1.5 text-center text-[11px] font-medium text-amber-900">
+        Demo veri — makineye, MES'e veya OPC-UA'ya bağlanılmadı.
+      </p>
+
+      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-200 px-4 py-2.5">
+        <div className="flex items-center gap-2">
+          <span
+            className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-semibold ${
+              isConnected
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border-slate-200 bg-slate-100 text-slate-600"
+            }`}
+          >
+            {isConnected ? (
+              <Wifi className="h-3 w-3" />
+            ) : (
+              <WifiOff className="h-3 w-3" />
+            )}
+            {CONNECTION_LABEL[status]}
+          </span>
+        </div>
+
+        <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+          Kaynak
+          <select
+            value={sourceId}
+            onChange={(event) => setSourceId(event.target.value as SourceId)}
+            className="rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-800 focus:outline-none"
+          >
+            {providerCatalog().map((choice) => (
+              <option
+                key={choice.id}
+                value={choice.id}
+                disabled={!choice.isAvailable}
+              >
+                {choice.name}
+                {choice.isAvailable ? "" : " (yakında)"}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+          Senaryo
+          <select
+            value={scenario}
+            onChange={(event) => setScenario(event.target.value as ScenarioId)}
+            className="rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-800 focus:outline-none"
+          >
+            {SCENARIOS.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {replayControls && (
+          <div className="min-w-[16rem] flex-1">
+            <ReplayControls controls={replayControls} />
+          </div>
+        )}
+      </header>
+
+      <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
+        {/* Diyagram yalnızca geniş ekranda; dar ekranda okunabilir bir liste. */}
+        <div className="min-h-[20rem] flex-1 lg:min-h-0">
+          <div className="hidden h-full lg:block">
+            <LiveFlowCanvas
+              config={config}
+              stations={state.stations}
+              onSelectStation={handleSelectStation}
+              selectedStationId={selectedStationId}
+            />
+          </div>
+          <div className="h-full overflow-y-auto lg:hidden">
+            <LiveStationList
+              stations={state.stations}
+              onSelectStation={handleSelectStation}
+            />
+          </div>
+        </div>
+
+        <aside className="w-full shrink-0 space-y-3 overflow-y-auto border-t border-slate-200 px-3 py-3 lg:w-[23rem] lg:border-t-0 lg:border-l">
+          <LiveKpiPanel
+            totals={totals}
+            trends={trends}
+            clockMinutes={state.clockMinutes}
+            eventCount={state.eventCount}
+          />
+
+          <section>
+            <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+              Alarm merkezi
+            </h3>
+            <AlarmCenter
+              alarms={state.alarms}
+              clockMinutes={state.clockMinutes}
+              onSelectStation={handleSelectStation}
+            />
+          </section>
+        </aside>
+
+        <StationDrawer
+          station={selectedStation}
+          lastAlarm={lastAlarm}
+          clockMinutes={state.clockMinutes}
+          onClose={handleCloseDrawer}
+        />
+      </div>
+
+      <footer className="h-32 shrink-0 border-t border-slate-200 lg:h-40">
+        <EventTimeline feed={state.feed} onSelectStation={handleSelectStation} />
+      </footer>
+    </div>
+  );
+}

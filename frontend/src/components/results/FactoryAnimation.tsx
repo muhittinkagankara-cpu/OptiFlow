@@ -87,14 +87,28 @@ interface FactoryAnimationProps {
   simulationId: string;
   config: SimulationConfig;
   bottleneckStationId: string;
+  /**
+   * Bileşen açık mı doğsun?
+   *
+   * Sonuç sayfasında varsayılan olarak **kapalıdır**: izi üretmek sunucuda
+   * simülasyonu yeniden çalıştırmayı gerektirir ve sayfa yüklenirken bu
+   * maliyeti ödemek gereksizdir. Canlı Üretim ekranında ise izlemek sayfanın
+   * tek amacıdır; orada kapalı açılmak, kullanıcıya anlamsız bir tık
+   * ekletirdi.
+   */
+  defaultOpen?: boolean;
+  /** Kendi başlığını gizler; sayfa zaten bir başlık taşıyorsa kullanılır. */
+  hideHeader?: boolean;
 }
 
 export function FactoryAnimation({
   simulationId,
   config,
   bottleneckStationId,
+  defaultOpen = false,
+  hideHeader = false,
 }: FactoryAnimationProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState(defaultOpen);
   const [trace, setTrace] = useState<SimulationTrace | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -126,35 +140,37 @@ export function FactoryAnimation({
 
   return (
     <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <button
-        type="button"
-        onClick={() => setIsOpen((previous) => !previous)}
-        aria-expanded={isOpen}
-        className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-      >
-        <span className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
-            <PlayIcon className="h-4 w-4" />
-          </span>
-          <span>
-            <span className="block text-sm font-semibold text-slate-900">
-              Canlı Akışı Gör
-            </span>
-            <span className="block text-xs text-slate-500">
-              Parçaların hattınızda nasıl ilerlediğini izleyin
-            </span>
-          </span>
-        </span>
-        <span
-          aria-hidden="true"
-          className={`text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}
+      {!hideHeader && (
+        <button
+          type="button"
+          onClick={() => setIsOpen((previous) => !previous)}
+          aria-expanded={isOpen}
+          className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
         >
-          ▸
-        </span>
-      </button>
+          <span className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
+              <PlayIcon className="h-4 w-4" />
+            </span>
+            <span>
+              <span className="block text-sm font-semibold text-slate-900">
+                Canlı Akışı Gör
+              </span>
+              <span className="block text-xs text-slate-500">
+                Parçaların hattınızda nasıl ilerlediğini izleyin
+              </span>
+            </span>
+          </span>
+          <span
+            aria-hidden="true"
+            className={`text-slate-400 transition-transform ${isOpen ? "rotate-90" : ""}`}
+          >
+            ▸
+          </span>
+        </button>
+      )}
 
       {isOpen && (
-        <div className="border-t border-slate-100 p-5">
+        <div className={hideHeader ? "p-5" : "border-t border-slate-100 p-5"}>
           {isLoading && (
             <div className="flex items-center gap-3 py-6">
               <Spinner />

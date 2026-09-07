@@ -33,8 +33,10 @@ import {
   statusTone,
 } from "../../lib/inventoryFormatting";
 import type { Tone } from "../../lib/resultsFormatting";
-import { PlusIcon, TrashIcon, WarningIcon } from "../shared/icons";
+import { PlusIcon, WarningIcon } from "../shared/icons";
 import { InventoryItemDetail } from "./InventoryItemDetail";
+import { ShoppingCart, Trash2 } from "lucide-react";
+import { Button, Card, ProgressBar } from "../ui/Primitives";
 import { InventoryItemForm } from "./InventoryItemForm";
 
 const TONE_BADGE: Record<Tone, string> = {
@@ -220,112 +222,147 @@ export function InventoryPage({ config, simulationId }: InventoryPageProps) {
       {!isLoading && rows.length === 0 && <EmptyState />}
 
       {!isLoading && rows.length > 0 && (
-        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[680px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left">
-                  <Th>Kalem</Th>
-                  <Th>Mevcut stok</Th>
-                  <Th>Sipariş noktası</Th>
-                  <Th>Yeter</Th>
-                  <Th>Durum</Th>
-                  <th className="w-12" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {rows.map(({ item, analysis }) => (
-                  <ItemRow
-                    key={item.id}
-                    item={item}
-                    analysis={analysis}
-                    onOpen={() => {
-                      setSelected(item);
-                      setView("detail");
-                    }}
-                    onDelete={() => void handleDelete(item)}
-                  />
-                ))}
-              </tbody>
-            </table>
+        <>
+          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+            {rows.map(({ item, analysis }, position) => (
+              <ItemCard
+                key={item.id}
+                item={item}
+                analysis={analysis}
+                index={position}
+                onOpen={() => {
+                  setSelected(item);
+                  setView("detail");
+                }}
+                onDelete={() => void handleDelete(item)}
+              />
+            ))}
           </div>
-          <p className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 text-xs text-slate-500">
-            Ayrıntılı analiz ve tükenme riski için bir satıra tıklayın.
+          <p className="mt-3 text-xs text-slate-500">
+            Ayrıntılı analiz ve tükenme riski için bir karta tıklayın.
           </p>
-        </div>
+        </>
       )}
     </div>
   );
 }
 
-function ItemRow({
+/**
+ * Tek bir envanter kaleminin kartı.
+ *
+ * Tablodan karta geçilmesinin sebebi stok seviyesinin **görsel** bir büyüklük
+ * olması: bir sayı ("120 adet") tek başına iyi mi kötü mü olduğunu söylemez,
+ * sipariş noktasına göre konumu söyler. İlerleme çubuğu tam olarak bunu
+ * gösterir ve satır düzeninde yeri yoktu.
+ */
+function ItemCard({
   item,
   analysis,
+  index,
   onOpen,
   onDelete,
 }: {
   item: InventoryItem;
   analysis: InventoryAnalysis | null;
+  index: number;
   onOpen: () => void;
   onDelete: () => void;
 }) {
   const tone = analysis ? statusTone(analysis.status) : "neutral";
 
+  /*
+   * Çubuğun doluluğu, mevcut stoğun sipariş noktasının İKİ KATINA oranıdır.
+   * Sipariş noktası ölçeğin ortasına denk gelir; böylece kullanıcı çubuğun
+   * yarıdan aşağı inmesini "sipariş zamanı" diye okuyabilir. Ölçek mevcut
+   * stoğun kendisine göre kurulsaydı, her kalem her zaman dolu görünür ve
+   * çubuk hiçbir şey anlatmazdı.
+   */
+  const applicable = analysis?.is_applicable === true;
+  const scale = applicable ? Math.max(analysis.reorder_point * 2, 1e-9) : 0;
+  const fill = applicable ? item.current_stock / scale : 0;
+
   return (
-    <tr onClick={onOpen} className="cursor-pointer transition-colors hover:bg-slate-50">
-      <Td>
-        <span className="font-medium text-slate-900">{item.name}</span>
-        {item.linked_station_id && (
-          <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
-            üretime bağlı
-          </span>
-        )}
-      </Td>
-      <Td>
-        <span className="tabular-nums text-slate-800">
+    <Card interactive index={index} className="flex flex-col overflow-hidden">
+      <button
+        type="button"
+        onClick={onOpen}
+        className="flex-1 p-5 text-left focus:outline-none"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold text-slate-900">
+              {item.name}
+            </p>
+            {item.linked_station_id && (
+              <span className="mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                üretime bağlı
+              </span>
+            )}
+          </div>
+          {applicable ? (
+            <span
+              className={`inline-flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${TONE_BADGE[tone]}`}
+            >
+              {/* Renk tek başına bilgi taşımaz: noktanın yanında her zaman yazı
+                  bulunur, aksi hâlde renk körü kullanıcı için kart okunamaz. */}
+              <span className={`inline-block h-2 w-2 rounded-full ${TONE_DOT[tone]}`} />
+              {statusLabel(analysis.status, analysis.covers_lead_time)}
+            </span>
+          ) : (
+            <span className="shrink-0 text-[11px] text-slate-400">
+              tüketim girilmemiş
+            </span>
+          )}
+        </div>
+
+        <p className="mt-4 text-2xl font-semibold text-slate-900 tabular-nums">
           {formatQuantity(item.current_stock, item.unit)}
-        </span>
-      </Td>
-      <Td>
-        <span className="tabular-nums text-slate-700">
-          {analysis?.is_applicable
-            ? formatQuantity(analysis.reorder_point, item.unit)
-            : "—"}
-        </span>
-      </Td>
-      <Td>
-        <span className="tabular-nums text-slate-700">
-          {analysis ? formatDays(analysis.days_of_stock) : "—"}
-        </span>
-      </Td>
-      <Td>
-        {analysis?.is_applicable ? (
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${TONE_BADGE[tone]}`}
-          >
-            {/* Renk tek başına bilgi taşımaz: noktanın yanında her zaman yazı
-                bulunur, aksi hâlde renk körü kullanıcı için tablo okunamaz. */}
-            <span className={`inline-block h-2 w-2 rounded-full ${TONE_DOT[tone]}`} />
-            {statusLabel(analysis.status, analysis.covers_lead_time)}
-          </span>
+        </p>
+
+        {applicable ? (
+          <>
+            <div className="mt-3">
+              <ProgressBar value={fill} tone={tone === "neutral" ? "info" : tone} />
+            </div>
+            <div className="mt-1.5 flex justify-between text-[11px] text-slate-500">
+              <span>
+                Sipariş noktası{" "}
+                <span className="tabular-nums text-slate-600">
+                  {formatQuantity(analysis.reorder_point, item.unit)}
+                </span>
+              </span>
+              <span className="tabular-nums">{formatDays(analysis.days_of_stock)}</span>
+            </div>
+          </>
         ) : (
-          <span className="text-xs text-slate-400">tüketim girilmemiş</span>
+          <p className="mt-3 text-[11px] leading-relaxed text-slate-500">
+            Günlük tüketim girilmeden sipariş noktası hesaplanamaz.
+          </p>
         )}
-      </Td>
-      <Td>
-        <button
-          type="button"
-          aria-label={`${item.name} kalemini sil`}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete();
-          }}
-          className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-300"
+      </button>
+
+      <div className="flex items-center gap-2 border-t border-slate-200 px-4 py-2.5">
+        <Button
+          size="sm"
+          variant={tone === "bad" ? "primary" : "secondary"}
+          icon={ShoppingCart}
+          onClick={onOpen}
+          title="Sipariş miktarı ve tükenme riski ayrıntı ekranında"
         >
-          <TrashIcon className="h-4 w-4" />
-        </button>
-      </Td>
-    </tr>
+          Sipariş ver
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          icon={Trash2}
+          ariaLabel={`${item.name} kalemini sil`}
+          onClick={onDelete}
+          className="ml-auto"
+        >
+          <span className="sr-only">Sil</span>
+        </Button>
+      </div>
+    </Card>
   );
 }
 
@@ -340,16 +377,4 @@ function EmptyState() {
       </p>
     </div>
   );
-}
-
-function Th({ children }: { children: React.ReactNode }) {
-  return (
-    <th className="px-4 py-2.5 text-xs font-semibold tracking-wide text-slate-600 uppercase">
-      {children}
-    </th>
-  );
-}
-
-function Td({ children }: { children: React.ReactNode }) {
-  return <td className="px-4 py-3 align-middle">{children}</td>;
 }

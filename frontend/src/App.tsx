@@ -37,10 +37,11 @@
  * bırakmamasını gerektirir.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { LoginPage } from "./components/auth/LoginPage";
 import { FactoryPicker } from "./components/factory/FactoryPicker";
+import { ImportWizard } from "./components/import/ImportWizard";
 import { OnboardingWizard } from "./components/wizard/OnboardingWizard";
 import { ProcessEditor } from "./components/editor/ProcessEditor";
 import { InventoryPage } from "./components/inventory/InventoryPage";
@@ -49,8 +50,31 @@ import {
   ScenarioComparison,
   type ComparisonScenario,
 } from "./components/results/ScenarioComparison";
-import { FolderIcon, WarningIcon } from "./components/shared/icons";
+import { WarningIcon } from "./components/shared/icons";
+import { CommandCenter } from "./components/dashboard/CommandCenter";
+import { CopilotPage } from "./components/copilot/CopilotPage";
+import { DemoBanner } from "./components/demo/DemoBanner";
+import { DemoLockedView } from "./components/demo/DemoLockedView";
+import { LandingPage } from "./components/demo/LandingPage";
+import { FactoryIntelligence } from "./components/intelligence/FactoryIntelligence";
+import { FinancePage } from "./components/finance/FinancePage";
+import { LiveSection } from "./components/live/LiveSection";
+import { OperatorApp } from "./components/operator/OperatorApp";
+import { Sidebar } from "./components/shell/Sidebar";
+import { TopBar } from "./components/shell/TopBar";
+import { displayName, greeting } from "./components/shell/userDisplay";
+import { SettingsPage } from "./components/shell/SimplePages";
+import { ReportsPage } from "./components/reports/ReportsPage";
 import {
+  DEMO_NAV_ITEMS,
+  NAV_ITEMS,
+  VIEW_TITLE,
+  sectionOfView,
+  type Section,
+  type View,
+} from "./components/shell/navigation";
+import {
+  analyzeInventoryItem,
   ApiError,
   API_BASE_URL,
   createFactory,
@@ -59,6 +83,7 @@ import {
   getMe,
   isBackendReachable,
   listFactories,
+  listInventoryItems,
   runFactorySimulation,
   saveFactory,
 } from "./lib/apiClient";
@@ -68,6 +93,16 @@ import {
   onAuthStateChange,
   signOut,
 } from "./lib/authClient";
+import {
+  DEMO_FACTORY_NAME,
+  DEMO_ORG_NAME,
+  demoSnapshot,
+  nextPhase,
+  phaseAt,
+  scenarioForPhase,
+  startedAtForPhase,
+} from "./lib/demo";
+import type { ScenarioId } from "./lib/live";
 import { GENERIC_ERROR_MESSAGE } from "./lib/errorMessages";
 import {
   applyLayout,
@@ -75,23 +110,67 @@ import {
   rememberFactory,
   type SavedSnapshot,
 } from "./lib/factoryModel";
+import {
+  entryFromResult,
+  recallRunHistory,
+  rememberRun,
+  type RunHistoryEntry,
+} from "./lib/runHistory";
+import type { ActionTarget } from "./lib/actionItems";
 import { buildFlowFromConfig } from "./lib/configBuilder";
 import type { FlowEdge, FlowNode } from "./lib/configBuilder";
+import { DEFAULT_SERVICE_LEVEL } from "./types/simulationTypes";
 import type {
   Factory,
+  FactoryDetail,
   FactoryLayout,
+  FinancialReport,
+  FinancialSettings,
+  InventoryAnalysis,
   MeResponse,
   SimulationConfig,
   SimulationRunResponse,
 } from "./types/simulationTypes";
 
-type View =
-  | "factories"
-  | "wizard"
-  | "editor"
-  | "results"
-  | "comparison"
-  | "inventory";
+/**
+ * Demoda kapalı görünümler ve nedenleri.
+ *
+ * Ortak yanları sunucuya yazmalarıdır: model kaydetme, Excel içe aktarma,
+ * envanter ve hesap ayarları oturum gerektirir. Demo oturumsuz çalıştığı için
+ * bu uçlar çağrılamaz; çağrılsaydı ziyaretçi bir yetki hatasıyla karşılaşırdı.
+ */
+const DEMO_LOCKED_VIEWS: Partial<Record<View, { title: string; detail: string }>> =
+  {
+    editor: {
+      title: "Model düzenleme demoda kapalı",
+      detail:
+        "Demo hazır bir metal hattını gösterir ve hiçbir şeyi kaydetmez. Kendi hattınızı kurup kaydetmek için bir hesap açın; süreç editörü, Excel içe aktarma ve sürümleme orada açılır.",
+    },
+    wizard: {
+      title: "Yeni model kurma demoda kapalı",
+      detail:
+        "Demoda kurulu bir fabrika üzerinden geziliyor. Kendi fabrikanızı sihirbazla kurmak için bir hesap açın.",
+    },
+    import: {
+      title: "Excel içe aktarma demoda kapalı",
+      detail:
+        "İçe aktarma, oluşturduğu fabrikayı sunucuya kaydeder. Kendi Excel dosyanızı aktarmak için bir hesap açın.",
+    },
+    factories: {
+      title: "Fabrika listesi demoda kapalı",
+      detail:
+        "Demo tek bir hazır hat üzerinden ilerler. Birden çok fabrikayı kaydedip sürümlemek için bir hesap açın.",
+    },
+    inventory: {
+      title: "Envanter demoda kapalı",
+      detail:
+        "Stok kalemleri hesabınıza bağlı olarak saklanır. Malzeme listenizi girmek için bir hesap açın.",
+    },
+    settings: {
+      title: "Ayarlar demoda kapalı",
+      detail: "Hesap ve organizasyon ayarları için önce bir hesap açın.",
+    },
+  };
 
 /** Açık fabrikanın kimliği, adı ve en son kaydedilen hâli. */
 interface OpenFactory {
@@ -101,9 +180,34 @@ interface OpenFactory {
 }
 
 export default function App() {
-  const [view, setView] = useState<View>("wizard");
+  const [view, setView] = useState<View>("dashboard");
   const [config, setConfig] = useState<SimulationConfig | null>(null);
   const [result, setResult] = useState<SimulationRunResponse | null>(null);
+  /** Dar ekrandaki gezinme çekmecesi. Masaüstünde her zaman kapalı sayılır. */
+  const [isMenuOpen, setMenuOpen] = useState(false);
+  /**
+   * Finans raporu ve oranları uygulama düzeyinde tutulur.
+   *
+   * Command Center'daki "Aylık Kayıp" kartı ile Finans ekranı **aynı** raporu
+   * okumak zorundadır; her ekran kendi hesabını yapsaydı aynı koşum için iki
+   * farklı rakam gösterebilirlerdi. Oranlar da burada durur ki kullanıcı
+   * ekranlar arasında gezinirken girdiği değerleri kaybetmesin.
+   */
+  const [financeReport, setFinanceReport] = useState<FinancialReport | null>(null);
+  const [financeSettings, setFinanceSettings] = useState<FinancialSettings>({});
+  /**
+   * Command Center'ı besleyen iki yardımcı veri.
+   *
+   * `runHistory` bu tarayıcıda çalıştırılan koşumların özetidir (bkz.
+   * `lib/runHistory`); `analyses` ise envanter kalemlerinin analizidir ve
+   * "Bugün Yapılacaklar" kartlarındaki stok uyarılarını besler. İkisi de
+   * yüklenmemişken `null`/boş kalır ve gösterge paneli o kuralları hiç
+   * üretmez — eksik veri, sıfır değildir.
+   */
+  const [runHistory, setRunHistory] = useState<RunHistoryEntry[]>([]);
+  const [inventoryAnalyses, setInventoryAnalyses] = useState<
+    InventoryAnalysis[] | null
+  >(null);
   /**
    * Envanter sekmesinden dönüldüğünde hangi üretim görünümüne gidileceği.
    *
@@ -130,6 +234,22 @@ export default function App() {
   } | null>(null);
   const [isLoadingFactories, setIsLoadingFactories] = useState(true);
   const [factoryErrors, setFactoryErrors] = useState<string[]>([]);
+
+  /*
+   * Demo modu — SALES-1.
+   *
+   * Tek durum, demonun **başlangıç anıdır**. Aşama bundan türetilir
+   * (`phaseAt`), ayrı bir "aşama" durumu tutulmaz: iki kaynak olsaydı biri
+   * kaydırıldığında (sonraki adıma atlama) öteki geride kalırdı.
+   *
+   * Demo `session === null` iken çalışır. Uygulamadaki bütün ağ etkileri
+   * `session` ya da `identity` bağımlılığına sahip olduğu için demoda hiçbiri
+   * tetiklenmez — izolasyon ayrı bir bayrakla değil, mevcut yapıyla sağlanır.
+   */
+  const [demoStartedAt, setDemoStartedAt] = useState<number | null>(null);
+  const [demoElapsedMs, setDemoElapsedMs] = useState(0);
+  /** Karşılama ekranında kayıt formuna geçilsin mi? */
+  const [wantsSignUp, setWantsSignUp] = useState(false);
 
   /**
    * Kimlik doğrulama durumu.
@@ -256,8 +376,16 @@ export default function App() {
     setIsLoadingFactories(true);
     setFactoryErrors([]);
     setIdentity(null);
+    // Finans raporu ve girilen oranlar da temizlenir: bir önceki
+    // organizasyonun maliyet verisi yeni kullanıcıya görünmemelidir.
+    setFinanceReport(null);
+    setFinanceSettings({});
+    // Kosum gecmisi tarayicida kalir (cihaza ait bir kolayliktir) ama ekrandan
+    // temizlenir: onceki organizasyonun kosumlari yeni kullaniciya gorunmemeli.
+    setRunHistory([]);
+    setInventoryAnalyses(null);
     rememberFactory(null);
-    setView("wizard");
+    setView("dashboard");
     setProductionView("wizard");
   }, []);
 
@@ -458,7 +586,27 @@ export default function App() {
   ) => {
     setResult(response);
     setConfig(usedConfig);
+    // Yeni bir koşum, eldeki finans raporunu geçersiz kılar: rapor eski
+    // koşumun metriklerinden üretilmişti ve yeni sonuçla birlikte gösterilseydi
+    // iki farklı koşumun sayıları aynı ekranda karışırdı. Oranlar korunur —
+    // onlar kullanıcının kendi verisidir, koşuma bağlı değildir.
+    setFinanceReport(null);
+    // Kosum gecmisine yalnizca GERCEK sonuclar yazilir: her satir, o kosumun
+    // donen yanitindan alinmis ozetidir.
+    setRunHistory(
+      rememberRun(
+        entryFromResult(
+          response,
+          usedConfig,
+          // Kimlik de taşınır: fabrika kartındaki "son koşum" rozeti kimliğe
+          // göre eşleşir, ada göre eşleşme yalnızca eski kayıtlar için bir
+          // yedek yoldur (bkz. `lib/onboarding.recentFactories`).
+          openFactory ? { id: openFactory.id, name: openFactory.name } : null,
+        ),
+      ),
+    );
     setView("results");
+    setProductionView("results");
   };
 
   const startComparison = () => {
@@ -477,211 +625,514 @@ export default function App() {
     // calistiracaktir; burada ayrica cagirmak cift sifirlama olurdu.
   }, []);
 
-  if (!isAuthConfigured) {
-    return (
-      <div className="flex h-full items-center justify-center bg-slate-50 px-4">
-        <div className="max-w-md rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
-          <WarningIcon className="mx-auto mb-3 h-6 w-6 text-amber-600" />
-          <p className="text-sm text-amber-900">
-            Kimlik doğrulama yapılandırılmamış. <code>VITE_SUPABASE_URL</code> ve{" "}
-            <code>VITE_SUPABASE_ANON_KEY</code> ortam değişkenlerini tanımlayın.
-          </p>
+  /**
+   * Command Center'ın yardımcı verileri: koşum geçmişi ve envanter analizi.
+   *
+   * Kimlik çözüldükten sonra bir kez yüklenir. Envanter analizi kalem başına
+   * bir istek gerektiriyor (`/analyze/{id}` — envanter ekranındaki desenin
+   * aynısı); bu yüzden gösterge panelini **bloklamaz**: liste geldiğinde stok
+   * kartları kendiliğinden belirir, gelmezse panel diğer kartlarla çalışmaya
+   * devam eder. Hata sessizce yutulur çünkü bu veri gösterge panelinin
+   * zorunlu bir parçası değil, zenginleştirmesidir.
+   */
+  useEffect(() => {
+    if (!identity) {
+      return;
+    }
+    let cancelled = false;
+
+    setRunHistory(recallRunHistory());
+
+    (async () => {
+      try {
+        const items = await listInventoryItems();
+        if (cancelled || items.length === 0) {
+          if (!cancelled) {
+            setInventoryAnalyses([]);
+          }
+          return;
+        }
+        const analyses = await Promise.all(
+          // Envanter ekranıyla aynı varsayılan hizmet seviyesi kullanılır;
+          // farklı bir değer, iki ekranda farklı sipariş noktası gösterirdi.
+          items.map((item) => analyzeInventoryItem(item.id, DEFAULT_SERVICE_LEVEL)),
+        );
+        if (!cancelled) {
+          setInventoryAnalyses(analyses);
+        }
+      } catch {
+        // Envanter okunamadıysa stok kuralları hiç üretilmez; panelin geri
+        // kalanı etkilenmez.
+        if (!cancelled) {
+          setInventoryAnalyses(null);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [identity]);
+
+  /**
+   * Kenar çubuğundan bir bölüme geçiş.
+   *
+   * "Simülasyon" bölümü özeldir: kullanıcının o anda nerede kaldığına göre
+   * sihirbaz, editör ya da sonuç ekranı açılır. Her seferinde sihirbaza
+   * dönseydi, üzerinde çalışılan model kaybolmuş gibi görünürdü.
+   */
+  /*
+   * Demo saati. Saniyede bir tik yeterlidir: aşama sınırı dakikalarla ölçülür
+   * ve daha sık güncellemek yalnızca gereksiz render üretirdi.
+   */
+  useEffect(() => {
+    if (demoStartedAt === null) {
+      return;
+    }
+    setDemoElapsedMs(Date.now() - demoStartedAt);
+    const timer = setInterval(
+      () => setDemoElapsedMs(Date.now() - demoStartedAt),
+      1_000,
+    );
+    return () => clearInterval(timer);
+  }, [demoStartedAt]);
+
+  const isDemo = demoStartedAt !== null;
+  const demoPhase = phaseAt(demoElapsedMs);
+
+  /*
+   * Anlık görüntü yalnızca aşama değiştiğinde yeniden kurulur; saniyelik tik
+   * onu yeniden üretmez. `demoStartedAt` tarihi geçmiş kayıtların zaman
+   * damgalarını sabitler — her tikte `new Date()` verilseydi "3 dakika önce"
+   * etiketleri sürekli oynardı.
+   */
+  const demoData = useMemo(
+    () =>
+      demoStartedAt === null
+        ? null
+        : demoSnapshot(demoPhase, new Date(demoStartedAt)),
+    [demoStartedAt, demoPhase],
+  );
+
+  const startDemo = useCallback(() => {
+    setDemoStartedAt(Date.now());
+    setDemoElapsedMs(0);
+    setView("dashboard");
+  }, []);
+
+  /** Demodan çıkış: tek tuş, hiçbir kalıntı bırakmaz. */
+  const exitDemo = useCallback(() => {
+    setDemoStartedAt(null);
+    setDemoElapsedMs(0);
+    setWantsSignUp(false);
+    setView("dashboard");
+    setFactoryErrors([]);
+  }, []);
+
+  const advanceDemo = useCallback(() => {
+    setDemoStartedAt((current) =>
+      current === null
+        ? current
+        : startedAtForPhase(Date.now(), nextPhase(phaseAt(Date.now() - current))),
+    );
+  }, []);
+
+  /** Demodan kayıt ekranına: demo kapanır, karşılama formu açılır. */
+  const leaveDemoForSignUp = useCallback(() => {
+    setDemoStartedAt(null);
+    setDemoElapsedMs(0);
+    setWantsSignUp(true);
+  }, []);
+
+  const goToSection = useCallback(
+    (section: Section) => {
+      setMenuOpen(false);
+      setFactoryErrors([]);
+
+      if (section === "simulation") {
+        // Demoda hazır bir koşum var ve editör kapalı; doğrudan sonuca gidilir.
+        const target: View = isDemo
+          ? "results"
+          : config
+            ? productionView === "results" && result
+              ? "results"
+              : "editor"
+            : "wizard";
+        setView(target);
+        return;
+      }
+
+      const item = NAV_ITEMS.find((entry) => entry.id === section);
+      if (item) {
+        setView(item.view);
+      }
+    },
+    [config, productionView, result, isDemo],
+  );
+
+  /**
+   * Excel'den fabrika oluşturulduğunda çağrılır.
+   *
+   * Oluşturulan fabrika, mevcut "fabrika aç" akışının aynısıyla açılır:
+   * `openFactoryById` modeli ve yerleşimi backend'den okuyup editörü kurar.
+   * Burada ayrı bir yol yazılsaydı, içe aktarılan fabrika ile elle açılan
+   * fabrika iki farklı biçimde yüklenir ve zamanla ayrışırlardı.
+   */
+  const handleImportCreated = useCallback(
+    async (detail: FactoryDetail) => {
+      setFactories(await refreshFactories());
+      await openFactoryById(detail.factory.id);
+    },
+    [refreshFactories, openFactoryById],
+  );
+
+  /**
+   * Öncelik kartlarının hedefini kenar çubuğu bölümüne çevirir.
+   *
+   * `ActionTarget` adları bilinçli olarak bölüm adlarıyla aynıdır; ayrı bir
+   * eşleme tablosu tutmak, iki listenin zamanla ayrışması demek olurdu.
+   */
+  const goToTarget = useCallback(
+    (target: ActionTarget) => goToSection(target),
+    [goToSection],
+  );
+
+  const activeSection = sectionOfView(view);
+  const userName = displayName(identity?.email ?? null);
+
+  /**
+   * Açık fabrikanın kart üzerinde gösterilecek özeti.
+   *
+   * Liste ucu modeli taşımadığı için bu bilgi yalnızca **açık olan** fabrika
+   * için bilinir; diğer kartlarda uydurulmaz (bkz. `FactoryPicker`).
+   */
+  const openFactoryStats = useMemo(() => {
+    if (!openFactory || !config) {
+      return null;
+    }
+    const bottleneckId = result?.results.bottleneck_station_id;
+    const bottleneck = bottleneckId
+      ? (config.stations.find((station) => station.id === bottleneckId)?.name ??
+        null)
+      : null;
+    return { stationCount: config.stations.length, bottleneck };
+  }, [openFactory, config, result]);
+
+  /*
+   * Demo, kimlik kapılarının **önünde** durur: oturum yokken de tam bir ürün
+   * turu yaşanabilmelidir. Kapılar yalnızca demo dışında uygulanır.
+   */
+  if (!isDemo) {
+    if (authLoading) {
+      return <FullPageStatus message="Yükleniyor…" />;
+    }
+
+    if (!session) {
+      /*
+       * Karşılama ekranı, kimlik doğrulama yapılandırılmamış olsa bile
+       * gösterilir. Demo hiçbir oturum gerektirmez; yapılandırma uyarısını
+       * öne almak, Supabase anahtarı tanımlanmamış bir dağıtımda ziyaretçinin
+       * ürünü hiç göremediği bir ekranla karşılaşması demek olurdu. Uyarı,
+       * gerçekten gerektiği yere — kayıt yoluna — taşındı.
+       */
+      if (!wantsSignUp) {
+        return <LandingPage onStartDemo={startDemo} />;
+      }
+      return isAuthConfigured ? (
+        <LoginPage />
+      ) : (
+        <div className="flex h-full items-center justify-center bg-slate-50 px-4">
+          <div className="max-w-md rounded-xl border border-amber-200 bg-amber-50 p-6 text-center">
+            <WarningIcon className="mx-auto mb-3 h-6 w-6 text-amber-600" />
+            <p className="text-sm text-amber-900">
+              Kayıt ve giriş için kimlik doğrulama yapılandırılmalı:{" "}
+              <code>VITE_SUPABASE_URL</code> ve{" "}
+              <code>VITE_SUPABASE_ANON_KEY</code> ortam değişkenlerini
+              tanımlayın. Demo bu ayarlar olmadan da çalışır.
+            </p>
+            <button
+              type="button"
+              onClick={() => setWantsSignUp(false)}
+              className="mt-4 rounded-lg border border-amber-300 bg-white px-3 py-1.5 text-sm font-medium text-amber-900 focus:outline-none"
+            >
+              Tanıtıma dön
+            </button>
+          </div>
         </div>
-      </div>
+      );
+    }
+
+    if (identityLoading || !identity) {
+      return <FullPageStatus message="Organizasyon yükleniyor…" error={authError} />;
+    }
+  }
+
+  /*
+   * Buradan sonrası hem demo hem gerçek oturum için ortaktır. Ekranlara giden
+   * değerler tek yerde seçilir; her bileşenin ayrı ayrı "demo mu?" diye
+   * sorması, bir yerde unutulduğunda karışık veri gösterirdi.
+   */
+  const activeIdentity: MeResponse = demoData
+    ? {
+        user_id: "demo",
+        email: null,
+        org_id: "demo",
+        org_name: DEMO_ORG_NAME,
+      }
+    : // Demo dışında yukarıdaki kapılar kimliğin dolu olmasını garanti eder.
+      (identity as MeResponse);
+
+  const activeConfig = demoData ? demoData.config : config;
+  const activeResult = demoData ? demoData.run : result;
+  const activeReport = demoData ? demoData.report : financeReport;
+  const activeHistory = demoData ? demoData.runHistory : runHistory;
+  const activeFactoryName = demoData ? DEMO_FACTORY_NAME : (openFactory?.name ?? null);
+  const activeUserName = demoData ? "Demo kullanıcısı" : userName;
+
+  /*
+   * Operatör deneyimi kabuğun dışında çizilir.
+   *
+   * Kenar çubuğu ve üst çubuk telefonda 375 pikselin üçte birini gezinmeye
+   * ayırırdı; operatör ekranının kendi alt çubuğu zaten var. Bu yüzden görünüm
+   * kabuğa girmeden, tam ekran döner. Oturum kapatılmaz — aynı kullanıcı
+   * "Yönetim paneline dön" ile geri gelir.
+   */
+  if (view === "operator") {
+    return (
+      <OperatorApp
+        config={activeConfig}
+        operatorName={activeUserName}
+        orgName={activeIdentity.org_name}
+        factoryName={activeFactoryName}
+        onExit={() => setView("dashboard")}
+      />
     );
   }
 
-  if (authLoading) {
-    return <FullPageStatus message="Yükleniyor…" />;
-  }
-
-  if (!session) {
-    return <LoginPage />;
-  }
-
-  if (identityLoading || !identity) {
-    return <FullPageStatus message="Organizasyon yükleniyor…" error={authError} />;
-  }
-
   return (
-    <div className="flex h-full flex-col">
-      <TopBar
-        onOpenFactories={() => {
-          setFactoryErrors([]);
-          setView("factories");
-        }}
-        factoryName={openFactory?.name ?? null}
-        orgName={identity.org_name}
-        onLogout={handleLogout}
-        current={view}
-        onSelect={(next) => {
-          if (next === "inventory") {
-            // Üretim tarafındaki yer işaretlenir ki geri dönüşte aynı ekran
-            // açılsın; envanter sekmesi akışı sıfırlamamalıdır.
-            setProductionView(view === "inventory" ? productionView : view);
-            setView("inventory");
-          } else {
-            setView(
-              productionView === "inventory" ? defaultProductionView() : productionView,
-            );
-          }
-        }}
+    <div className="flex h-full">
+      <Sidebar
+        active={activeSection}
+        onSelect={goToSection}
+        isOpen={isMenuOpen}
+        onClose={() => setMenuOpen(false)}
+        factoryName={activeFactoryName}
+        // Demoda yalnızca demonun besleyebildiği bölümler gezilebilir;
+        // sunucuya yazan bölümler menüden çıkar (bkz. `DemoLockedView`).
+        items={isDemo ? DEMO_NAV_ITEMS : undefined}
       />
 
-      {backendOnline === false && (
-        <div className="flex items-start gap-2.5 border-b border-amber-200 bg-amber-50 px-4 py-2.5">
-          <WarningIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <p className="text-sm text-amber-900">
-            Simülasyon servisine ulaşılamıyor ({API_BASE_URL}). Modeli
-            kurabilirsiniz, ancak çalıştırmak için servisin açık olması gerekir.
-          </p>
-        </div>
-      )}
-
-      <main className="min-h-0 flex-1 overflow-y-auto">
-        {view === "factories" && (
-          <FactoryPicker
-            factories={factories}
-            isLoading={isLoadingFactories}
-            errors={factoryErrors}
-            onOpen={(factoryId) => void openFactoryById(factoryId)}
-            onDelete={(factoryId) => void handleDeleteFactory(factoryId)}
-            onCreateNew={startNewFactory}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {demoData !== null && (
+          <DemoBanner
+            phase={demoPhase}
+            elapsedMs={demoElapsedMs}
+            comparison={demoData.comparison}
+            onAdvance={advanceDemo}
+            onSignUp={leaveDemoForSignUp}
+            onExit={exitDemo}
           />
         )}
 
-        {view === "wizard" && (
-          <OnboardingWizard onSimulationComplete={handleSimulationComplete} />
+        <TopBar
+          // Karşılama artık Command Center'ın kendi hero bölümünde duruyor
+          // (Sprint UX-2); üst çubuk her ekranda sayfa adını taşır. İkisi de
+          // selamlasaydı aynı cümle ekranda iki kez görünürdü.
+          title={VIEW_TITLE[view]}
+          subtitle={activeFactoryName ?? activeIdentity.org_name}
+          orgName={activeIdentity.org_name}
+          userEmail={activeIdentity.email ?? null}
+          onOpenMenu={() => setMenuOpen(true)}
+          onOpenCopilot={() => goToSection("copilot")}
+          onLogout={handleLogout}
+        />
+
+        {backendOnline === false && !isDemo && (
+          <div className="flex items-start gap-2.5 border-b border-amber-200 bg-amber-50 px-4 py-2.5">
+            <WarningIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <p className="text-sm text-amber-900">
+              Simülasyon servisine ulaşılamıyor ({API_BASE_URL}). Modeli
+              kurabilirsiniz, ancak çalıştırmak için servisin açık olması gerekir.
+            </p>
+          </div>
         )}
 
-        {view === "editor" && config && (
-          <ProcessEditor
-            key={editorKey}
-            initialConfig={config}
-            initialFlow={initialFlow}
-            lastResult={result}
-            factoryName={openFactory?.name ?? null}
-            savedSnapshot={openFactory?.snapshot ?? null}
-            onSave={handleSaveFactory}
-            onRunSaved={
-              openFactory?.snapshot
-                ? () => runFactorySimulation(openFactory.id)
-                : undefined
-            }
-            onBack={() => setView(result ? "results" : defaultProductionView())}
-            onSimulationComplete={handleSimulationComplete}
-          />
-        )}
+        <main className="min-h-0 flex-1 overflow-y-auto">
+          {/* Demoda kapalı ekranlar: hepsi oturum gerektiren bir uca yazar.
+              Gizlemek yerine nedenini yazmak, özelliğin var olduğunu ve nasıl
+              açılacağını anlatır. */}
+          {isDemo && DEMO_LOCKED_VIEWS[view] !== undefined ? (
+            <DemoLockedView
+              title={DEMO_LOCKED_VIEWS[view]!.title}
+              detail={DEMO_LOCKED_VIEWS[view]!.detail}
+              onSignUp={leaveDemoForSignUp}
+            />
+          ) : (
+          <>
+          {view === "dashboard" && (
+            <CommandCenter
+              greetingText={greeting()}
+              userName={activeUserName}
+              results={activeResult?.results ?? null}
+              report={activeReport}
+              analyses={inventoryAnalyses}
+              runHistory={activeHistory}
+              factoryCount={isDemo ? 1 : factories.length}
+              onNavigate={goToTarget}
+              onOpenCopilot={() => goToSection("copilot")}
+            />
+          )}
 
-        {view === "results" && result && config && (
-          <ResultsPage
-            result={result}
-            config={config}
-            onBackToEditor={() => setView("editor")}
-            onStartOver={startNewFactory}
-            onCompareFromHere={startComparison}
-            onOpenComparison={baseline ? () => setView("comparison") : undefined}
-            baselineLabel={baseline?.label ?? null}
-          />
-        )}
+          {view === "factories" && (
+            <FactoryPicker
+              factories={factories}
+              isLoading={isLoadingFactories}
+              errors={factoryErrors}
+              onOpen={(factoryId) => void openFactoryById(factoryId)}
+              onDelete={(factoryId) => void handleDeleteFactory(factoryId)}
+              onCreateNew={startNewFactory}
+              onImportExcel={() => setView("import")}
+              openFactoryId={openFactory?.id ?? null}
+              openFactoryStats={openFactoryStats}
+            />
+          )}
 
-        {view === "inventory" && (
-          <InventoryPage
-            config={config}
-            simulationId={result?.simulation_id ?? null}
-          />
-        )}
+          {view === "import" && (
+            <ImportWizard
+              onCreated={(detail) => void handleImportCreated(detail)}
+              onCancel={() => setView("factories")}
+            />
+          )}
 
-        {view === "comparison" && baseline && config && (
-          <ScenarioComparison
-            baseline={baseline}
-            candidate={{ label: "Değiştirilmiş model", config }}
-            onBack={() => setView("results")}
-          />
-        )}
-      </main>
+          {view === "wizard" && (
+            <OnboardingWizard
+              onSimulationComplete={handleSimulationComplete}
+              factories={factories}
+              runHistory={runHistory}
+              onOpenFactory={(factoryId) => void openFactoryById(factoryId)}
+              onImportExcel={() => setView("import")}
+            />
+          )}
+
+          {view === "editor" && config && (
+            <ProcessEditor
+              key={editorKey}
+              initialConfig={config}
+              initialFlow={initialFlow}
+              lastResult={result}
+              factoryName={openFactory?.name ?? null}
+              savedSnapshot={openFactory?.snapshot ?? null}
+              onSave={handleSaveFactory}
+              onRunSaved={
+                openFactory?.snapshot
+                  ? () => runFactorySimulation(openFactory.id)
+                  : undefined
+              }
+              onBack={() => setView(result ? "results" : "wizard")}
+              onSimulationComplete={handleSimulationComplete}
+              onImportExcel={() => setView("import")}
+            />
+          )}
+
+          {view === "results" && activeResult && activeConfig && (
+            <ResultsPage
+              result={activeResult}
+              config={activeConfig}
+              onBackToEditor={() => setView("editor")}
+              onStartOver={startNewFactory}
+              onCompareFromHere={startComparison}
+              onOpenComparison={baseline ? () => setView("comparison") : undefined}
+              onOpenIntelligence={() => setView("intelligence")}
+              baselineLabel={baseline?.label ?? null}
+            />
+          )}
+
+          {view === "intelligence" && activeResult && (
+            <FactoryIntelligence
+              results={activeResult.results}
+              report={activeReport}
+              onBack={() => setView("results")}
+              onOpenFinance={() => goToSection("finance")}
+            />
+          )}
+
+          {view === "live" && (
+            <LiveSection
+              // Aşama değişince komuta merkezi yeni senaryoyla baştan kurulur:
+              // her demo dakikası hattın başka bir hâlini anlatır.
+              key={isDemo ? `demo-live-${demoPhase}` : "live"}
+              simulationId={activeResult?.simulation_id ?? null}
+              config={activeConfig}
+              results={activeResult?.results ?? null}
+              onStartSimulation={() => goToSection("simulation")}
+              // Demoda gerçek `ReplayProvider` çalışır; ziyaretçi hiçbir şey
+              // seçmez.
+              initialSource={isDemo ? "replay" : undefined}
+              initialScenario={
+                isDemo ? (scenarioForPhase(demoPhase) as ScenarioId) : undefined
+              }
+            />
+          )}
+
+          {view === "finance" && (
+            <FinancePage
+              result={activeResult}
+              config={activeConfig}
+              report={activeReport}
+              settings={financeSettings}
+              onSettingsChange={(patch) =>
+                setFinanceSettings((current) => ({ ...current, ...patch }))
+              }
+              onReportChange={setFinanceReport}
+              onStartSimulation={() => goToSection("simulation")}
+              readOnly={isDemo}
+            />
+          )}
+
+          {view === "inventory" && (
+            <InventoryPage
+              config={config}
+              simulationId={result?.simulation_id ?? null}
+            />
+          )}
+
+          {view === "copilot" && (
+            <CopilotPage
+              results={activeResult?.results ?? null}
+              report={activeReport}
+            />
+          )}
+
+          {view === "reports" && (
+            <ReportsPage
+              result={activeResult}
+              config={activeConfig}
+              report={activeReport}
+              factoryName={activeFactoryName}
+              orgName={activeIdentity.org_name}
+              onStartSimulation={() => goToSection("simulation")}
+            />
+          )}
+
+          {view === "settings" && (
+            <SettingsPage
+              orgName={activeIdentity.org_name}
+              userEmail={activeIdentity.email ?? null}
+            />
+          )}
+
+          {view === "comparison" && baseline && config && (
+            <ScenarioComparison
+              baseline={baseline}
+              candidate={{ label: "Değiştirilmiş model", config }}
+              onBack={() => setView("results")}
+            />
+          )}
+          </>
+          )}
+        </main>
+      </div>
     </div>
-  );
-}
-
-/**
- * Üst çubuk ve ana sekmeler.
- *
- * İki alan vardır: üretim (sihirbaz → editör → sonuç) ve envanter. Envanter
- * ayrı bir sekmedir çünkü bağımsız bir modüldür — kalem eklemeden üretim
- * simülasyonu, simülasyon çalıştırmadan envanter analizi yapılabilir. Akış
- * içine gömülseydi, biri olmadan diğerinin çalışmadığı izlenimi doğardı.
- */
-function TopBar({
-  current,
-  onSelect,
-  onOpenFactories,
-  factoryName,
-  orgName,
-  onLogout,
-}: {
-  current: View;
-  onSelect: (area: "production" | "inventory") => void;
-  onOpenFactories: () => void;
-  factoryName: string | null;
-  /** Açık organizasyonun adı; her ekranda görünür kalır. */
-  orgName: string;
-  onLogout: () => void;
-}) {
-  const isInventory = current === "inventory";
-
-  return (
-    <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-slate-200 bg-white px-4 py-3">
-      <div className="flex items-center gap-3">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-sm font-bold text-white">
-          S
-        </span>
-        <div>
-          <p className="text-sm font-semibold text-slate-900">Üretim Simülasyonu</p>
-          <p className="text-xs text-slate-500">
-            {/* Hangi fabrikanın açık olduğu üst çubukta durur: kullanıcı birden
-                çok fabrika kaydedebildiği için, ekrandaki modelin hangisi
-                olduğu her görünümde okunabilmelidir. */}
-            {factoryName ?? "Hattınızı kurun, çalıştırın, darboğazı görün"}
-          </p>
-        </div>
-      </div>
-
-      <nav aria-label="Ana bölümler" className="flex gap-1">
-        <TabButton
-          label="Üretim"
-          isActive={!isInventory}
-          onClick={() => onSelect("production")}
-        />
-        <TabButton
-          label="Envanter"
-          isActive={isInventory}
-          onClick={() => onSelect("inventory")}
-        />
-      </nav>
-
-      <button
-        type="button"
-        onClick={onOpenFactories}
-        className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:border-brand-300 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-      >
-        <FolderIcon className="h-4 w-4" />
-        Fabrikalarım
-      </button>
-
-      <div className="flex items-center gap-2 border-l border-slate-200 pl-3">
-        <span className="hidden text-sm text-slate-600 sm:inline" title="Organizasyon">
-          {orgName}
-        </span>
-        <button
-          type="button"
-          onClick={onLogout}
-          className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-        >
-          Çıkış yap
-        </button>
-      </div>
-    </header>
   );
 }
 
@@ -705,42 +1156,6 @@ function FullPageStatus({
       {error && <p className="text-sm text-red-700">{error}</p>}
     </div>
   );
-}
-
-function TabButton({
-  label,
-  isActive,
-  onClick,
-}: {
-  label: string;
-  isActive: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-current={isActive ? "page" : undefined}
-      className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
-        isActive
-          ? "bg-brand-50 text-brand-700"
-          : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-/**
- * "Üretim" sekmesine dönüldüğünde açılacak varsayılan görünüm.
- *
- * Kayıtlı fabrikası olan kullanıcı listeyi görmelidir; hiç fabrikası olmayan
- * doğrudan sihirbaza gitmelidir. Sabit bir görünüm seçilseydi, biri her
- * seferinde gereksiz bir ekrandan geçmek zorunda kalırdı.
- */
-function defaultProductionView(): View {
-  return recallFactory() ? "factories" : "wizard";
 }
 
 /**

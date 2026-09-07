@@ -9,7 +9,7 @@
  */
 
 import type { Distribution, Station } from "../../types/simulationTypes";
-import { INFINITE_CAPACITY } from "../../types/simulationTypes";
+import { DISTRIBUTION_LABELS, INFINITE_CAPACITY } from "../../types/simulationTypes";
 import type { ArrivalNodeData, FlowNode, StationNodeData } from "../../lib/configBuilder";
 import { isArrivalNode, isStationNode } from "../../lib/configBuilder";
 import { meanServiceTime, stationCapacityPerMinute } from "../../lib/configDefaults";
@@ -72,6 +72,46 @@ function EmptyState() {
       <p className="mt-4 text-sm font-medium text-slate-700">Bir kutu seçin</p>
       <p className="mt-1 text-xs text-slate-500">
         Soldaki şemadan bir istasyona tıklayın; ayarları burada açılır.
+      </p>
+    </div>
+  );
+}
+
+/**
+ * Özet kartı — istasyonun tek bir özelliğini gösterir.
+ *
+ * Renk tonu yalnızca OEE kartında kullanılır ve tek başına bilgi taşımaz:
+ * değer yazıyla da okunur, dolayısıyla renk körü bir kullanıcı hiçbir şey
+ * kaçırmaz.
+ */
+function StatTile({
+  label,
+  value,
+  hint,
+  tone = "neutral",
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  tone?: "neutral" | "good" | "bad";
+}) {
+  const valueClass =
+    tone === "bad"
+      ? "text-red-700"
+      : tone === "good"
+        ? "text-emerald-700"
+        : "text-slate-900";
+
+  return (
+    <div
+      className="rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2"
+      title={hint}
+    >
+      <p className="text-[10px] font-medium tracking-wide text-slate-500 uppercase">
+        {label}
+      </p>
+      <p className={`mt-0.5 truncate text-sm font-semibold ${valueClass}`}>
+        {value}
       </p>
     </div>
   );
@@ -140,6 +180,14 @@ function StationSettings({
   const mttr = Number(station.repair_time_distribution?.params.mean ?? 15);
   const bufferUnlimited = station.buffer_capacity_before === INFINITE_CAPACITY;
   const capacityPerHour = stationCapacityPerMinute(station) * 60;
+  /**
+   * Özet kartında gösterilen çevrim süresi.
+   *
+   * Depoda zaten var olan `meanServiceTime` kullanılır; her dağılım tipinin
+   * ortalamayı farklı bir parametreyle taşıması orada bir kez çözülmüştür ve
+   * burada ikinci bir kopyası tutulsaydı ikisi zamanla ayrışırdı.
+   */
+  const cycleMinutes = meanServiceTime(station);
 
   const setFailureModel = (enabled: boolean) => {
     if (enabled) {
@@ -178,6 +226,56 @@ function StationSettings({
           <TrashIcon className="h-4 w-4" />
         </button>
       </header>
+
+      {/* Özet kartları: formu doldurmadan önce istasyonun o anki hâli tek
+          bakışta okunur. Aşağıdaki alanlar değiştikçe bu kartlar da değişir —
+          ayrı bir veri kaynağı yoktur, hepsi `station` nesnesinden türetilir.
+          OEE yalnızca bir koşumdan sonra bilinir; koşum yoksa "—" gösterilir ve
+          uydurulmaz. */}
+      <div className="grid grid-cols-2 gap-2">
+        <StatTile
+          label="Çevrim süresi"
+          value={
+            Number.isFinite(cycleMinutes) && cycleMinutes > 0
+              ? `${cycleMinutes.toFixed(1)} dk`
+              : "—"
+          }
+        />
+        <StatTile label="Makine sayısı" value={String(station.num_servers)} />
+        <StatTile
+          label="Operatör"
+          value={station.line_name?.trim() ? station.line_name : "Atanmadı"}
+        />
+        <StatTile
+          label="Dağılım"
+          value={
+            DISTRIBUTION_LABELS[station.service_time_distribution.type] ??
+            station.service_time_distribution.type
+          }
+        />
+        <StatTile
+          label="OEE"
+          value={
+            data.metrics ? `%${Math.round(data.metrics.utilization * 100)}` : "—"
+          }
+          hint={
+            data.metrics
+              ? "Son koşumdaki doluluk oranı."
+              : "Bir simülasyon çalıştırdığınızda dolar."
+          }
+          tone={
+            data.metrics?.is_bottleneck ? "bad" : data.metrics ? "good" : "neutral"
+          }
+        />
+        <StatTile
+          label="Kapasite"
+          value={
+            Number.isFinite(capacityPerHour) && capacityPerHour > 0
+              ? `${capacityPerHour.toFixed(0)}/sa`
+              : "—"
+          }
+        />
+      </div>
 
       <Section title="Temel bilgiler">
         <Field label="İstasyon adı">

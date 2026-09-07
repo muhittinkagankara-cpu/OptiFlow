@@ -26,6 +26,7 @@ import { ApiError, getFinancialImpact } from "../../lib/apiClient";
 import { FactoryHeatmap } from "../heatmap/FactoryHeatmap";
 import { HeatLegend } from "../heatmap/HeatLegend";
 import { TopLossStations } from "../heatmap/TopLossStations";
+import { SelectedStationCard } from "../heatmap/SelectedStationCard";
 import { GENERIC_ERROR_MESSAGE } from "../../lib/errorMessages";
 import {
   confidenceLabel,
@@ -150,7 +151,7 @@ export function FinancialImpactPanel({ result, config }: FinancialImpactPanelPro
 }
 
 /** Maliyet oranları formu. */
-function SettingsForm({
+export function SettingsForm({
   settings,
   onChange,
 }: {
@@ -267,7 +268,7 @@ function SettingsForm({
 }
 
 /** Hesaplanmış raporun görünümü. */
-function ReportView({
+export function ReportView({
   report,
   config,
 }: {
@@ -276,14 +277,19 @@ function ReportView({
 }) {
   const { impact } = report;
   const [focusedId, setFocusedId] = useState<string | null>(null);
+  const focusedHeat =
+    report.heat.find((item) => item.station_id === focusedId) ?? null;
 
   return (
     <div className="mt-6 space-y-6">
       {/* --- Isı haritası: "param nerede yanıyor?" tek ekranda --- */}
       {report.heat.length > 0 && (
         <div>
-          <h4 className="mb-2 text-sm font-semibold text-slate-900">Isı haritası</h4>
-          <div className="grid gap-3 lg:grid-cols-[1fr_240px]">
+          <h4 className="text-sm font-semibold text-slate-900">Isı haritası</h4>
+          <p className="mt-0.5 mb-3 text-xs text-slate-500">
+            Bir kutuya tıklayın; sağda o istasyonun dökümü açılır.
+          </p>
+          <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
             <FactoryHeatmap
               config={config}
               heat={report.heat}
@@ -291,6 +297,14 @@ function ReportView({
               onFocus={setFocusedId}
             />
             <div className="space-y-3">
+              {/* Seçim varsa ayrıntı kartı en üstte durur: kullanıcının az önce
+                  tıkladığı şeyin karşılığı, göz hareketine en yakın yerdedir. */}
+              {focusedHeat && (
+                <SelectedStationCard
+                  heat={focusedHeat}
+                  onClear={() => setFocusedId(null)}
+                />
+              )}
               <HeatLegend isRelative={report.heat.some((item) => item.is_relative)} />
               <TopLossStations
                 stations={report.top_loss_stations}

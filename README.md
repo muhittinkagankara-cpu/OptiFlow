@@ -181,7 +181,7 @@ başlatma komutunu, `.python-version` ise Python sürümünü belirler; ek
 yapılandırma gerekmez.
 
 ```
-web: uvicorn simulation_engine.api.simulation_service:app --host 0.0.0.0 --port $PORT
+web: python -m simulation_engine.api.schema_bootstrap && uvicorn simulation_engine.api.simulation_service:app --host 0.0.0.0 --port $PORT
 ```
 
 Uygulama, platformun atadığı `PORT` değişkenini okur ve `0.0.0.0` adresine
@@ -190,28 +190,39 @@ verilir.
 
 ### 1b. Veritabanı şeması — Alembic
 
-Şema **Alembic ile yönetilir** ve uygulama açılışında kendiliğinden göç
-çalıştırmaz. Bu bilinçlidir: başarısız bir göçün uygulamayı yarım başlatması
-yerine dağıtımı durdurması gerekir. Her dağıtımda, uygulama başlatılmadan önce
-bir kez çalıştırın:
+Şema **Alembic ile yönetilir** ve göçler her dağıtımda, sunucu açılmadan önce
+`schema_bootstrap` adımında **kendiliğinden** çalışır. Ayrı bir elle komut
+gerekmez.
+
+Göç başarısız olursa `&&` zinciri kopar, uvicorn hiç başlamaz ve dağıtım
+görünür biçimde düşer. Bu bilinçlidir: yarım şemayla açılan bir uygulama, hiç
+açılmayan bir uygulamadan kötüdür — kullanıcı verisini kaydettiğini sanıp
+kaybeder.
+
+**Bu adım neden var:** `simulations` ve `inventory_items` tabloları kendi
+depoları tarafından `create_all()` ile oluşturulur, ama `factories`,
+`factory_versions`, `organizations` ve `memberships` **yalnızca** Alembic
+tarafından oluşturulur. Göç çalıştırılmadığında sonuç bu asimetri yüzünden
+yanıltıcıdır: simülasyon sonuçları ve envanter kalıcı görünürken fabrika modeli
+hiç kaydedilemez. Kalıcılığın elle bir komuta bağlı kalması, ürünün en pahalı
+verisini (kullanıcının saatlerce kurduğu model) operatörün hafızasına
+bağlamak demekti.
+
+`schema_bootstrap` üç işi yinelenebilir biçimde yapar; her dağıtımda
+çalıştırılması güvenlidir:
+
+1. Alembic öncesinden kalma, damgalanmamış bir veritabanını baseline ile
+   damgalar (README'de daha önce elle yapılması istenen `alembic stamp` adımı).
+2. `alembic upgrade head` çalıştırır.
+3. Göçlerden sonra eksik tablo kalmışsa — `alembic_version` damgası gerçek
+   şemayla uyuşmuyorsa — eksikleri ORM tanımından tamamlar ve durumu uyarı
+   olarak günlüğe yazar.
+
+Göçleri elle çalıştırmak isterseniz komut hâlâ geçerlidir:
 
 ```bash
 DATABASE_URL="$DATABASE_URL" alembic upgrade head
 ```
-
-**Mevcut bir veritabanında ilk kez:** `simulations` ve `inventory_items`
-tabloları Alembic devreye girmeden önce `create_all()` ile oluşturulmuştu.
-Baseline göçü bu tabloları yeniden yaratmaya çalışmasın diye önce damgalayın,
-sonra yükseltin — bu iki komut yalnızca **bir kez**, mevcut veritabanında
-çalıştırılır:
-
-```bash
-DATABASE_URL="$DATABASE_URL" alembic stamp a1b2c3d4e5f6
-DATABASE_URL="$DATABASE_URL" alembic upgrade head
-```
-
-Boş bir veritabanında damgalamaya gerek yoktur; `alembic upgrade head` şemayı
-sıfırdan kurar.
 
 ### 2. Frontend — Vercel
 

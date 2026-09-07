@@ -8,7 +8,7 @@
  * model ile çalışan modelin sessizce ayrışmasına yol açardı.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import ReactFlow, {
   addEdge,
   Background,
@@ -46,6 +46,15 @@ import {
   hasUnsavedChanges,
   type SavedSnapshot,
 } from "../../lib/factoryModel";
+import {
+  canRedo,
+  canUndo,
+  createHistory,
+  push,
+  redo,
+  undo,
+  type History,
+} from "../../lib/editorHistory";
 import type { FactoryLayout } from "../../types/simulationTypes";
 import { GENERIC_ERROR_MESSAGE, summarizeWarning } from "../../lib/errorMessages";
 import { ParameterPanel } from "./ParameterPanel";
@@ -69,6 +78,12 @@ const NEW_NODE_POSITION = { x: 420, y: 420 };
 const NEW_NODE_COLUMNS = 4;
 const NEW_NODE_STEP_X = 260;
 const NEW_NODE_STEP_Y = 130;
+
+/** Geri al / yeniden yap geçmişinde saklanan canvas anlık görüntüsü. */
+interface EditorSnapshot {
+  nodes: FlowNode[];
+  edges: FlowEdge[];
+}
 
 interface ProcessEditorProps {
   initialConfig: SimulationConfig;
@@ -128,6 +143,8 @@ interface ProcessEditorProps {
    * başka bir modelin sonucunu göstermek olurdu.
    */
   onRunSaved?: () => Promise<SimulationRunResponse>;
+  /** Verilirse araç çubuğundaki "Excel İçe Aktar" düğmesi etkinleşir. */
+  onImportExcel?: () => void;
 }
 
 /**
@@ -182,6 +199,7 @@ function EditorCanvas({
   savedSnapshot,
   onSave,
   onRunSaved,
+  onImportExcel,
 }: ProcessEditorProps) {
   const initialFlow = useMemo(() => {
     // Kullanıcı bu editörden daha önce çıkıp geri döndüyse kendi yerleşimi
@@ -214,6 +232,72 @@ function EditorCanvas({
 
   const flowNodes = nodes as FlowNode[];
   const flowEdges = edges as FlowEdge[];
+
+  /* -- Geri al / yeniden yap ---------------------------------------------- */
+  /*
+   * Geçmiş, canvas'ın **tamamının** (kutular + bağlantılar) anlık
+   * görüntüsünü tutar; yalnızca model saklansaydı bir kutuyu yanlışlıkla
+   * taşıyan kullanıcı "geri al" dediğinde model geri gelir ama kutu yeni
+   * yerinde kalırdı.
+   *
+   * Anlık görüntü, değişiklik React durumuna işlendikten **sonra** alınır:
+   * `setNodes` işlevsel güncelleme kullanıyor ve yeni değer çağrı anında
+   * bilinmiyor. Bunun için bir bayrak konur, efekt de yalnızca o bayrak
+   * kalkıkken geçmişe yazar. Geri alma sırasında bayrak konmaz — yoksa geri
+   * alma işleminin kendisi yeni bir geçmiş adımı üretir ve kullanıcı bir daha
+   * asla ileriye gidemezdi.
+   */
+  const historyRef = useRef<History<EditorSnapshot>>(
+    createHistory({ nodes: initialFlow.nodes, edges: initialFlow.edges }),
+  );
+  const pendingCommit = useRef(false);
+  const [historyVersion, setHistoryVersion] = useState(0);
+
+  const markChange = useCallback(() => {
+    pendingCommit.current = true;
+  }, []);
+
+  useEffect(() => {
+    if (!pendingCommit.current) {
+      return;
+    }
+    pendingCommit.current = false;
+    historyRef.current = push(historyRef.current, {
+      nodes: nodes as FlowNode[],
+      edges: edges as FlowEdge[],
+    });
+    setHistoryVersion((current) => current + 1);
+  }, [nodes, edges]);
+
+  const applySnapshot = useCallback(
+    (snapshot: EditorSnapshot) => {
+      setNodes(snapshot.nodes as never);
+      setEdges(snapshot.edges);
+      setSelectedNodeId(null);
+    },
+    [setNodes, setEdges],
+  );
+
+  const handleUndo = useCallback(() => {
+    if (!canUndo(historyRef.current)) {
+      return;
+    }
+    historyRef.current = undo(historyRef.current);
+    applySnapshot(historyRef.current.present);
+    setHistoryVersion((current) => current + 1);
+  }, [applySnapshot]);
+
+  const handleRedo = useCallback(() => {
+    if (!canRedo(historyRef.current)) {
+      return;
+    }
+    historyRef.current = redo(historyRef.current);
+    applySnapshot(historyRef.current.present);
+    setHistoryVersion((current) => current + 1);
+  }, [applySnapshot]);
+
+  // `historyVersion` yalnızca yeniden çizimi tetikler; değeri okunmaz.
+  void historyVersion;
 
   // Hat adları parametre panelindeki otomatik tamamlamayı besler.
   const lineNames = useMemo(() => collectLineNames(flowNodes), [flowNodes]);
@@ -259,6 +343,7 @@ function EditorCanvas({
 
   const handleConnect = useCallback(
     (connection: FlowConnection) => {
+      markChange();
       setEdges((current) =>
         addEdge(
           {
@@ -272,7 +357,7 @@ function EditorCanvas({
         ),
       );
     },
-    [setEdges],
+    [setEdges, markChange],
   );
 
   const handleAddStation = useCallback(() => {
@@ -287,12 +372,14 @@ function EditorCanvas({
           Math.floor(stationCount / NEW_NODE_COLUMNS) * NEW_NODE_STEP_Y,
       },
     );
+    markChange();
     setNodes((current) => [...current, fresh] as typeof current);
     setSelectedNodeId(fresh.id);
-  }, [flowNodes, stationCount, setNodes]);
+  }, [flowNodes, stationCount, setNodes, markChange]);
 
   const handleUpdateStation = useCallback(
     (nodeId: string, station: Station) => {
+      markChange();
       setNodes((current) =>
         current.map((node) =>
           node.id === nodeId
@@ -301,22 +388,24 @@ function EditorCanvas({
         ),
       );
     },
-    [setNodes],
+    [setNodes, markChange],
   );
 
   const handleUpdateArrival = useCallback(
     (distribution: Distribution) => {
+      markChange();
       setNodes((current) =>
         current.map((node) =>
           node.id === ARRIVAL_NODE_ID ? { ...node, data: { distribution } } : node,
         ),
       );
     },
-    [setNodes],
+    [setNodes, markChange],
   );
 
   const handleDeleteStation = useCallback(
     (nodeId: string) => {
+      markChange();
       setNodes((current) => current.filter((node) => node.id !== nodeId));
       // Silinen istasyona bağlı kenarlar da kaldırılır; aksi hâlde canvas'ta
       // hiçbir yere gitmeyen oklar kalırdı.
@@ -325,7 +414,7 @@ function EditorCanvas({
       );
       setSelectedNodeId(null);
     },
-    [setNodes, setEdges],
+    [setNodes, setEdges, markChange],
   );
 
   /**
@@ -478,6 +567,11 @@ function EditorCanvas({
         onSave={onSave ? handleSave : undefined}
         isSaving={isSaving}
         isDirty={isDirty}
+        onUndo={handleUndo}
+        onRedo={handleRedo}
+        canUndo={canUndo(historyRef.current)}
+        canRedo={canRedo(historyRef.current)}
+        onImportExcel={onImportExcel}
       />
 
       {(errors.length > 0 || warnings.length > 0) && (
@@ -504,6 +598,11 @@ function EditorCanvas({
             edges={edges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
+            // Suruklemenin BITISINDE bir adim kaydedilir. Her piksel
+            // hareketinde kaydedilseydi tek bir tasima onlarca gecmis adimi
+            // uretir ve "geri al" kullanicinin beklediginden cok daha kucuk
+            // bir sicrama yapardi.
+            onNodeDragStop={markChange}
             onConnect={handleConnect}
             onNodeClick={handleNodeClick}
             onPaneClick={() => setSelectedNodeId(null)}

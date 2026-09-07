@@ -10,6 +10,7 @@
  */
 
 import { useMemo, useRef, useState } from "react";
+import { Sparkles } from "lucide-react";
 import type { SimulationConfig, SimulationRunResponse } from "../../types/simulationTypes";
 import { formatDecimal, formatUnits } from "../../lib/resultsFormatting";
 import { summarizeFactory } from "../../lib/factoryOverview";
@@ -32,6 +33,8 @@ interface ResultsPageProps {
   onCompareFromHere: () => void;
   /** Referans senaryo varsa karşılaştırma görünümünü açar. */
   onOpenComparison?: () => void;
+  /** Bu koşumun yorumlandığı Factory Intelligence ekranını açar. */
+  onOpenIntelligence: () => void;
   /** Karşılaştırma için saklanmış referans senaryonun etiketi. */
   baselineLabel?: string | null;
 }
@@ -43,6 +46,7 @@ export function ResultsPage({
   onStartOver,
   onCompareFromHere,
   onOpenComparison,
+  onOpenIntelligence,
   baselineLabel,
 }: ResultsPageProps) {
   const { results } = result;
@@ -86,14 +90,27 @@ export function ResultsPage({
             tamamlandı
           </p>
         </div>
-        <button
-          type="button"
-          onClick={onBackToEditor}
-          className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-brand-300 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-        >
-          <ArrowLeftIcon className="h-4 w-4" />
-          Modeli düzenle
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Sonuç sayfası "ne oldu?" sorusunu yanıtlar; asıl merak edilen
+              "şimdi ne yapmalıyım?" sorusudur. Bu yüzden Intelligence bağlantısı
+              birincil eylem olarak, sayfanın en üstünde durur. */}
+          <button
+            type="button"
+            onClick={onOpenIntelligence}
+            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          >
+            <Sparkles className="h-4 w-4" />
+            Ne yapmalıyım?
+          </button>
+          <button
+            type="button"
+            onClick={onBackToEditor}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-brand-300 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          >
+            <ArrowLeftIcon className="h-4 w-4" />
+            Modeli düzenle
+          </button>
+        </div>
       </header>
 
       {/* --- Bölüm A --- */}

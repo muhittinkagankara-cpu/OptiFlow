@@ -34,7 +34,59 @@ depends_on: Union[str, Sequence[str], None] = None
 JSON_TYPE = sa.JSON().with_variant(postgresql.JSONB(), "postgresql")
 
 
+# --------------------------------------------------------------------------- #
+# Yinelenebilirlik koruyuculari
+# --------------------------------------------------------------------------- #
+#
+# `simulations` tablosu uygulamanin kendi `create_all()` cagrisiyla olusur ve
+# ORM tanimi bugun `factory_id` ile `factory_version_id` sutunlarini zaten
+# iceriyor. Dolayisiyla goc ilk kez calistiginda bu sutunlar coktan var
+# olabilir; korumasiz bir `add_column` "duplicate column" hatasiyla duser ve
+# dagitim sonsuz yeniden baslatma dongusune girer.
+#
+# Yardimcilar bilincli olarak bu dosyaya gomuludur: bir goc, yazildigi andaki
+# semayi tarif eder ve uygulama kodu degistikce anlaminin degismemesi gerekir.
+
+
+def _inspector():
+    return sa.inspect(op.get_bind())
+
+
+def _has_table(name: str) -> bool:
+    return name in _inspector().get_table_names()
+
+
+def _has_column(table: str, column: str) -> bool:
+    if not _has_table(table):
+        return False
+    return column in {item["name"] for item in _inspector().get_columns(table)}
+
+
+def _has_index(table: str, name: str) -> bool:
+    if not _has_table(table):
+        return False
+    return name in {item["name"] for item in _inspector().get_indexes(table)}
+
+
+def _add_column(table: str, column: sa.Column) -> None:
+    if not _has_column(table, column.name):
+        op.add_column(table, column)
+
+
+def _create_index(name: str, table: str, columns: list[str]) -> None:
+    if not _has_index(table, name):
+        op.create_index(name, table, columns, unique=False)
+
+
 def upgrade() -> None:
+    if not _has_table("factories"):
+        _create_factories()
+    if not _has_table("factory_versions"):
+        _create_factory_versions()
+    _extend_simulations()
+
+
+def _create_factories() -> None:
     op.create_table(
         "factories",
         sa.Column("id", sa.String(length=64), nullable=False),
@@ -54,6 +106,8 @@ def upgrade() -> None:
         op.f("ix_factories_updated_at"), "factories", ["updated_at"], unique=False
     )
 
+
+def _create_factory_versions() -> None:
     op.create_table(
         "factory_versions",
         sa.Column("id", sa.String(length=64), nullable=False),
@@ -91,25 +145,25 @@ def upgrade() -> None:
         unique=False,
     )
 
+def _extend_simulations() -> None:
     # Kosumun hangi modelden uretildigi. Yabanci anahtar kisiti bilincli olarak
     # konmadi: fabrika silindiginde gecmis kosum kaydi silinmemeli ya da
     # bosaltilmamalidir. Kosumun kendisi hala gecerli bir olcumdur ve
     # fabrikanin silinmesi gecmisi yeniden yazmamalidir.
-    op.add_column(
+    _add_column(
         "simulations", sa.Column("factory_id", sa.String(length=64), nullable=True)
     )
-    op.add_column(
+    _add_column(
         "simulations",
         sa.Column("factory_version_id", sa.String(length=64), nullable=True),
     )
-    op.create_index(
-        op.f("ix_simulations_factory_id"), "simulations", ["factory_id"], unique=False
+    _create_index(
+        op.f("ix_simulations_factory_id"), "simulations", ["factory_id"]
     )
-    op.create_index(
+    _create_index(
         op.f("ix_simulations_factory_version_id"),
         "simulations",
         ["factory_version_id"],
-        unique=False,
     )
 
 

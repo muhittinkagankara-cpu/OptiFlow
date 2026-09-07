@@ -1,0 +1,183 @@
+/**
+ * İstasyon detay çekmecesi.
+ *
+ * Diyagramdaki bir düğüme tıklanınca sağdan açılır. Gösterdiği her alan
+ * sağlayıcıdan gelen canlı durumdan okunur; hiçbiri burada hesaplanmaz.
+ *
+ * Kapatma iki yoldan yapılabilir (düğme ve arka perde) çünkü çekmece dar
+ * ekranda tüm genişliği kaplar ve tek bir küçük çarpı, dokunmatikte zor
+ * hedeftir.
+ */
+
+import { memo } from "react";
+import { X } from "lucide-react";
+import {
+  STATUS_LABEL,
+  formatClock,
+  type Alarm,
+  type StationLiveState,
+} from "../../lib/live";
+import { STATUS_STYLE } from "./liveStyles";
+
+interface StationDrawerProps {
+  station: StationLiveState | null;
+  /** Bu istasyonun en son alarmı; yoksa `null`. */
+  lastAlarm: Alarm | null;
+  clockMinutes: number;
+  onClose: () => void;
+}
+
+function StationDrawerInner({
+  station,
+  lastAlarm,
+  clockMinutes,
+  onClose,
+}: StationDrawerProps) {
+  if (!station) {
+    return null;
+  }
+
+  const style = STATUS_STYLE[station.status];
+  const handled = station.completed + station.scrapped;
+  const scrapRate = handled > 0 ? station.scrapped / handled : null;
+  /*
+   * Kullanım oranı, çevrimiçi makinelerden üretim yapanların payıdır. Koşum
+   * metriklerindeki `utilization` ile karıştırılmamalı: o, bir simülasyonun
+   * tamamının ortalamasıdır; buradaki ise şu anki hâldir.
+   */
+  const utilization =
+    station.machineCount > 0 ? station.onlineMachines / station.machineCount : null;
+
+  return (
+    <>
+      {/* Arka perde yalnızca dar ekranda; masaüstünde çekmece panelin yanında
+          durur ve arkadaki diyagram görünür kalmalıdır. */}
+      <button
+        type="button"
+        aria-label="Kapat"
+        onClick={onClose}
+        className="fixed inset-0 z-30 bg-black/50 lg:hidden"
+      />
+
+      <aside className="optiflow-screen fixed inset-y-0 right-0 z-40 flex w-full max-w-sm flex-col border-l border-slate-200 bg-slate-50 shadow-2xl lg:absolute">
+        <header className="flex items-start justify-between gap-2 border-b border-slate-200 px-4 py-3">
+          <div className="min-w-0">
+            <h3 className="truncate text-base font-semibold text-slate-900">
+              {station.stationName}
+            </h3>
+            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+              <span className={`h-2 w-2 rounded-full ${style.dot}`} />
+              {STATUS_LABEL[station.status]}
+              {station.setupProduct && ` · ${station.setupProduct}`}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Kapat"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+          {station.faultReason && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+              {station.faultReason}
+            </p>
+          )}
+
+          <dl className="grid grid-cols-2 gap-2">
+            <Field label="Kuyruk" value={String(station.queue)} />
+            <Field
+              label="Kullanım"
+              value={
+                utilization === null ? "—" : `%${Math.round(utilization * 100)}`
+              }
+              hint={`${station.onlineMachines}/${station.machineCount} makine`}
+            />
+            <Field
+              label="OEE"
+              value={station.oee > 0 ? `%${Math.round(station.oee * 100)}` : "—"}
+            />
+            <Field
+              label="Çevrim süresi"
+              value={station.cycleSeconds > 0 ? `${station.cycleSeconds} sn` : "—"}
+            />
+            <Field
+              label="Fire"
+              /* Hiç parça işlenmemişken "%0 fire" demek, ölçüm yapılmadığı
+                 hâlde iyi bir sonuç bildirmek olurdu. */
+              value={
+                scrapRate === null
+                  ? "—"
+                  : `%${(scrapRate * 100).toFixed(1).replace(".", ",")}`
+              }
+              hint={`${station.scrapped} adet`}
+            />
+            <Field
+              label="Üretim"
+              value={String(station.completed)}
+              hint="vardiya toplamı"
+            />
+          </dl>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-3">
+            <h4 className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+              Son operatör
+            </h4>
+            <p className="mt-0.5 text-sm font-medium text-slate-900">
+              {station.operatorName ?? "Atanmamış"}
+            </p>
+          </section>
+
+          <section className="rounded-xl border border-slate-200 bg-white p-3">
+            <h4 className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+              Son alarm
+            </h4>
+            {lastAlarm ? (
+              <>
+                <p className="mt-0.5 text-xs text-slate-700">{lastAlarm.text}</p>
+                <p className="mt-1 text-[10px] text-slate-500 tabular-nums">
+                  {formatClock(lastAlarm.atMinutes)}
+                  {lastAlarm.resolvedAtMinutes === null
+                    ? ` · ${Math.max(0, clockMinutes - lastAlarm.atMinutes)} dk açık`
+                    : ` · ${lastAlarm.resolvedAtMinutes - lastAlarm.atMinutes} dk sürdü, kapandı`}
+                </p>
+              </>
+            ) : (
+              <p className="mt-0.5 text-xs text-slate-500">
+                Bu istasyonda alarm oluşmadı.
+              </p>
+            )}
+          </section>
+        </div>
+      </aside>
+    </>
+  );
+}
+
+function Field({
+  label,
+  value,
+  hint,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-2.5">
+      <dt className="text-[10px] tracking-wide text-slate-500 uppercase">
+        {label}
+      </dt>
+      <dd className="mt-0.5 text-lg font-semibold text-slate-900 tabular-nums">
+        {value}
+      </dd>
+      {hint && <p className="text-[10px] text-slate-500">{hint}</p>}
+    </div>
+  );
+}
+
+export const StationDrawer = memo(StationDrawerInner);

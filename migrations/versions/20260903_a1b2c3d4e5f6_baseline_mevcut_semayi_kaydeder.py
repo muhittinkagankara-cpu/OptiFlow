@@ -38,7 +38,47 @@ depends_on: Union[str, Sequence[str], None] = None
 JSON_TYPE = sa.JSON().with_variant(postgresql.JSONB(), "postgresql")
 
 
+# --------------------------------------------------------------------------- #
+# Yinelenebilirlik koruyuculari
+# --------------------------------------------------------------------------- #
+#
+# Bu goc, tablolari `create_all()` ile zaten kurulmus bir veritabaninda da
+# calistirilabilmelidir: uygulama `simulations` ve `inventory_items` tablolarini
+# kendi acilisinda olusturur, dolayisiyla goc ilk kez calistiginda bu tablolar
+# coktan var olabilir. Koruyucular olmadan goc "tablo zaten var" hatasiyla
+# duser ve dagitim sonsuz yeniden baslatma dongusune girer.
+#
+# Yardimcilar bilincli olarak bu dosyaya gomuludur, ortak bir modulden
+# alinmaz: bir goc, yazildigi andaki semayi tarif eder ve uygulama kodu
+# degistikce anlaminin degismemesi gerekir.
+
+
+def _inspector():
+    return sa.inspect(op.get_bind())
+
+
+def _has_table(name: str) -> bool:
+    return name in _inspector().get_table_names()
+
+
 def upgrade() -> None:
+    if _has_table("simulations"):
+        # Tablo `create_all()` ile zaten kurulmus; baseline onu yeniden
+        # yaratmaya calismaz, yalnizca damgalanmis sayilir.
+        pass
+    else:
+        _create_simulations()
+
+    if not _has_table("inventory_items"):
+        op.create_table(
+            "inventory_items",
+            sa.Column("id", sa.String(length=64), nullable=False),
+            sa.Column("payload", JSON_TYPE, nullable=False),
+            sa.PrimaryKeyConstraint("id"),
+        )
+
+
+def _create_simulations() -> None:
     op.create_table(
         "simulations",
         sa.Column("id", sa.String(length=64), nullable=False),
@@ -50,13 +90,6 @@ def upgrade() -> None:
     )
     op.create_index(
         op.f("ix_simulations_created_at"), "simulations", ["created_at"], unique=False
-    )
-
-    op.create_table(
-        "inventory_items",
-        sa.Column("id", sa.String(length=64), nullable=False),
-        sa.Column("payload", JSON_TYPE, nullable=False),
-        sa.PrimaryKeyConstraint("id"),
     )
 
 

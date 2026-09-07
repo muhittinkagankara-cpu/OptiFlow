@@ -17,6 +17,7 @@
 import type { DistributionType, SimulationConfig } from "../types/simulationTypes";
 import gidaJson from "./gida.json";
 import metalJson from "./metal.json";
+import plastikJson from "./plastik.json";
 import tekstilJson from "./tekstil.json";
 
 const VALID_DISTRIBUTION_TYPES: readonly string[] = [
@@ -84,3 +85,4 @@ function loadTemplate(name: string, raw: unknown): SimulationConfig {
 export const tekstilTemplate = loadTemplate("tekstil", tekstilJson);
 export const gidaTemplate = loadTemplate("gida", gidaJson);
 export const metalTemplate = loadTemplate("metal", metalJson);
+export const plastikTemplate = loadTemplate("plastik", plastikJson);

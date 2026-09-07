@@ -11,11 +11,15 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.114.0",
+    "lucide-react": "^1.40.0",
+    "pdfmake": "^0.2.23",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.87.0",
     "reactflow": "^11.11.4",
-    "recharts": "^3.10.1"
+    "read-excel-file": "^9.3.10",
+    "recharts": "^3.10.1",
+    "write-excel-file": "^4.1.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

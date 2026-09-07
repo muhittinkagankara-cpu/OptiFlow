@@ -15,11 +15,18 @@
 import { createContext, useCallback, useContext, useMemo, useState } from "react";
 import type { SimulationConfig } from "../../types/simulationTypes";
 import type { FlowEdge, FlowNode } from "../../lib/configBuilder";
+import type { SectorId } from "../../lib/onboarding";
 
 export type WizardStepNumber = 1 | 2 | 3;
 
-/** Şablon kimlikleri; "blank" sıfırdan kurulan model demektir. */
-export type TemplateId = "tekstil" | "gida" | "metal" | "blank";
+/**
+ * Şablon kimliği, kurulum akışındaki sektör kimliğiyle aynıdır.
+ *
+ * İki ayrı liste tutulsaydı (sihirbazın şablonları ve akışın sektörleri), yeni
+ * bir sektör eklendiğinde birinin güncellenmesi unutulur ve seçilebilen ama
+ * yüklenemeyen bir kart ortaya çıkardı. "genel" sıfırdan kurulan modeldir.
+ */
+export type TemplateId = SectorId;
 
 /** Süreç editöründen bırakılan canvas durumu. */
 export interface FlowSnapshot {

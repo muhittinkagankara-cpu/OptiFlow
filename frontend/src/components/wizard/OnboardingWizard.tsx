@@ -21,10 +21,12 @@ import { ApiError, runSimulation } from "../../lib/apiClient";
 import { GENERIC_ERROR_MESSAGE } from "../../lib/errorMessages";
 import { createBlankConfig } from "../../lib/configDefaults";
 import { ProcessEditor } from "../editor/ProcessEditor";
-import { ArrowLeftIcon, ArrowRightIcon, CheckIcon } from "../shared/icons";
+import { ArrowLeftIcon, CheckIcon } from "../shared/icons";
 import { WizardProvider, useWizard, type WizardStepNumber } from "./WizardContext";
-import { WizardStep1_TemplateSelection } from "./WizardStep1_TemplateSelection";
 import { WizardStep3_Confirmation } from "./WizardStep3_Confirmation";
+import { OnboardingFlow } from "../onboarding/OnboardingFlow";
+import type { Factory } from "../../types/simulationTypes";
+import type { RunHistoryEntry } from "../../lib/runHistory";
 
 const STEP_TITLES: Record<WizardStepNumber, string> = {
   1: "Sektör",
@@ -35,6 +37,12 @@ const STEP_TITLES: Record<WizardStepNumber, string> = {
 interface OnboardingWizardProps {
   /** Simülasyon tamamlandığında sonucu üst katmana verir. */
   onSimulationComplete: (result: SimulationRunResponse, config: SimulationConfig) => void;
+  /** Hero ekranındaki "Son Çalıştığınız Fabrikalar" kartlarını besler. */
+  factories: Factory[];
+  runHistory: RunHistoryEntry[];
+  onOpenFactory: (factoryId: string) => void;
+  /** Excel içe aktarma akışını açar. */
+  onImportExcel: () => void;
 }
 
 export function OnboardingWizard(props: OnboardingWizardProps) {
@@ -45,8 +53,14 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   );
 }
 
-function WizardShell({ onSimulationComplete }: OnboardingWizardProps) {
-  const { step, config, flow, updateConfig, setFlow, goNext, goBack, goToStep, canGoNext } =
+function WizardShell({
+  onSimulationComplete,
+  factories,
+  runHistory,
+  onOpenFactory,
+  onImportExcel,
+}: OnboardingWizardProps) {
+  const { step, config, flow, selectTemplate, updateConfig, setFlow, goNext, goBack, goToStep } =
     useWizard();
   const [isRunning, setIsRunning] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
@@ -71,6 +85,28 @@ function WizardShell({ onSimulationComplete }: OnboardingWizardProps) {
       setIsRunning(false);
     }
   };
+
+  /**
+   * 1. adım artık üç ekranlı kurulum akışıdır (hero → sektör → kuruluyor).
+   *
+   * Adım göstergesi burada **gösterilmez**: akışın kendi ilerlemesi var ve iki
+   * ayrı ilerleme göstergesi aynı anda kullanıcıya nerede olduğunu değil, kaç
+   * farklı yerde olduğunu sorardı. Gösterge 2. adımdan itibaren belirir.
+   */
+  if (step === 1) {
+    return (
+      <OnboardingFlow
+        factories={factories}
+        runHistory={runHistory}
+        onOpenFactory={onOpenFactory}
+        onImportExcel={onImportExcel}
+        onReady={(sectorId, templateConfig) => {
+          selectTemplate(sectorId, templateConfig);
+          goNext();
+        }}
+      />
+    );
+  }
 
   /**
    * Süreç editörü tam genişlikte açılır; şema dar bir sütuna sığmaz.
@@ -109,7 +145,6 @@ function WizardShell({ onSimulationComplete }: OnboardingWizardProps) {
       <StepIndicator current={step} onSelect={goToStep} />
 
       <div className="mt-8">
-        {step === 1 && <WizardStep1_TemplateSelection />}
         {step === 3 && (
           <WizardStep3_Confirmation
             onEdit={goBack}
@@ -127,25 +162,12 @@ function WizardShell({ onSimulationComplete }: OnboardingWizardProps) {
         <button
           type="button"
           onClick={goBack}
-          disabled={step === 1 || isRunning}
+          disabled={isRunning}
           className="inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:pointer-events-none disabled:opacity-40"
         >
           <ArrowLeftIcon className="h-4 w-4" />
           Geri
         </button>
-
-        {step === 1 && (
-          <button
-            type="button"
-            onClick={goNext}
-            disabled={!canGoNext}
-            title={canGoNext ? undefined : "Devam etmek için bir seçenek seçin"}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500 disabled:shadow-none"
-          >
-            İleri
-            <ArrowRightIcon className="h-4 w-4" />
-          </button>
-        )}
       </div>
     </div>
   );
