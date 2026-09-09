@@ -96,6 +96,13 @@ export type ReportBlock =
   | { kind: "bars"; caption?: string; items: BarItem[] }
   | { kind: "heatmap"; caption?: string; cells: HeatCell[]; isRelative: boolean }
   | { kind: "note"; text: string; tone?: BlockTone }
+  /**
+   * İmza alanı — teklif belgelerinde iki tarafın adı ve boş imza çizgisi.
+   *
+   * Tablo bloğuyla taklit edilebilirdi ama okunmazdı: imza için gereken şey
+   * satır değil **boşluk**tur ve o boşluğun yüksekliği bir sunum kararıdır.
+   */
+  | { kind: "signature"; parties: { role: string; name: string }[] }
   | { kind: "pageBreak" };
 
 export interface ReportDocument {

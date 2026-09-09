@@ -23,3 +23,13 @@ alembic>=1.13
 # `pyjwt` ile dagitim yapilirsa her giris denemesi calisma zamaninda
 # "Algorithm not supported" ile duser.
 pyjwt[crypto]>=2.8,<3.0
+
+# Runtime koprusu: fabrika cihazlariyla konusan surucular (SALES-9).
+#
+# Ikisi de **tembel** ice aktarilir: kurulu degillerse uygulama yine acilir ve
+# ilgili protokol arayuzde "Dogrulanmadi" gorunur. Yine de calisma zamani
+# bagimliligi olarak listelenirler, cunku kurulu olmadiklarinda OPC UA ve MQTT
+# baglantilari hic denenemez -- yayindaki bir kurulumda bu, ozelligin sessizce
+# yok olmasi demek olurdu.
+asyncua>=1.1,<3.0
+aiomqtt>=2.0,<3.0

@@ -52,7 +52,7 @@ import {
 } from "./components/results/ScenarioComparison";
 import { WarningIcon } from "./components/shared/icons";
 import { CommandCenter } from "./components/dashboard/CommandCenter";
-import { CopilotPage } from "./components/copilot/CopilotPage";
+import { CopilotHome } from "./components/copilot/CopilotHome";
 import { DemoBanner } from "./components/demo/DemoBanner";
 import { DemoLockedView } from "./components/demo/DemoLockedView";
 import { LandingPage } from "./components/demo/LandingPage";
@@ -60,6 +60,24 @@ import { FactoryIntelligence } from "./components/intelligence/FactoryIntelligen
 import { FinancePage } from "./components/finance/FinancePage";
 import { LiveSection } from "./components/live/LiveSection";
 import { OperatorApp } from "./components/operator/OperatorApp";
+import { SalesSection } from "./components/sales/SalesSection";
+import { ValidationWorkspace } from "./components/validation/ValidationWorkspace";
+import { ConnectorCenter } from "./components/connectors/ConnectorCenter";
+import { TeamSection } from "./components/team/TeamSection";
+import { PilotFactoryWizard } from "./components/pilot/PilotFactoryWizard";
+import { PilotWorkspacePage } from "./components/pilot/PilotWorkspacePage";
+import { OperationsPage } from "./components/ops/OperationsPage";
+import { ProvisioningWizard } from "./components/provisioning/ProvisioningWizard";
+import { HistoricalTrendsPage } from "./components/telemetry/HistoricalTrendsPage";
+import { RuntimeDiagnosticsPage } from "./components/diagnostics/RuntimeDiagnosticsPage";
+import { RuntimeBridgePage } from "./components/runtime/RuntimeBridgePage";
+import { EnterpriseSection } from "./components/enterprise/EnterpriseSection";
+import { MachineInventoryManager } from "./components/enterprise/MachineInventoryManager";
+import {
+  First30MinutesGuide,
+  SetupChecklistCard,
+} from "./components/enterprise/SetupCards";
+import { useEnterpriseSetup } from "./components/enterprise/useEnterpriseSetup";
 import { Sidebar } from "./components/shell/Sidebar";
 import { TopBar } from "./components/shell/TopBar";
 import { displayName, greeting } from "./components/shell/userDisplay";
@@ -103,6 +121,7 @@ import {
   startedAtForPhase,
 } from "./lib/demo";
 import type { ScenarioId } from "./lib/live";
+import { monthlyLoss } from "./lib/dashboardMetrics";
 import { GENERIC_ERROR_MESSAGE } from "./lib/errorMessages";
 import {
   applyLayout,
@@ -220,6 +239,13 @@ export default function App() {
 
   /** Kayıtlı fabrikalar ve açık olan. */
   const [factories, setFactories] = useState<Factory[]>([]);
+  /**
+   * Fabrika listesi sunucudan **okunabildi mi**?
+   *
+   * Boş bir liste ile okunamamış bir liste ekranda aynı görünemez: birincisi
+   * ölçülmüş bir sıfır, ikincisi ölçülmemiş bir bilinmezdir.
+   */
+  const [factoryListRead, setFactoryListRead] = useState(false);
   const [openFactory, setOpenFactory] = useState<OpenFactory | null>(null);
   /**
    * Açık fabrikanın canvas yerleşimi.
@@ -370,6 +396,7 @@ export default function App() {
     setResult(null);
     setBaseline(null);
     setFactories([]);
+    setFactoryListRead(false);
     setOpenFactory(null);
     setInitialFlow(null);
     setEditorKey((current) => current + 1);
@@ -481,16 +508,25 @@ export default function App() {
 
     (async () => {
       let items: Factory[] = [];
+      /*
+       * Listenin **okunabildiği** ayrıca tutulur. Boş liste iki farklı şey
+       * olabilir: hiç fabrika yok ya da sunucuya ulaşılamadı. Ekip ekranı
+       * "fabrika sayısı" ölçüsünü okuyamadığında sıfır değil "Doğrulanmadı"
+       * yazar; bu ayrım olmadan ölçülmemiş bir sayı ölçülmüş gibi görünürdü.
+       */
+      let listRead = true;
       try {
         items = await listFactories();
       } catch {
         // Backend kapalıysa liste boş kalır; kullanıcı yine de modelini
         // kurabilir ve bağlantı geri geldiğinde kaydedebilir.
+        listRead = false;
       }
       if (cancelled) {
         return;
       }
       setFactories(items);
+      setFactoryListRead(listRead);
       setIsLoadingFactories(false);
 
       const remembered = recallFactory();
@@ -819,6 +855,19 @@ export default function App() {
   }, [openFactory, config, result]);
 
   /*
+   * Kurumsal kurulum durumu tek yerde tutulur: sihirbaz, makine envanteri ve
+   * dashboard kartları aynı durumu okur. Her ekran kendi kopyasını tutsaydı,
+   * envanterde eklenen bir makine dashboard'daki puanı değiştirmezdi.
+   *
+   * Hook, kimlik kapılarından **önce** çağrılır: koşullu bir hook çağrısı,
+   * oturum açılıp kapandığında React'in hook sırasını bozardı.
+   */
+  const enterprise = useEnterpriseSetup({
+    hasSimulationRun: result !== null,
+    savedFactoryCount: factories.length,
+  });
+
+  /*
    * Demo, kimlik kapılarının **önünde** durur: oturum yokken de tam bir ürün
    * turu yaşanabilmelidir. Kapılar yalnızca demo dışında uygulanır.
    */
@@ -970,6 +1019,21 @@ export default function App() {
           ) : (
           <>
           {view === "dashboard" && (
+            <div className="mx-auto w-full max-w-7xl space-y-3 px-4 pt-6 sm:px-6">
+              <First30MinutesGuide
+                items={enterprise.checklist}
+                report={enterprise.report}
+                onNavigate={(target) => setView(target as View)}
+              />
+              <SetupChecklistCard
+                items={enterprise.checklist}
+                report={enterprise.report}
+                onNavigate={(target) => setView(target as View)}
+              />
+            </div>
+          )}
+
+          {view === "dashboard" && (
             <CommandCenter
               greetingText={greeting()}
               userName={activeUserName}
@@ -1096,10 +1160,89 @@ export default function App() {
             />
           )}
 
+          {view === "validation" && (
+            <ValidationWorkspace
+              config={activeConfig}
+              result={activeResult}
+              factoryId={openFactory?.id ?? null}
+              factoryName={activeFactoryName}
+              orgName={activeIdentity.org_name}
+              onStartSimulation={() => goToSection("simulation")}
+            />
+          )}
+
+          {view === "connectors" && <ConnectorCenter config={activeConfig} />}
+
+          {view === "pilot" && <PilotFactoryWizard />}
+          {view === "workspace" && <PilotWorkspacePage />}
+
+          {view === "runtime" && <RuntimeBridgePage />}
+          {view === "operations" && <OperationsPage />}
+          {view === "provisioning" && <ProvisioningWizard />}
+          {view === "trends" && <HistoricalTrendsPage />}
+          {view === "diagnostics" && <RuntimeDiagnosticsPage />}
+
+          {view === "enterprise" && (
+            <EnterpriseSection
+              state={enterprise.state}
+              report={enterprise.report}
+              healthCards={enterprise.connectorSnapshot.cards}
+              onChange={enterprise.setState}
+              onNavigate={(target) => setView(target as View)}
+              onSetupCompleted={enterprise.markSetupCompleted}
+            />
+          )}
+
+          {view === "machines" && (
+            <MachineInventoryManager
+              machines={enterprise.state.machines}
+              factoryId={enterprise.state.factories[0]?.id ?? null}
+              onChange={(machines) =>
+                enterprise.setState({ ...enterprise.state, machines })
+              }
+            />
+          )}
+
+          {view === "sales" && (
+            <SalesSection
+              vendorName={activeIdentity.org_name}
+              // Teklifteki tasarruf tahmini ancak ölçülmüş bir kayıp varsa
+              // yazılır; yoksa teklif nedenini açıkça söyler.
+              monthlyLoss={monthlyLoss(activeReport)}
+            />
+          )}
+
           {view === "copilot" && (
-            <CopilotPage
-              results={activeResult?.results ?? null}
+            <CopilotHome
+              factoryName={activeFactoryName}
+              orgName={activeIdentity.org_name}
+              result={activeResult}
               report={activeReport}
+              inventory={inventoryAnalyses}
+              /*
+               * Paket bilgisi bu sürümde sunucudan gelmiyor; kota motorunun
+               * çalıştığı görülebilsin diye Growth varsayılıyor ve bu varsayım
+               * burada açıkça yazılıyor.
+               */
+              tier="growth"
+              onNavigate={(view) => setView(view as View)}
+            />
+          )}
+
+          {view === "team" && (
+            <TeamSection
+              userId={activeIdentity.user_id}
+              email={activeIdentity.email}
+              orgName={activeIdentity.org_name}
+              config={activeConfig}
+              factoryName={activeFactoryName}
+              /*
+               * Liste okunamadıysa sayı yerine `null` gider; ekip ekranı bunu
+               * "Doğrulanmadı" olarak yazar.
+               */
+              factoryCount={factoryListRead ? factories.length : null}
+              machineCount={enterprise.state.machines.length}
+              connectorCount={enterprise.connectorSnapshot.connectorCount}
             />
           )}
 

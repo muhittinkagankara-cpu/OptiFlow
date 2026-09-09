@@ -20,18 +20,28 @@ import {
   taskCounts,
   type OperatorTask,
 } from "../../lib/operator";
+import type { ProductionStatus } from "../../lib/monitoring";
 import { StatTile, TouchButton } from "./operatorUi";
+import { ProductionStatusCard } from "./ProductionStatusCard";
 import { TaskCard } from "./TaskCard";
 
 export function OperatorHome({
   tasks,
   operatorName,
+  productionStatus = null,
   onOpenTask,
   onOpenTasks,
   onOpenShift,
 }: {
   tasks: OperatorTask[];
   operatorName: string;
+  /**
+   * Hattın gerçek runtime durumu; okunmadıysa `null`.
+   *
+   * Varsayılanı `null` olmak zorunda: veri gelmeden sıfır göstermek, duran
+   * bir hattı "sorunsuz" diye raporlamak olurdu.
+   */
+  productionStatus?: ProductionStatus | null;
   onOpenTask: (taskId: string) => void;
   onOpenTasks: () => void;
   onOpenShift: () => void;
@@ -46,6 +56,8 @@ export function OperatorHome({
         <p className="text-xs text-slate-500">Vardiya</p>
         <h1 className="text-2xl font-bold text-slate-900">{operatorName}</h1>
       </div>
+
+      <ProductionStatusCard status={productionStatus} />
 
       {/* Aktif iş */}
       <section>

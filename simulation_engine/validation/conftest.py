@@ -52,3 +52,27 @@ def _fixed_org():
     app.dependency_overrides[get_current_org] = lambda: TEST_ORG_ID
     yield
     app.dependency_overrides.pop(get_current_org, None)
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """Hız sınırı sayaçlarını **her testten önce** sıfırlar.
+
+    Neden gerekli
+    -------------
+    Hız sınırı süreç genelinde durum tutar: kimlik başına bir jeton kovası.
+    Test süreci tek bir süreçtir ve bütün testler aynı kimliği kullanır
+    (`TEST_ORG_ID`), dolayısıyla bir test dosyasının harcadığı kota bir
+    sonrakine sızar. Sıfırlanmadığında dakikada 120 isteği aşan bir süit,
+    kendinden sonraki testlere **429** aldırır — SALES-14'te eklenen ara
+    katman tam olarak bunu yaptı ve 64 mevcut test düştü.
+
+    Test başına sıfırlanması bilinçlidir (oturum kapsamı yerine): sınırın
+    kendisini sınayan testler kotayı tek bir test içinde tüketir ve sonraki
+    testi etkilememelidir.
+    """
+    from simulation_engine.api.simulation_service import get_rate_limiters
+
+    for limiter in get_rate_limiters():
+        limiter.reset()
+    yield

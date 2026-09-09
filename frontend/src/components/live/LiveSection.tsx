@@ -12,14 +12,17 @@
  * anlatırdı: biri gerçek zamanlı durum, öteki kayıttan animasyon.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Film, Radio } from "lucide-react";
 import type {
   SimulationConfig,
   SimulationResults,
 } from "../../types/simulationTypes";
 import type { ScenarioId } from "../../lib/live";
+import type { StreamStatus } from "../../lib/connectors";
 import { LivePage } from "./LivePage";
+import { useLiveStream } from "../monitoring/useLiveStream";
+import { useMonitoring } from "../monitoring/useMonitoring";
 import { LiveProductionCenter } from "./LiveProductionCenter";
 
 type LiveTab = "center" | "trace";
@@ -35,8 +38,10 @@ interface LiveSectionProps {
   results: SimulationResults | null;
   onStartSimulation: () => void;
   /** Komuta merkezinin açılıştaki kaynağı ve senaryosu (demo modu kullanır). */
-  initialSource?: "demo" | "replay";
+  initialSource?: "demo" | "replay" | "runtime";
   initialScenario?: ScenarioId;
+  /** Sunucu köprüsündeki cihaz akışları; yoksa yalnızca kaynağa bakılır. */
+  bridge?: { streams: StreamStatus[]; anyVerifiedConnection: boolean };
 }
 
 export function LiveSection({
@@ -46,8 +51,28 @@ export function LiveSection({
   onStartSimulation,
   initialSource,
   initialScenario,
+  bridge,
 }: LiveSectionProps) {
   const [tab, setTab] = useState<LiveTab>("center");
+
+  /*
+   * Gerçek cihaz KPI'ları. Yalnızca komuta merkezi açıkken yoklanır: koşum
+   * izi sekmesindeyken sunucuya on saniyede bir istek atmak, bakılmayan bir
+   * ekran uğruna gereksiz yük olurdu.
+   */
+  const monitoring = useMonitoring({ enabled: tab === "center" });
+
+  /*
+   * Canlı akış. KPI'lar yoklamayla da tazelenir ama on saniyelik aralık,
+   * cihazdan gelen bir değişimi ekranda on saniye geciktirir. Akıştan bir
+   * üretim ya da OEE güncellemesi geldiğinde KPI hemen yeniden okunur.
+   */
+  const live = useLiveStream({ enabled: tab === "center" });
+
+  useEffect(() => {
+    if (live.lastProduction === null && live.lastOee === null) return;
+    void monitoring.refresh();
+  }, [live.lastProduction, live.lastOee, monitoring.refresh]);
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
@@ -78,6 +103,8 @@ export function LiveSection({
             onStartSimulation={onStartSimulation}
             initialSource={initialSource}
             initialScenario={initialScenario}
+            bridge={bridge}
+            runtimeKpi={monitoring.kpi}
           />
         ) : (
           /* Koşum izi ekranı kendi içinde kaydırılır; komuta merkezi ise tam

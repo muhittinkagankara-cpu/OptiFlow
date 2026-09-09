@@ -1,0 +1,15 @@
+# Imaja girmemesi gerekenler.
+#
+# `frontend/` bilincli olarak disaridadir: arayuz statik dosyalara derlenir ve
+# ayri bir yerde (CDN ya da nginx) yayinlanir; backend imajinda node_modules
+# tasimak imaji yuzlerce megabayt buyuturdu.
+.git
+.gitignore
+.pytest_cache
+__pycache__
+*.pyc
+frontend
+docs
+*.md
+.env
+.env.*

@@ -872,3 +872,34 @@ input[type="number"] {
     transform: none;
   }
 }
+
+/* --------------------------------------------------------------------------
+   Kurulum tamamlandı ekranının konfetisi (SALES-6).
+
+   Parçalar yalnızca dekoratiftir. Hareketi azaltılmış kullanıcıda bileşen
+   parçaları hiç üretmez; buradaki kural, animasyonun sızabileceği tek yolu da
+   kapatır.
+   -------------------------------------------------------------------------- */
+
+@keyframes optiflow-confetti-fall {
+  from {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 1;
+  }
+  to {
+    transform: translate3d(0, 110vh, 0) rotate(540deg);
+    opacity: 0;
+  }
+}
+
+.optiflow-confetti {
+  animation-name: optiflow-confetti-fall;
+  animation-timing-function: cubic-bezier(0.3, 0.7, 0.4, 1);
+  animation-fill-mode: both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .optiflow-confetti {
+    display: none;
+  }
+}

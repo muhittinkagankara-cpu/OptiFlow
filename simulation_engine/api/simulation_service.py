@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 import math
 import os
 import time
@@ -91,6 +92,18 @@ from simulation_engine.auth.dependencies import get_current_org
 from simulation_engine.api.auth_routes import router as auth_router
 from simulation_engine.api.finance_routes import router as finance_router
 from simulation_engine.api.inventory_routes import router as inventory_router
+from simulation_engine.api.ops_routes import get_metrics, router as ops_router
+from simulation_engine.runtime.api import router as runtime_router, recover_on_startup
+from simulation_engine.runtime.ops import (
+    MAX_REQUEST_BYTES,
+    RateLimiter,
+    WRITE_RATE_PER_MINUTE,
+    client_key,
+    exceeds_size_limit,
+    is_production,
+    is_write_method,
+    security_headers,
+)
 from simulation_engine.api.storage import (
     MAX_STORED_SIMULATIONS,
     DatabaseSimulationStore,
@@ -751,7 +764,45 @@ def _build_comparison_response(
 # Uygulama
 # --------------------------------------------------------------------------- #
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    """Sunucu acilirken runtime durumunu diskten geri yukler.
+
+    Kurtarma **baglanti kurmaz**: geri yuklenen baglantilarin durumu "Test
+    edilmedi" kalir ve gercekten baglanip baglanmadiklari ancak yeni bir
+    deneme ile anlasilir. Acilista baglanmaya calisilsaydi, kapali bir
+    fabrikaya karsi her yeniden baslatmada onlarca basarisiz deneme yapilirdi.
+
+    Elle bir dugmeye birakilsaydi, yeniden baslatmadan sonra ekrani ilk acan
+    kisiye kadar alarmlar degerlendirilmez ve o aradaki duruslar hic
+    kaydedilmezdi.
+
+    Hata durumunda sunucu **yine de acilir**: izleme koprusunun
+    kurtarilamamasi, simulasyon uclarinin calismamasi icin bir neden degildir.
+    """
+    try:
+        recover_on_startup()
+    except Exception as error:  # noqa: BLE001
+        logging.getLogger(__name__).warning(
+            "Runtime otomatik kurtarmasi basarisiz: %s", error
+        )
+
+    yield
+
+    # Zarif kapanis: acik cihaz akislari durdurulur. Durdurulmasaydi,
+    # kapanan surecin arkasinda yarim kalmis soketler ve calisan gorevler
+    # kalir; bir sonraki dagitim ayni cihaza baglanmakta zorlanirdi.
+    try:
+        from simulation_engine.runtime.api import get_runtime_manager
+
+        stopped = get_runtime_manager().stream.stop_all()
+        logging.getLogger(__name__).info("Kapanista %s akis durduruldu.", stopped)
+    except Exception as error:  # noqa: BLE001
+        logging.getLogger(__name__).warning("Akislar durdurulamadi: %s", error)
+
+
 app = FastAPI(
+    lifespan=_lifespan,
     title="Uretim Sureç Simulasyon Motoru",
     description=(
         "Endustri muhendisligi temelli kesikli olay simulasyonu (DES) servisi. "
@@ -790,6 +841,95 @@ app.include_router(auth_router)
 # Finans katmani da ayri bir router'dir. Simulasyon matematigine dokunmaz:
 # kaydedilmis bir kosumun metriklerini okuyup maliyet oranlariyla carpar.
 app.include_router(finance_router)
+
+# Runtime koprusu ayri bir router'dir: fabrika cihazlarina **sunucu tarafindan**
+# baglanir. Simulasyon matematigine dokunmaz ve mevcut uclarin hicbirini
+# degistirmez; tarayici cihazlara dogrudan baglanamadigi icin bu katman
+# olmadan gercek bir PLC verisi urune giremezdi.
+app.include_router(runtime_router)
+
+# Operasyon uclari: saglik, hazirlik, olcum, yedekleme ve denetim.
+app.include_router(ops_router)
+
+
+#: Okuma ve yazma icin ayri hiz siniri.
+#:
+#: Okuma istegi bir sorgu calistirir; yazma istegi veritabanina yazar, olay
+#: uretir ve cihazla konusabilir. Ikisini ayni kotaya koymak, pahali islemi
+#: ucuz olanla ayni siklikta yapilabilir kilardi.
+_read_limiter = RateLimiter()
+_write_limiter = RateLimiter(rate_per_minute=WRITE_RATE_PER_MINUTE, burst=10)
+
+#: Saglik ve hazirlik uclari hiz sinirindan **muaftir**.
+#:
+#: Bu uclari cagiran bir kullanici degil altyapidir: Docker saglik denetimi
+#: saniyede bir sorabilir ve sinirlanirsa saglikli bir kapsayici olu
+#: sayilip yeniden baslatilir.
+RATE_LIMIT_EXEMPT = frozenset({"/api/health", "/api/ready"})
+
+
+def get_rate_limiters():
+    """Hiz sinirlayicilar; testler bunlari sifirlayabilir."""
+    return _read_limiter, _write_limiter
+
+
+@app.middleware("http")
+async def _security_middleware(request, call_next):
+    """Hiz siniri, govde boyutu, guvenlik basliklari ve hata sayaci.
+
+    Tek bir ara katman: uc ayri katman her istekte uc kez calisir ve sirasi
+    okunmasi zor bir bagimliliga donusurdu.
+    """
+    from fastapi.responses import JSONResponse
+
+    path = request.url.path
+    metrics = get_metrics()
+
+    # 1) Govde boyutu. Sinirsiz govde, tek bir istekle sunucunun bellegini
+    #    doldurmanin en kolay yoludur.
+    if exceeds_size_limit(request.headers.get("content-length")):
+        metrics.requests.note(ok=False)
+        return JSONResponse(
+            status_code=413,
+            content={
+                "detail": (
+                    f"Istek govdesi cok buyuk; ust sinir {MAX_REQUEST_BYTES} bayt."
+                )
+            },
+            headers=security_headers(is_production()),
+        )
+
+    # 2) Hiz siniri.
+    if path not in RATE_LIMIT_EXEMPT:
+        limiter = _write_limiter if is_write_method(request.method) else _read_limiter
+        key = client_key(
+            request.headers.get("authorization"),
+            request.client.host if request.client else None,
+        )
+        allowed, retry_after = limiter.check(key)
+        if not allowed:
+            metrics.requests.note(ok=False)
+            headers = security_headers(is_production())
+            headers["Retry-After"] = str(retry_after)
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "detail": (
+                        "Cok fazla istek gonderildi; "
+                        f"{retry_after} saniye sonra yeniden deneyin."
+                    )
+                },
+                headers=headers,
+            )
+
+    response = await call_next(request)
+
+    # 3) Guvenlik basliklari ve hata sayaci.
+    for name, value in security_headers(is_production()).items():
+        response.headers.setdefault(name, value)
+    metrics.requests.note(ok=response.status_code < 500)
+    return response
+
 
 
 @app.post(

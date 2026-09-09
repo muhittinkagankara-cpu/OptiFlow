@@ -268,6 +268,9 @@ function renderBlock(block: ReportBlock): PdfNode[] {
     case "heatmap":
       return heatmapNodes(block);
 
+    case "signature":
+      return signatureNodes(block);
+
     case "pageBreak":
       return [{ text: "", pageBreak: "after" }];
   }
@@ -532,6 +535,49 @@ function heatmapNodes(block: Extract<ReportBlock, { kind: "heatmap" }>): PdfNode
   });
 
   return nodes;
+}
+
+/**
+ * İmza alanı.
+ *
+ * Her taraf için önce boşluk, sonra ince bir çizgi, altında rol ve ad.
+ * Çizginin üstündeki boşluk elle imza atmaya yeter; daha darı, çıktının
+ * altına ikinci bir kâğıt koydururdu.
+ */
+function signatureNodes(
+  block: Extract<ReportBlock, { kind: "signature" }>,
+): PdfNode[] {
+  const columnWidth = Math.floor(
+    (BODY_WIDTH - 24 * (block.parties.length - 1)) / block.parties.length,
+  );
+
+  return [
+    {
+      margin: [0, 26, 0, 0],
+      columnGap: 24,
+      columns: block.parties.map((party) => ({
+        width: "*",
+        stack: [
+          { text: " ", margin: [0, 0, 0, 30] },
+          {
+            canvas: [
+              {
+                type: "line",
+                x1: 0,
+                y1: 0,
+                x2: columnWidth,
+                y2: 0,
+                lineWidth: 0.7,
+                lineColor: MUTED,
+              },
+            ],
+          },
+          { text: party.role, fontSize: 7, color: MUTED, margin: [0, 5, 0, 0] },
+          { text: party.name, fontSize: 9, bold: true, margin: [0, 1, 0, 0] },
+        ],
+      })),
+    },
+  ];
 }
 
 /* --- Ortak yerleşimler ------------------------------------------------------ */

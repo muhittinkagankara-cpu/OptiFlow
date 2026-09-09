@@ -30,6 +30,7 @@ import {
 } from "../../lib/operator";
 import { AlertsScreen } from "./AlertsScreen";
 import { BottomNav } from "./BottomNav";
+import { useMonitoring } from "../monitoring/useMonitoring";
 import { OperatorHome } from "./OperatorHome";
 import { ProfileScreen } from "./ProfileScreen";
 import { QrScannerScreen } from "./QrScannerScreen";
@@ -71,6 +72,13 @@ export function OperatorApp({
 
   const [tasks, setTasks] = useState<OperatorTask[]>([]);
   const [screen, setScreen] = useState<OperatorScreen>({ name: "home" });
+
+  /*
+   * Hattın gerçek durumu. Yalnızca ana ekran açıkken yoklanır: görünmeyen bir
+   * ekran için sunucuya on saniyede bir istek atmak, telefonun pilini boşuna
+   * tüketirdi.
+   */
+  const monitoring = useMonitoring({ enabled: screen.name === "home" });
 
   useEffect(() => {
     let cancelled = false;
@@ -121,6 +129,7 @@ export function OperatorApp({
           <OperatorHome
             tasks={tasks}
             operatorName={operatorName}
+            productionStatus={monitoring.status}
             onOpenTask={openTask}
             onOpenTasks={() => setScreen({ name: "tasks" })}
             onOpenShift={() => setScreen({ name: "shift" })}

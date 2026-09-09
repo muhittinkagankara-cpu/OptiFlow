@@ -36,6 +36,8 @@ from simulation_engine.api.storage import (  # noqa: E402
 import simulation_engine.api.factory_storage  # noqa: F401,E402
 import simulation_engine.api.inventory_storage  # noqa: F401,E402
 import simulation_engine.api.org_storage  # noqa: F401,E402
+# Runtime kaliciligi (SALES-11): dort tablo Base.metadata'ya buradan katilir.
+import simulation_engine.runtime.persistence.models  # noqa: F401,E402
 
 config = context.config
 
