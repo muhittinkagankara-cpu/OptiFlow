@@ -217,3 +217,120 @@ export const VIEW_TITLE: Record<View, string> = {
   reports: "Raporlar",
   settings: "Ayarlar",
 };
+
+/* --------------------------------------------------------------------------
+   Gezinme grupları (Sprint 2A)
+   --------------------------------------------------------------------------
+   Yirmi üç madde tek bir düz listede okunmuyordu: yan yana duran "Bağlantılar",
+   "Pilot Bağlantı", "Runtime Köprüsü", "Cihaz Kurulumu" ve "Tanılama" aynı
+   kavram alanına ait ve adlarından ayırt edilemiyorlar. Gruplama, ürünün
+   büyümesiyle yatayda genişleyen menüyü kullanıcının zihnindeki iş
+   bölümlerine göre toplar.
+
+   Bu blok tümüyle **toplamadır**. Yukarıdaki `View`, `Section`,
+   `SECTION_OF_VIEW`, `VIEW_TITLE`, `NAV_ITEMS` ve `DEMO_NAV_ITEMS`
+   değişmemiştir; gruplar yalnızca bir **sunum katmanıdır**. Uygulamanın
+   görünüm anahtarı bu dosyadaki hiçbir yeni ihracı okumaz.
+   -------------------------------------------------------------------------- */
+
+/** Kenar çubuğundaki üst düzey grup. */
+export type NavGroupId =
+  | "overview"
+  | "factory"
+  | "operations"
+  | "connect"
+  | "setup"
+  | "admin";
+
+export interface NavGroup {
+  id: NavGroupId;
+  /** Grup başlığı; küçük, büyük harfli bir etikettir. */
+  label: string;
+  /** Gruba ait bölümler, menüde görünecekleri sırayla. */
+  sections: Section[];
+}
+
+/**
+ * Grupların ve içlerindeki bölümlerin sırası.
+ *
+ * Sıra kullanıcının gününü izler: önce durum (Genel Bakış), sonra modelin
+ * kendisi (Fabrika), sonra hattın o anki hâli (Operasyon), sonra sahayla
+ * kurulan bağ (Bağlantı), kurulum işleri ve en sonda yönetim.
+ *
+ * `copilot` bilinçli olarak hiçbir grupta değildir. Uzun vadede menüden çıkıp
+ * global bir çekmeceye dönüşecek; o güne kadar mevcut davranışı korunsun diye
+ * kenar çubuğu, gruplara girmeyen maddeleri listenin sonunda başlıksız çizer.
+ * Gruba zorlanmış olsaydı, ilerideki çekmece taşıması bir grubu boşaltıp
+ * yeniden düzenlemeyi gerektirirdi.
+ *
+ * `editor`, `results`, `intelligence`, `comparison` ve `import` buraya
+ * **girmez**: bunlar kendi başlarına gidilen yerler değil, bir görevin
+ * adımlarıdır ve programatik olarak açılırlar. Menüye eklenselerdi kullanıcı
+ * bağlamı olmayan bir ekrana düşerdi — örneğin açık bir model yokken süreç
+ * editörüne.
+ */
+export const NAV_GROUPS: NavGroup[] = [
+  {
+    id: "overview",
+    label: "Genel Bakış",
+    sections: ["dashboard", "reports"],
+  },
+  {
+    id: "factory",
+    label: "Fabrika",
+    sections: ["factories", "machines", "simulation", "inventory"],
+  },
+  {
+    id: "operations",
+    label: "Operasyon",
+    sections: ["live", "finance", "operator", "validation"],
+  },
+  {
+    id: "connect",
+    label: "Bağlantı",
+    sections: [
+      "connectors",
+      "runtime",
+      "provisioning",
+      "pilot",
+      "trends",
+      "diagnostics",
+      "operations",
+    ],
+  },
+  {
+    id: "setup",
+    label: "Kurulum",
+    sections: ["enterprise", "workspace"],
+  },
+  {
+    id: "admin",
+    label: "Yönetim",
+    sections: ["team", "sales", "settings"],
+  },
+];
+
+/**
+ * Bir bölümün kenar çubuğunda hangi maddeyi aydınlatacağı.
+ *
+ * Bağlantı ekranlarının tamamı ileride tek bir merkezin sekmeleri olacak.
+ * O aşamaya geçildiğinde `runtime` ya da `diagnostics` görünümündeyken kenar
+ * çubuğunda **hiçbir madde** yanmazdı: `sectionOfView("runtime")` kendi
+ * bölümünü döndürür, ama o bölüm artık listede ayrı bir satır olmayabilir.
+ *
+ * Bu eşleme sorunu `SECTION_OF_VIEW`'a dokunmadan çözer — orası görünüm ile
+ * bölüm arasındaki **gerçek** ilişkiyi taşır ve vurgu tercihine göre
+ * eğilmemelidir. Vurgu bir sunum kararıdır ve burada durur.
+ *
+ * Eşlenmemiş bir bölüm kendini aydınlatır; bu yüzden diğer bölümler için
+ * kayıt gerekmez.
+ */
+export const SECTION_HUB: Partial<Record<Section, Section>> = {
+  connectors: "connectors",
+  runtime: "connectors",
+  provisioning: "connectors",
+  pilot: "connectors",
+  trends: "connectors",
+  diagnostics: "connectors",
+  operations: "connectors",
+};

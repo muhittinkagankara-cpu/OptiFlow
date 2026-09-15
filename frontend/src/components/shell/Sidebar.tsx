@@ -12,7 +12,13 @@
  */
 
 import { Factory, PanelLeftClose } from "lucide-react";
-import { NAV_ITEMS, type NavItem, type Section } from "./navigation";
+import {
+  NAV_GROUPS,
+  NAV_ITEMS,
+  SECTION_HUB,
+  type NavItem,
+  type Section,
+} from "./navigation";
 
 interface SidebarProps {
   active: Section;
@@ -40,6 +46,60 @@ export function Sidebar({
   factoryName,
   items,
 }: SidebarProps) {
+  const visible = items ?? NAV_ITEMS;
+
+  /*
+   * Kenar çubuğunda hangi maddenin yanacağı.
+   *
+   * `active` görünümün **gerçek** bölümüdür ve öyle kalır. Bağlantı
+   * ekranlarının hepsi ileride tek bir merkezin sekmeleri olacağı için, o
+   * ekranlardayken vurgu merkezin kendisine taşınır. Eşlenmemiş bir bölüm
+   * kendini aydınlatır.
+   */
+  const highlighted = SECTION_HUB[active] ?? active;
+
+  /*
+   * Görünür maddeler gruplara dağıtılır. Demo modu `items` listesini
+   * daralttığı için bir grup tümüyle boşalabilir; boş grup başlığı hiç
+   * çizilmez — başlığı olup içi olmayan bir bölüm, eksik bir şey olduğunu
+   * düşündürürdü.
+   */
+  const groups = NAV_GROUPS.map((group) => ({
+    id: group.id,
+    label: group.label,
+    items: group.sections
+      .map((section) => visible.find((item) => item.id === section))
+      .filter((item): item is NavItem => item !== undefined),
+  })).filter((group) => group.items.length > 0);
+
+  const grouped = new Set(NAV_GROUPS.flatMap((group) => group.sections));
+  const ungrouped = visible.filter((item) => !grouped.has(item.id));
+
+  const renderItem = (item: NavItem) => {
+    const isActive = item.id === highlighted;
+    const Icon = item.icon;
+    return (
+      <button
+        key={item.id}
+        type="button"
+        onClick={() => onSelect(item.id)}
+        aria-current={isActive ? "page" : undefined}
+        className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 focus:outline-none ${
+          isActive
+            ? "bg-brand-600/12 text-brand-700"
+            : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+        }`}
+      >
+        {/* Renkten bağımsız ikinci sinyal. */}
+        {isActive && (
+          <span className="absolute top-1.5 bottom-1.5 -left-3 w-0.5 rounded-r-full bg-brand-500" />
+        )}
+        <Icon className="h-4 w-4 shrink-0" />
+        <span className="truncate">{item.label}</span>
+      </button>
+    );
+  };
+
   return (
     <>
       {/* Dar ekranda çekmecenin arkasındaki karartma. Tıklanınca kapanır —
@@ -80,31 +140,40 @@ export function Sidebar({
           </button>
         </div>
 
-        <nav aria-label="Ana gezinme" className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
-          {(items ?? NAV_ITEMS).map((item) => {
-            const isActive = item.id === active;
-            const Icon = item.icon;
-            return (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => onSelect(item.id)}
-                aria-current={isActive ? "page" : undefined}
-                className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 focus:outline-none ${
-                  isActive
-                    ? "bg-brand-600/12 text-brand-700"
-                    : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                }`}
-              >
-                {/* Renkten bağımsız ikinci sinyal. */}
-                {isActive && (
-                  <span className="absolute top-1.5 bottom-1.5 -left-3 w-0.5 rounded-r-full bg-brand-500" />
-                )}
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </button>
-            );
-          })}
+        <nav aria-label="Ana gezinme" className="flex-1 overflow-y-auto px-3 py-2">
+          {groups.map((group, index) => (
+            <div
+              key={group.id}
+              // Gruplar arasındaki ayrım kutuyla değil çizgiyle kurulur; ilk
+              // grubun üstünde çizgi olmaz, yoksa marka bloğundan sonra ikinci
+              // bir kenarlık belirirdi.
+              className={
+                index === 0
+                  ? "space-y-0.5"
+                  : "mt-3 space-y-0.5 border-t border-slate-200 pt-3"
+              }
+            >
+              <p className="px-3 pb-1 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+                {group.label}
+              </p>
+              {group.items.map(renderItem)}
+            </div>
+          ))}
+
+          {/* Hiçbir gruba girmeyen maddeler (bugün yalnızca AI Copilot) sonda,
+              başlıksız durur. Bir gruba zorlanmaları, ilerideki çekmece
+              taşımasında o grubu boşaltıp yeniden düzenlemeyi gerektirirdi. */}
+          {ungrouped.length > 0 && (
+            <div
+              className={
+                groups.length === 0
+                  ? "space-y-0.5"
+                  : "mt-3 space-y-0.5 border-t border-slate-200 pt-3"
+              }
+            >
+              {ungrouped.map(renderItem)}
+            </div>
+          )}
         </nav>
 
         {/* Hangi fabrikanın açık olduğu her ekranda okunabilir kalır. */}
