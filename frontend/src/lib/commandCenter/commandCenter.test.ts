@@ -15,15 +15,25 @@ import {
 } from "../actionItems";
 import type { SimulationResults } from "../../types/simulationTypes";
 import {
+  closingStep,
   confidenceLine,
   factoryStatement,
+  freshnessLine,
   leadDecision,
   moneyLine,
+  operationalHealth,
   railStations,
   remainingTopics,
+  runFreshness,
   runProvenance,
+  runQuality,
+  runQualityLine,
+  runRanAt,
   utilizationState,
 } from "./index";
+import type { HealthIndicator } from "../factoryHealth";
+import type { RunHistoryEntry } from "../runHistory";
+import type { SimulationRunResponse } from "../../types/simulationTypes";
 
 function station(id: string, name: string, utilization: number) {
   return {
@@ -216,5 +226,332 @@ describe("confidenceLine", () => {
     const line = confidenceLine(runProvenance(results()));
     expect(line).toContain("30 tekrar");
     expect(line).toContain("%95");
+  });
+});
+
+/* -------------------------------------------------------------------------- */
+/* Zaman damgası ve tazelik (Sprint 2F-A)                                      */
+/* -------------------------------------------------------------------------- */
+
+const NOW = new Date("2026-09-15T16:12:00.000Z");
+
+function historyEntry(
+  simulationId: string,
+  ranAt: string,
+): RunHistoryEntry {
+  return {
+    simulationId,
+    factoryId: "f1",
+    factoryName: "Demo Metal Hattı",
+    ranAt,
+    throughput: 1000,
+    oee: 0.74,
+    bottleneckName: "Torna",
+    isStable: true,
+    stationCount: 2,
+    durationSeconds: 3.8,
+  };
+}
+
+function runResponse(simulationId: string): SimulationRunResponse {
+  return {
+    simulation_id: simulationId,
+    status: "completed",
+    results: results(),
+    master_seed: 1,
+    duration_seconds: 3.8,
+    warnings: [],
+    headline: "",
+  };
+}
+
+describe("runRanAt — koşumun saatini geçmişten bulur", () => {
+  it("kimliği eşleşen kaydın saatini döner", () => {
+    const history = [
+      historyEntry("run-2", "2026-09-15T16:00:00.000Z"),
+      historyEntry("run-1", "2026-09-15T15:00:00.000Z"),
+    ];
+    expect(runRanAt(runResponse("run-1"), history)).toBe(
+      "2026-09-15T15:00:00.000Z",
+    );
+  });
+
+  it("sıraya değil kimliğe göre eşleşir", () => {
+    // Sıraya göre eşleşseydi, listenin başındaki başka bir koşumun saati bu
+    // koşuma yazılırdı.
+    const history = [
+      historyEntry("run-2", "2026-09-15T16:00:00.000Z"),
+      historyEntry("run-1", "2026-09-15T15:00:00.000Z"),
+    ];
+    expect(runRanAt(runResponse("run-2"), history)).toBe(
+      "2026-09-15T16:00:00.000Z",
+    );
+  });
+
+  it("eşleşme yoksa saat uydurmaz", () => {
+    expect(runRanAt(runResponse("yok"), [historyEntry("run-1", "x")])).toBeNull();
+  });
+
+  it("koşum ya da geçmiş yoksa null döner", () => {
+    expect(runRanAt(null, [])).toBeNull();
+    expect(runRanAt(runResponse("run-1"), [])).toBeNull();
+  });
+});
+
+describe("runProvenance — zaman damgasını taşır", () => {
+  it("verilen damgayı aynen aktarır", () => {
+    const p = runProvenance(results(), "2026-09-15T16:00:00.000Z");
+    expect(p.ranAt).toBe("2026-09-15T16:00:00.000Z");
+  });
+
+  it("damga verilmezse null kalır", () => {
+    expect(runProvenance(results()).ranAt).toBeNull();
+  });
+
+  it("koşum yokken damga da yoktur", () => {
+    expect(runProvenance(null, "2026-09-15T16:00:00.000Z").ranAt).toBeNull();
+  });
+});
+
+describe("runFreshness — tazelik", () => {
+  const at = (iso: string) => runFreshness(iso, NOW);
+
+  it("damga yoksa hiçbir şey çizilmez", () => {
+    expect(runFreshness(null, NOW)).toBeNull();
+  });
+
+  it("geçersiz damga tazelik üretmez", () => {
+    // Bozuk bir değeri "az önce" diye okumak, eski veriyi taze gösterirdi.
+    expect(at("bu bir tarih değil")).toBeNull();
+    expect(at("")).toBeNull();
+  });
+
+  it("bir dakikanın altı: az önce", () => {
+    expect(at("2026-09-15T16:11:30.000Z")?.text).toBe("az önce");
+  });
+
+  it("dakikalar", () => {
+    expect(at("2026-09-15T16:00:00.000Z")?.text).toBe("12 dk önce");
+  });
+
+  it("saatler", () => {
+    expect(at("2026-09-15T13:12:00.000Z")?.text).toBe("3 saat önce");
+  });
+
+  it("bir günden eski koşum mutlak tarih ve saatle yazılır", () => {
+    const fresh = at("2026-09-13T08:30:00.000Z");
+    expect(fresh?.isOlderThanADay).toBe(true);
+    // Tarih ve saat birlikte: "14 Eyl" tek başına hangi vardiya olduğunu
+    // söylemez.
+    expect(fresh?.text).toMatch(/\d/);
+    expect(fresh?.text.split(" ").length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("bir günün altındaki koşum eski işaretlenmez", () => {
+    expect(at("2026-09-15T16:00:00.000Z")?.isOlderThanADay).toBe(false);
+    expect(at("2026-09-14T17:00:00.000Z")?.isOlderThanADay).toBe(false);
+  });
+
+  it("ileri tarihli damga (saat kayması) eksi süre göstermez", () => {
+    // Cihaz saati ileri gitmişse "-5 dk önce" bir hata gibi okunurdu.
+    const fresh = at("2026-09-15T16:20:00.000Z");
+    expect(fresh?.text).toBe("az önce");
+    expect(fresh?.text).not.toContain("-");
+  });
+
+  it("saklanan değeri değiştirmez", () => {
+    const iso = "2026-09-15T16:00:00.000Z";
+    at(iso);
+    expect(iso).toBe("2026-09-15T16:00:00.000Z");
+  });
+});
+
+describe("hat sağlığı ile koşum üstverisinin ayrılması (Sprint 2F-C)", () => {
+  const indicators: HealthIndicator[] = [
+    { id: "stability", label: "Kararlılık", value: "Kararlı", tone: "good", hint: "" },
+    { id: "validation", label: "Doğrulama", value: "Geçti", tone: "good", hint: "" },
+    { id: "scrap", label: "Fire oranı", value: "%1.1", tone: "good", hint: "" },
+    { id: "rejected", label: "Tampon reddi", value: "%0.0", tone: "good", hint: "" },
+    { id: "balance", label: "Hat dengesi", value: "%23 fark", tone: "good", hint: "" },
+    { id: "replications", label: "Tekrar", value: "30×", tone: "good", hint: "" },
+  ];
+
+  it("şeritte yalnızca fabrikaya ait göstergeler kalır", () => {
+    const ids = operationalHealth(indicators).map((item) => item.id);
+    expect(ids).toEqual(["stability", "scrap", "rejected", "balance"]);
+  });
+
+  it("koşuma ait göstergeler ayrı toplanır", () => {
+    // Doğrulama ve tekrar, hattın değil koşumun niteliğini anlatır.
+    expect(runQuality(indicators).map((item) => item.id)).toEqual([
+      "validation",
+      "replications",
+    ]);
+  });
+
+  it("hiçbir gösterge kaybolmaz — ikisinin toplamı girdiye eşittir", () => {
+    // Ayırma bir silme değildir; her gösterge iki kümeden birine düşer.
+    expect(
+      operationalHealth(indicators).length + runQuality(indicators).length,
+    ).toBe(indicators.length);
+  });
+
+  it("gösterge değerleri ve tonları olduğu gibi kalır", () => {
+    const stability = operationalHealth(indicators)[0];
+    expect(stability.value).toBe("Kararlı");
+    expect(stability.tone).toBe("good");
+  });
+
+  it("koşum satırı tekrar sayısını iki kez yazmaz", () => {
+    // "30 tekrar" zaten güven satırında geçiyor; ikinci kez yazmak iki ayrı
+    // ölçüm varmış izlenimi bırakırdı.
+    const line = runQualityLine(indicators, "30 tekrar · %95 aralık 554 – 588");
+    expect(line).toBe("30 tekrar · %95 aralık 554 – 588 · Doğrulama: Geçti");
+    expect(line!.match(/tekrar/g)).toHaveLength(1);
+    expect(line).not.toContain("30×");
+  });
+
+  it("doğrulama sonucu kararın yanında görünür", () => {
+    // Şeritten çıktı ama ekrandan çıkmadı; başka hiçbir yerde yazılmıyor.
+    expect(runQualityLine(indicators, null)).toBe("Doğrulama: Geçti");
+  });
+
+  it("geçmeyen doğrulama da aynı yerde yazılır", () => {
+    const failed = indicators.map((item) =>
+      item.id === "validation" ? { ...item, value: "Geçmedi" } : item,
+    );
+    expect(runQualityLine(failed, null)).toBe("Doğrulama: Geçmedi");
+  });
+
+  it("yazacak bir şey yoksa satır hiç çizilmez", () => {
+    // Boş bir "Koşum:" etiketi, ölçüm varmış izlenimi bırakırdı (Yasa 4).
+    expect(runQualityLine([], null)).toBeNull();
+  });
+
+  it("koşum yoksa şerit boş kalır, uydurulmuş gösterge üretilmez", () => {
+    expect(operationalHealth([])).toEqual([]);
+    expect(runQuality([])).toEqual([]);
+  });
+});
+
+describe("tazelik cümlesi (Sprint 2F-E)", () => {
+  it("bir günün altındaki koşumu göreli anlatır", () => {
+    expect(freshnessLine({ text: "12 dk önce", isOlderThanADay: false })).toBe(
+      "Son koşum 12 dk önce",
+    );
+  });
+
+  it("eski koşuma yazılı bir eskilik notu ekler", () => {
+    // "14 Eyl 16:00" tek başına bakışta eski olduğunu söylemez; okuyup bugünün
+    // tarihiyle karşılaştırmayı gerektirir.
+    expect(
+      freshnessLine({ text: "14 Eyl 16:00", isOlderThanADay: true }),
+    ).toBe("Son koşum 14 Eyl 16:00 · bir günden eski");
+  });
+
+  it("tazelik yoksa cümle uydurulmaz", () => {
+    expect(freshnessLine(null)).toBeNull();
+  });
+
+  it("benzetim verisi için canlılık iddiası üretmez", () => {
+    const line = freshnessLine({ text: "az önce", isOlderThanADay: false })!;
+    expect(line).not.toMatch(/Canlı|Aktif|Şimdi/);
+  });
+});
+
+describe("koşum satırında zaman (Sprint 2F-E)", () => {
+  const indicators: HealthIndicator[] = [
+    { id: "validation", label: "Doğrulama", value: "Geçti", tone: "good", hint: "" },
+    { id: "replications", label: "Tekrar", value: "30×", tone: "good", hint: "" },
+  ];
+
+  it("zaman satırın başına gelir", () => {
+    const line = runQualityLine(indicators, "30 tekrar", {
+      text: "4 dk önce",
+      isOlderThanADay: false,
+    });
+    expect(line).toBe("4 dk önce · 30 tekrar · Doğrulama: Geçti");
+  });
+
+  it("üstteki rozetin sözcüklerini yinelemez", () => {
+    // Üstte "Son koşum 4 dk önce" yazıyor; burada satırın etiketi zaten
+    // "KOŞUM" olduğu için aynı sözcükler ikinci kez yazılmaz.
+    const line = runQualityLine(indicators, null, {
+      text: "4 dk önce",
+      isOlderThanADay: false,
+    })!;
+    expect(line).not.toContain("Son koşum");
+  });
+
+  it("eski koşum burada da eski işaretlenir", () => {
+    const line = runQualityLine(indicators, null, {
+      text: "14 Eyl 16:00",
+      isOlderThanADay: true,
+    });
+    expect(line).toBe("14 Eyl 16:00 · bir günden eski · Doğrulama: Geçti");
+  });
+
+  it("tazelik verilmezse zaman uydurulmaz", () => {
+    expect(runQualityLine(indicators, "30 tekrar")).toBe(
+      "30 tekrar · Doğrulama: Geçti",
+    );
+  });
+
+  it("hiçbir şey ölçülemiyorsa satır çizilmez", () => {
+    expect(runQualityLine([], null, null)).toBeNull();
+  });
+});
+
+describe("kapanış adımı (Yasa 5, Sprint 2F-E)", () => {
+  const karar: ActionItem = {
+    id: "bottleneck",
+    priority: "critical",
+    title: "Hat kararsız",
+    detail: "Kuyruklar büyümeye devam ediyor.",
+    target: "simulation",
+    actionLabel: "Modeli aç",
+  };
+  const konu: ActionItem = {
+    id: "scrap",
+    priority: "warning",
+    title: "Fire oranı yüksek",
+    detail: "Fire eşiği aşıldı.",
+    target: "inventory",
+    actionLabel: "Envantere git",
+  };
+
+  it("kararın kendi eylemini ve hedefini kullanır", () => {
+    // Yeni bir gezinme hedefi ya da yeni bir eylem etiketi üretilmez.
+    const step = closingStep(karar, [konu])!;
+    expect(step.actionLabel).toBe("Modeli aç");
+    expect(step.target).toBe("simulation");
+  });
+
+  it("var olan önceliklendirmeyi cümleye çevirir", () => {
+    const step = closingStep(karar, [konu])!;
+    expect(step.text).toContain("Hat kararsız");
+    expect(step.text).toContain("diğer konu bundan sonra gelir");
+  });
+
+  it("birden çok konuyu sayıyla anlatır", () => {
+    const step = closingStep(karar, [konu, { ...konu, id: "buffer" }])!;
+    expect(step.text).toContain("diğer 2 konu");
+  });
+
+  it("konu yoksa çizilmez — anlamsız yineleme olurdu", () => {
+    // O durumda son blok zaten karar bloğudur ve birincil eylemle biter.
+    expect(closingStep(karar, [])).toBeNull();
+  });
+
+  it("karar yoksa çizilmez", () => {
+    expect(closingStep(null, [konu])).toBeNull();
+  });
+
+  it("uydurma öneri, para ya da aciliyet dili üretmez", () => {
+    const step = closingStep(karar, [konu])!;
+    expect(step.text).not.toMatch(/₺|\d+\s*TL/);
+    expect(step.text).not.toMatch(/hemen|acele|kaçırma|tebrikler|yapay zekâ/i);
+    // Metindeki tek sayı konu adedidir; yeni bir ölçüm iddiası yoktur.
+    expect(step.text.match(/\d+/g)).toBeNull();
   });
 });

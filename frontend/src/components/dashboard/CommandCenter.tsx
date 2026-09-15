@@ -3,7 +3,8 @@
  *
  * Ekranın hiyerarşisi kullanıcının sorduğu sırayı izler:
  *
- *   DURUM → KISIT → SONUÇ → KARAR → SIRADAKİ KONULAR → HAT SAĞLIĞI
+ *   DURUM → KISIT → SONUÇ (ölçümler + hat sağlığı) → KARAR → SIRADAKİ KONULAR
+ *   → SONRAKİ ADIM
  *
  * Yani: fabrikada ne oluyor, neyin yüzünden oluyor, bunun operasyonel ve
  * parasal karşılığı ne, şimdi ne yapmalı.
@@ -29,10 +30,33 @@
  *
  * Hesaplanamayan hiçbir gösterge uydurulmaz: değeri "—" olur, nedeni yazılır
  * ve ölçümü tamamlayacak adıma götürür (Yasa 4).
+ *
+ * Ne değişti (Sprint 2F-C)
+ * ------------------------
+ * Sayfa "Hat sağlığı" şeridiyle, yani pasif bir ölçüm listesiyle bitiyordu —
+ * Yasa 5'in tersi. Şerit ölçümlerin yanına alındı ve sayfa artık karar ya da
+ * konular listesiyle, ikisi de bir yere götüren bloklarla bitiyor.
+ *
+ * Şeritten iki hücre çıkarıldı: "Doğrulama" ve "Tekrar". İkisi de fabrikanın
+ * değil koşumun niteliğini anlatıyordu; üstelik "Tekrar" zaten karar
+ * bloğundaki koşum satırında yazılıydı. Gösterge mantığı silinmedi, yalnızca
+ * nereye yazıldıkları ayrıldı (`lib/commandCenter/health`).
+ *
+ * Ne değişti (Sprint 2F-E)
+ * ------------------------
+ * Sayfa konu listesiyle bitiyordu; liste "başka neler var" der, "önce ne
+ * yapılacak" demez. Sona tek satırlık bir **kapanış adımı** eklendi: kararın
+ * kendi eylemini ikincil düğmeyle tekrar erişilebilir kılar. Konu yoksa hiç
+ * çizilmez, çünkü o durumda son blok zaten karar bloğudur.
+ *
+ * Zaman iki yerde görünür, üç değil: üstte rozetli birincil cümle, kararın
+ * yanında sessiz dipnot. `MetricGroup` ve `FactoryHealthStrip` **kasıtlı
+ * olarak** tazelik göstermez — ikisinin de her sayısı aynı koşumdan gelir ve
+ * sayfa bunu bir kez söyler. Her bölüme aynı damgayı yazmak, üç ayrı ölçüm
+ * zamanı varmış izlenimi bırakırdı.
  */
 
 import { ArrowRight } from "lucide-react";
-import { ClipboardList } from "lucide-react";
 import type {
   FinancialReport,
   InventoryAnalysis,
@@ -56,15 +80,20 @@ import type { ChecklistItem } from "../../lib/onboarding-enterprise";
 import { formatMoney } from "../../lib/financeFormatting";
 import { formatUnits } from "../../lib/resultsFormatting";
 import {
+  closingStep,
   confidenceLine,
   factoryStatement,
+  freshnessLine,
   leadDecision,
+  operationalHealth,
   railStations,
   remainingTopics,
+  runFreshness,
   runProvenance,
+  runQualityLine,
 } from "../../lib/commandCenter";
 import type { MeasuredState } from "../../lib/ui";
-import { Button, EmptyState } from "../ui/Primitives";
+import { Button } from "../ui/Primitives";
 import { ConstraintRail } from "../ui/ConstraintRail";
 import { DecisionBlock } from "../ui/DecisionBlock";
 import { MetricGroup, type MetricItem } from "../ui/MetricGroup";
@@ -92,6 +121,12 @@ interface CommandCenterProps {
   report: FinancialReport | null;
   analyses: InventoryAnalysis[] | null;
   factoryCount: number;
+  /**
+   * Ekrandaki koşumun alındığı an (ISO 8601) — `RunHistoryEntry.ranAt`.
+   *
+   * Eşleşen bir kayıt yoksa `null`; o zaman tazelik hiç gösterilmez.
+   */
+  ranAt: string | null;
   /** Kurulum adımları; şerit yalnızca eksik adım varsa çizilir. */
   setupItems: ChecklistItem[];
   onNavigate: (target: ActionTarget) => void;
@@ -104,6 +139,7 @@ export function CommandCenter({
   report,
   analyses,
   factoryCount,
+  ranAt,
   setupItems,
   onNavigate,
   onNavigateView,
@@ -120,10 +156,20 @@ export function CommandCenter({
   /* --- Sunum katmanı: seçim ve cümle --- */
   const statement = factoryStatement(results);
   const stations = railStations(results);
-  const provenance = runProvenance(results);
+  const provenance = runProvenance(results, ranAt);
+  const freshness = runFreshness(provenance.ranAt);
   const decision = leadDecision(actions);
   const topics = remainingTopics(actions);
   const confidence = confidenceLine(provenance);
+  /* Şeritte yalnızca fabrikaya ait göstergeler kalır; koşuma ait olanlar
+     kararın yanındaki tek satıra iner. Hesap değişmedi, yalnızca hangi
+     sayının nereye yazıldığı değişti. */
+  const operational = operationalHealth(health);
+  /* Zaman iki yerde görünür ve ikisi aynı ağırlıkta değildir: üstte rozetli
+     birincil cümle, kararın yanında 11 piksellik sessiz dipnot. Üçüncü bir
+     yere yazılmaz (bkz. aşağıdaki MetricGroup/FactoryHealthStrip notu). */
+  const runLine = runQualityLine(health, confidence, freshness);
+  const closing = closingStep(decision, topics);
 
   const metrics: MetricItem[] = [
     {
@@ -191,13 +237,25 @@ export function CommandCenter({
       <Statement
         headline={statement.headline}
         detail={statement.detail}
+        /* Köken ve tazelik tek rozette birleşir. Ayrı bir "Son simülasyon
+           koşumu" satırı artık yazılmıyor: "Benzetim" sözcüğü kaynağı zaten
+           söylüyordu, ikisi birlikte aynı şeyi iki kez anlatıyordu. Zaman
+           damgası yoksa kaynak açıklaması geri gelir — o durumda söylenecek
+           tek şey odur. */
         meta={
-          <>
-            <OriginBadge origin={provenance.origin} />
-            <span className="text-[12px] text-[var(--of-ink-3)]">
-              {provenance.source}
-            </span>
-          </>
+          freshness === null ? (
+            <>
+              <OriginBadge origin={provenance.origin} />
+              <span className="text-[12px] text-[var(--of-ink-3)]">
+                {provenance.source}
+              </span>
+            </>
+          ) : (
+            <OriginBadge
+              origin={provenance.origin}
+              detail={freshnessLine(freshness)}
+            />
+          )
         }
         action={
           statement.action && (
@@ -216,13 +274,35 @@ export function CommandCenter({
 
       <MetricGroup items={metrics} />
 
+      {/* Hat sağlığı bir sonuç ölçümüdür, karar sonrası bir ek değil: kararın
+          hangi tabloya bakılarak verildiğini anlatır. Bu yüzden ölçümlerin
+          hemen ardında durur. */}
+      <FactoryHealthStrip indicators={operational} />
+
       {decision === null ? (
-        <EmptyState
-          icon={ClipboardList}
-          title="Eşiği aşan bir konu yok"
-          description="Doluluk, fire ve tampon oranlarının hepsi tanımlı eşiklerin içinde. Yeni bir senaryo denemek için simülasyonu açabilirsiniz."
+        /*
+         * Eşik aşımı yokken de ekran bir karar yüzeyidir. Önceki hâl genel bir
+         * boş durum kartıydı: 313,6 piksel, ortalanmış, ikonlu ve kenarlıklı —
+         * yani "burada bir şey yok" demek için sayfanın en büyük kutusunu
+         * ayırıyordu (ANTI-PATTERNS #18). Artık karar bloğunun kendisi
+         * kullanılıyor; şekil aynı kalır, durum "ok" olur ve birincil eylem
+         * yerinde durur.
+         *
+         * Dil kasıtlı olarak yalın: kutlama yok, "harika/tebrikler" yok, yapay
+         * zekâ dili yok. Yalnızca ölçülen durum ve sıradaki adım.
+         */
+        <DecisionBlock
+          state="ok"
+          stateLabel="Eşik aşımı yok"
+          situation="Şu anda eşiği aşan bir konu yok."
+          why="Doluluk, fire ve tampon oranlarının hepsi tanımlı eşiklerin içinde. Yeni bir senaryo denemek için simülasyonu açabilirsiniz."
+          provenanceLine={runLine}
           action={
-            <Button variant="primary" onClick={() => onNavigate("simulation")}>
+            <Button
+              variant="primary"
+              icon={ArrowRight}
+              onClick={() => onNavigate("simulation")}
+            >
               Simülasyonu aç
             </Button>
           }
@@ -237,7 +317,7 @@ export function CommandCenter({
              `monthlyRecoverable` hat düzeyindedir. Bu tutarları tek bir eyleme
              yazmak, ölçülmemiş bir atıf olurdu; para bu yüzden ölçüm şeridinde,
              doğru etiketiyle duruyor. */
-          provenanceLine={confidence}
+          provenanceLine={runLine}
           action={
             <Button
               variant="primary"
@@ -250,12 +330,44 @@ export function CommandCenter({
         />
       )}
 
+      {/* Yasa 5: sayfa eylemle biter. Konular varsa her satır bir yere
+          götürür; yoksa son görünen blok karar bloğudur ve onun son öğesi
+          birincil eylemdir. Pasif bir ölçüm şeridiyle bitmez. */}
       <CriticalTopics
         items={topics}
         onSelect={(item: ActionItem) => onNavigate(item.target)}
       />
 
-      <FactoryHealthStrip indicators={health} />
+      {/*
+        Kapanış adımı. Konu listesi "başka neler var" der; bu satır "önce ne
+        yapılacak" der ve kararın eylemini sayfanın sonunda tekrar erişilebilir
+        kılar — liste uzunsa karar bloğu epey yukarıda kalıyordu.
+
+        Eylem **ikincil** çizilir: birincil eylem karar bloğundadır ve bir
+        ekranda iki birincil düğme yarışmaz. Hedef de kararın kendi hedefidir;
+        yeni bir gezinme hedefi üretilmez.
+
+        Konu yoksa `closingStep` null döner ve bu bölüm hiç çizilmez.
+      */}
+      {closing !== null && (
+        <section className="flex flex-col gap-[var(--of-spacing-12)] border-t border-[var(--of-surface-hairline)] pt-[var(--of-spacing-16)] sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h3 className="text-[11px] font-medium tracking-[0.08em] text-[var(--of-ink-3)] uppercase">
+              Sonraki adım
+            </h3>
+            <p className="mt-[var(--of-spacing-4)] text-[13px] leading-5 text-[var(--of-ink-2)]">
+              {closing.text}
+            </p>
+          </div>
+          <Button
+            icon={ArrowRight}
+            className="shrink-0"
+            onClick={() => onNavigate(closing.target)}
+          >
+            {closing.actionLabel}
+          </Button>
+        </section>
+      )}
     </div>
   );
 }

@@ -133,6 +133,7 @@ import {
   type RunHistoryEntry,
 } from "./lib/runHistory";
 import type { ActionTarget } from "./lib/actionItems";
+import { runRanAt } from "./lib/commandCenter";
 import { buildFlowFromConfig } from "./lib/configBuilder";
 import type { FlowEdge, FlowNode } from "./lib/configBuilder";
 import { DEFAULT_SERVICE_LEVEL } from "./types/simulationTypes";
@@ -932,6 +933,7 @@ export default function App() {
   const activeResult = demoData ? demoData.run : result;
   const activeReport = demoData ? demoData.report : financeReport;
   const activeFactoryName = demoData ? DEMO_FACTORY_NAME : (openFactory?.name ?? null);
+  const activeHistory = demoData ? demoData.runHistory : runHistory;
   const activeUserName = demoData ? "Demo kullanıcısı" : userName;
 
   /*
@@ -1025,6 +1027,10 @@ export default function App() {
               report={activeReport}
               analyses={inventoryAnalyses}
               factoryCount={isDemo ? 1 : factories.length}
+              // Koşumun saati yanıtta gelmez; geçmiş kaydından `simulation_id`
+              // ile eşleştirilir. Eşleşme yoksa `null` döner ve ekran tazelik
+              // göstermez.
+              ranAt={runRanAt(activeResult, activeHistory)}
               setupItems={enterprise.checklist}
               onNavigate={goToTarget}
               onNavigateView={(target) => setView(target as View)}

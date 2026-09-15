@@ -53,4 +53,14 @@ export interface RunProvenance {
   replications: number | null;
   /** %95 güven aralığı metni; hesaplanamıyorsa `null`. */
   interval: string | null;
+  /**
+   * Koşumun alındığı an — ISO 8601, `RunHistoryEntry.ranAt`.
+   *
+   * Zaman damgası **istemcide** üretilir: simülasyon yanıtı
+   * (`SimulationRunResponse`) hiçbir zaman alanı taşımaz. Bu yüzden değer
+   * "sunucunun koşumu bitirdiği an" değil, "bu tarayıcının yanıtı aldığı an"
+   * demektir. Eşleşme bulunamazsa `null` olur ve ekranda tazelik gösterilmez —
+   * uydurulmuş bir saat, eski veriyi taze göstermekten daha kötüdür.
+   */
+  ranAt: string | null;
 }

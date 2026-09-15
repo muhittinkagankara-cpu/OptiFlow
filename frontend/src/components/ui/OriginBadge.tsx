@@ -21,10 +21,23 @@ import {
 
 interface OriginBadgeProps {
   origin: DataOrigin;
+  /**
+   * Kökenin yanına yazılan tek satırlık ayrıntı — tipik olarak tazelik
+   * ("Son koşum 12 dk önce").
+   *
+   * Rozetin **içinde** durur, ayrı bir satır ya da ikinci bir rozet açılmaz:
+   * köken ile zaman aynı olgunun iki yüzüdür ve ayrı kutulara konsaydı
+   * kullanıcı ikisini ayrı iddialar sanırdı. Verilmezse hiçbir şey çizilmez.
+   */
+  detail?: string | null;
   className?: string;
 }
 
-export function OriginBadge({ origin, className = "" }: OriginBadgeProps) {
+export function OriginBadge({
+  origin,
+  detail,
+  className = "",
+}: OriginBadgeProps) {
   const { label, description, state } = originPresentation(origin);
   return (
     <span
@@ -37,6 +50,12 @@ export function OriginBadge({ origin, className = "" }: OriginBadgeProps) {
         className={`h-1.5 w-1.5 shrink-0 rounded-[var(--of-radius-full)] ${STATE_DOT_CLASS[state]}`}
       />
       {label}
+      {detail && (
+        <span className="text-[var(--of-ink-3)]">
+          <span aria-hidden="true">· </span>
+          {detail}
+        </span>
+      )}
       {/* Kısa etiket ekranda yeterlidir; ekran okuyucu tam cümleyi duyar. */}
       <span className="sr-only">{description}</span>
     </span>

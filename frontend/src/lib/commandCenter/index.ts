@@ -13,6 +13,24 @@ export type {
 } from "./types";
 
 export { factoryStatement } from "./statement";
+export {
+  operationalHealth,
+  runQuality,
+  runQualityLine,
+} from "./health";
 export { railStations, utilizationState } from "./rail";
-export { leadDecision, moneyLine, remainingTopics, type MoneyLine } from "./decision";
-export { confidenceLine, runProvenance } from "./provenance";
+export {
+  closingStep,
+  leadDecision,
+  moneyLine,
+  remainingTopics,
+  type ClosingStep,
+  type MoneyLine,
+} from "./decision";
+export {
+  confidenceLine,
+  freshnessLine,
+  runFreshness,
+  runProvenance,
+  runRanAt,
+} from "./provenance";
