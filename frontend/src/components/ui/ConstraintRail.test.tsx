@@ -78,3 +78,48 @@ describe("ConstraintRail", () => {
     expect(render(stations)).not.toContain("gradient");
   });
 });
+
+describe("ConstraintRail — görsel ağırlık (Sprint 2F-B)", () => {
+  it("kısıt etiketi kendi istasyonunun adıyla aynı kutuda durur", () => {
+    // Etiket segmentin sağ ucundayken bir sonraki istasyonun adına yapışıyor
+    // ve "KISIT KAYNAK" diye okunuyordu; kısıt yanlış istasyona işaret ediyor
+    // gibi duruyordu. Arada başka bir ad ya da okuma değeri olmamalı.
+    const html = render(stations);
+    const arada = html.slice(html.indexOf("Torna"), html.indexOf("Kısıt"));
+    expect(arada).not.toContain("Kesim");
+    expect(arada).not.toContain("%97");
+  });
+
+  it("okuma değeri adın ardından gelir", () => {
+    const html = render(stations);
+    expect(html.indexOf("Torna")).toBeLessThan(html.indexOf("%97"));
+    expect(html.indexOf("Kısıt")).toBeLessThan(html.indexOf("%97"));
+  });
+
+  it("her okuma değeri tek kez yazılır", () => {
+    // Dar ve geniş ekran aynı düğümü paylaşır. İki ayrı düğüm konsaydı ekran
+    // okuyucu her istasyonu iki kez okurdu.
+    const html = render(stations);
+    expect(html.match(/%97/g)).toHaveLength(1);
+    expect(html.match(/%55/g)).toHaveLength(1);
+  });
+
+  it("çubuk kalınlığı ölçek jetonlarından gelir", () => {
+    // Şeridin aleti dolgu çubuğudur; kalınlığı uydurulmuş bir sayı değil,
+    // MASTER §3'teki ölçek jetonudur.
+    const html = render(stations);
+    expect(html).toContain("h-[var(--of-spacing-8)]");
+    expect(html).toContain("md:h-[var(--of-spacing-12)]");
+  });
+
+  it("kelepçe 2 piksel kalır", () => {
+    // MASTER §15.2'deki üç sinyalden biri; kalınlaşan çubuk onun yerine geçmez.
+    expect(render(stations)).toContain("h-0.5");
+  });
+
+  it("gölge, parlama ya da bulanıklık kullanmaz", () => {
+    const html = render(stations);
+    expect(html).not.toContain("shadow");
+    expect(html).not.toContain("blur");
+  });
+});

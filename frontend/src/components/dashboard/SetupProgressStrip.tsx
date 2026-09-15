@@ -47,7 +47,12 @@ export function SetupProgressStrip({
       <button
         type="button"
         onClick={() => onNavigate(next.view)}
-        className="ml-auto inline-flex items-center gap-1.5 rounded-[var(--of-radius-sm)] px-2 py-1 text-[13px] font-medium text-[var(--of-interactive)] transition-colors duration-200 hover:text-[var(--of-interactive-hover)] focus:outline-none"
+        /*
+         * Dokunma hedefi 27,5 px'ti (MASTER §14: en az 44×44). Yükseklik
+         * `min-h` ile açılır; yazı boyutu ve dolgu değişmez, yani bağlantı
+         * görünümü korunur — yalnızca parmağın isabet ettiği alan büyür.
+         */
+        className="ml-auto inline-flex min-h-[44px] min-w-[44px] items-center gap-1.5 rounded-[var(--of-radius-sm)] px-[var(--of-spacing-8)] py-[var(--of-spacing-4)] text-[13px] font-medium text-[var(--of-interactive)] transition-colors duration-200 hover:text-[var(--of-interactive-hover)] focus:outline-none"
       >
         Devam et
         <ArrowRight className="h-3.5 w-3.5" />

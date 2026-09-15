@@ -69,7 +69,7 @@ export function CriticalTopics({ items, onSelect }: CriticalTopicsProps) {
                     {item.title}
                   </span>
                   <span
-                    className="text-[10px] font-semibold tracking-[0.08em] uppercase"
+                    className="text-[11px] font-semibold tracking-[0.08em] uppercase"
                     style={{ color: `var(${STATE_COLOR_VAR[state]})` }}
                   >
                     {PRIORITY_LABEL[item.priority]}

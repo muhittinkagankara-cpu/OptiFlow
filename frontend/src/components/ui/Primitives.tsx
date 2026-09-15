@@ -82,9 +82,18 @@ const BUTTON_VARIANT: Record<ButtonVariant, string> = {
   danger: "bg-red-500 text-white hover:bg-red-600 disabled:bg-slate-200",
 };
 
+/*
+ * Dokunma hedefi (MASTER §14): her düğme en az 44×44 px.
+ *
+ * Ölçüldü (Sprint 2F-D): `sm` 28 px, `md` 36 px yükseklikteydi; ikisi de
+ * kuralın altındaydı. Düzeltme `min-h`/`min-w` ile yapılır, dolgu ya da punto
+ * büyütülerek değil — böylece düğmeler **görsel olarak şişmez**, yalnızca
+ * tıklanabilir alanları kurala çıkar. Metinli düğmeler zaten 44 px'den
+ * geniştir; `min-w` yalnızca yalnızca-ikon düğmelerini büyütür.
+ */
 const BUTTON_SIZE: Record<ButtonSize, string> = {
-  sm: "gap-1.5 rounded-lg px-2.5 py-1.5 text-xs",
-  md: "gap-2 rounded-lg px-3.5 py-2 text-sm",
+  sm: "min-h-[44px] min-w-[44px] gap-1.5 rounded-lg px-2.5 py-1.5 text-xs",
+  md: "min-h-[44px] min-w-[44px] gap-2 rounded-lg px-3.5 py-2 text-sm",
 };
 
 interface ButtonProps {

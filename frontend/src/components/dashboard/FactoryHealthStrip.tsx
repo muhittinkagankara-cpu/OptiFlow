@@ -34,14 +34,22 @@ export function FactoryHealthStrip({ indicators }: FactoryHealthStripProps) {
         Hat sağlığı
       </h3>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--of-radius-md)] bg-[var(--of-surface-hairline)] sm:grid-cols-3 xl:grid-cols-6">
+      {/*
+        Sütun sayısı sabit değil, hücre sayısına uyar. Önceden altı sütuna
+        sabitlenmişti; Sprint 2F-C'de koşum üstverisi şeritten çıkınca dört
+        hücre kaldı ve geniş ekranda iki sütun boş bir kutu olarak görünüyordu.
+        Gösterge sayısı zaten değişken — fire ve tampon yalnızca parça girmişse,
+        denge yalnızca birden çok istasyon varsa üretilir — bu yüzden esneyen
+        bir satır, sabit ızgaradan doğrudur.
+      */}
+      <div className="flex flex-wrap gap-px overflow-hidden rounded-[var(--of-radius-md)] bg-[var(--of-surface-hairline)]">
         {indicators.map((indicator) => (
           <div
             key={indicator.id}
             title={indicator.hint}
-            className="bg-[var(--of-surface-1)] px-[var(--of-spacing-12)] py-[var(--of-spacing-12)]"
+            className="min-w-[calc(50%-1px)] flex-1 bg-[var(--of-surface-1)] px-[var(--of-spacing-12)] py-[var(--of-spacing-12)] sm:min-w-0"
           >
-            <p className="truncate text-[10px] font-medium tracking-[0.08em] text-[var(--of-ink-3)] uppercase">
+            <p className="truncate text-[11px] font-medium tracking-[0.08em] text-[var(--of-ink-3)] uppercase">
               {indicator.label}
             </p>
             <p

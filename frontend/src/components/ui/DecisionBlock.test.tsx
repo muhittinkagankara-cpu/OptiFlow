@@ -103,3 +103,46 @@ describe("DecisionBlock — yüzey", () => {
     expect(html).toContain("border-t border-[var(--of-surface-hairline)]");
   });
 });
+
+describe("DecisionBlock — dikey ritim (Sprint 2F-C)", () => {
+  it("koşum satırı eylemin yanında durur, gerekçelerin arasında değil", () => {
+    // Ayrı bir etiket–değer satırıyken "Neden" ile eşit ağırlıktaydı; oysa o
+    // bir gerekçe değil, kararın dayandığı koşumun kimliğidir.
+    const html = render({
+      why: "Kuyruklar büyümeye devam ediyor",
+      provenanceLine: "30 tekrar · %95 aralık 554 – 588",
+    });
+    expect(html.indexOf("Neden")).toBeLessThan(html.indexOf("Modeli aç"));
+    expect(html.indexOf("Modeli aç")).toBeLessThan(html.indexOf("Koşum"));
+  });
+
+  it("koşum satırı gerekçeden daha hafif yazılır", () => {
+    const html = render({ provenanceLine: "30 tekrar" });
+    expect(html).toContain("text-[11px]");
+    expect(html).toContain("--of-ink-3");
+  });
+
+  it("eylem gerekçelerle aynı hairline ritmini sürdürür", () => {
+    // Eylem 33 piksellik bir boşlukla ayrıyken bloğa sonradan eklenmiş gibi
+    // duruyordu.
+    const html = render({ why: "x" });
+    expect(html).toContain("border-t border-[var(--of-surface-hairline)]");
+    expect(html).not.toContain("--of-spacing-16)] border-t");
+  });
+
+  it("eşik aşımı yokken de tek birincil eylemle biter", () => {
+    // Boş durum da bir karar yüzeyidir; kutlama dili ya da yapay zekâ dili yok.
+    const html = render({
+      state: "ok",
+      stateLabel: "Eşik aşımı yok",
+      situation: "Şu anda eşiği aşan bir konu yok.",
+    });
+    expect(html).toContain("Eşik aşımı yok");
+    expect(html).toContain("--of-semantic-ok");
+    expect(html).toContain("Modeli aç");
+    // Sınıf adlarında "hairline" gibi diziler geçtiği için ham işaretlemede
+    // değil, yalnızca görünen metinde aranır.
+    const metin = html.replace(/<[^>]*>/g, " ");
+    expect(metin).not.toMatch(/Tebrikler|Harika|Mükemmel|yapay zekâ|AI/i);
+  });
+});

@@ -13,6 +13,21 @@
  * Bu sürümde `compact` varyantı çizilir (Command Center). `plan`, `live` ve
  * `money` varyantları aynı sözleşmeyi paylaşacak; bu yüzden bileşen
  * `components/ui/` altında durur, tek bir ekranın içinde değil.
+ *
+ * ## Sprint 2F-B — görsel ağırlık
+ *
+ * Şerit ölçüyü doğru taşıyordu ama bir **alet** gibi değil, bir ayraç gibi
+ * görünüyordu: 4 piksellik saç teli çubuklar, 67 piksellik satır. Üç şey
+ * değişti ve hiçbiri veriyi değiştirmedi:
+ *
+ * 1. Dolgu çubuğu şeridin birincil aletidir; kalınlığı okunur bir ölçek
+ *    hâline geldi (8px dar ekran, 12px geniş ekran).
+ * 2. "KISIT" etiketi segmentin sağ ucundan alınıp **kendi istasyon adının
+ *    hemen yanına** taşındı. Sağ uçtayken bir sonraki istasyonun adına
+ *    yapışıyor ve "KISIT KAYNAK" diye okunuyordu — yani kısıt yanlış
+ *    istasyona işaret ediyor gibi duruyordu.
+ * 3. Dar ekranda ad ve değer tek satıra indi; satır 66,5 pikselden ~40
+ *    piksele düştü, dört istasyon da okunur kaldı.
  */
 
 import { STATE_COLOR_VAR, type MeasuredState } from "../../lib/ui";
@@ -44,7 +59,7 @@ export function ConstraintRail({ stations, className = "" }: ConstraintRailProps
   return (
     <section
       aria-label="Hat kısıdı"
-      className={`flex flex-col gap-[var(--of-spacing-4)] md:flex-row ${className}`}
+      className={`flex flex-col gap-[var(--of-spacing-4)] md:flex-row md:gap-[var(--of-spacing-8)] ${className}`}
     >
       {stations.map((station) => {
         const color = `var(${STATE_COLOR_VAR[station.state]})`;
@@ -66,29 +81,42 @@ export function ConstraintRail({ stations, className = "" }: ConstraintRailProps
                   : "var(--of-surface-hairline)",
               }}
             />
-            <div className="mt-2 flex items-baseline justify-between gap-2">
-              <span className="truncate text-[11px] font-medium tracking-[0.08em] text-[var(--of-ink-3)] uppercase">
-                {station.label}
-              </span>
-              {station.isConstraint && (
-                <span
-                  className="shrink-0 text-[10px] font-semibold tracking-[0.08em] uppercase"
-                  style={{ color }}
-                >
-                  Kısıt
+            {/*
+             * Dar ekranda ad ve değer aynı satırı paylaşır (kompakt liste);
+             * geniş ekranda değer adın altına iner ve okunacak sayı büyür.
+             * Değer tek bir düğümdür — iki kez yazılsaydı ekran okuyucu her
+             * istasyonu iki kez okurdu.
+             */}
+            <div className="mt-[var(--of-spacing-8)] flex items-baseline justify-between gap-[var(--of-spacing-8)] md:mt-[var(--of-spacing-16)] md:flex-col md:items-start md:justify-start md:gap-[var(--of-spacing-4)]">
+              <span className="flex min-w-0 items-baseline gap-[var(--of-spacing-8)]">
+                <span className="truncate text-[11px] font-medium tracking-[0.08em] text-[var(--of-ink-3)] uppercase">
+                  {station.label}
                 </span>
-              )}
+                {station.isConstraint && (
+                  // Kendi adının yanında durur: hangi istasyonun kısıt olduğu
+                  // tek bakışta, komşu segmente bakmadan okunur.
+                  <span
+                    className="shrink-0 text-[11px] font-semibold tracking-[0.08em] uppercase"
+                    style={{ color }}
+                  >
+                    Kısıt
+                  </span>
+                )}
+              </span>
+              <p
+                className="shrink-0 font-mono text-[16px] leading-[1.15] tabular-nums md:text-[28px]"
+                style={{
+                  color: station.isConstraint ? color : "var(--of-ink-1)",
+                }}
+              >
+                {station.value}
+              </p>
             </div>
-            <p
-              className="mt-0.5 font-mono text-xl tabular-nums"
-              style={{
-                color: station.isConstraint ? color : "var(--of-ink-1)",
-              }}
-            >
-              {station.value}
-            </p>
-            {/* Dolgu çubuğu: dar ekranda geometri burada okunur. */}
-            <div className="mt-1.5 h-1 w-full rounded-[var(--of-radius-xs)] bg-[var(--of-surface-2)]">
+            {/*
+             * Dolgu çubuğu şeridin aleti: kalınlığı okunur olmalı, yoksa
+             * geometri bilgi değil süs olur.
+             */}
+            <div className="mt-[var(--of-spacing-4)] h-[var(--of-spacing-8)] w-full rounded-[var(--of-radius-xs)] bg-[var(--of-surface-2)] md:mt-[var(--of-spacing-16)] md:h-[var(--of-spacing-12)]">
               <div
                 className="h-full rounded-[var(--of-radius-xs)]"
                 style={{

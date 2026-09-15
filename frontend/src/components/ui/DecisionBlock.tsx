@@ -14,6 +14,14 @@
  *
  * Bu sürümde bir dil modeli yoktur. Öneri, `lib/actionItems` içindeki eşik
  * tabanlı kurallardan gelir ve blok bunu "AI" diye sunmaz.
+ *
+ * ## Sprint 2F-C — dikey ritim
+ *
+ * Blok 1280 pikselde 246,9 piksel yer kaplıyor ve alanının yalnızca %29,5'i
+ * metindi; geri kalanı boşluktu. Üç şey sıkıldı ve hiçbiri bilgi eksiltmedi:
+ * satır dolgusu 12'den 8 piksele indi, koşum satırı eylemin yanına taşındı,
+ * eylemi ayıran 33 piksellik boşluk 25 piksellik tek bir hairline ritmine
+ * dönüştü.
  */
 
 import type { ReactNode } from "react";
@@ -39,6 +47,10 @@ interface DecisionBlockProps {
    * elimizdeki belirsizlik ölçüsü (`confidence_interval_95`) çıktıya aittir,
    * tek tek kararlara değil. "Güven" yazmak, fire oranıyla ilgili bir kararın
    * güvenini ölçmüşüz izlenimi bırakırdı. Ölçülemiyorsa satır hiç çizilmez.
+   *
+   * Sprint 2F-C: satır yığından çıkıp eylemin yanına indi. Görünürlüğü
+   * azalmadı, ağırlığı azaldı — gerekçeyle eşit puntoda durduğunda ikisi aynı
+   * türden bilgi sanılıyordu.
    */
   provenanceLine?: string | null;
   /** Bulunduğu bölgenin tek birincil eylemi. */
@@ -49,7 +61,7 @@ interface DecisionBlockProps {
 /** Etiket–değer satırı; değer yoksa satır hiç çizilmez. */
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="flex flex-col gap-0.5 border-t border-[var(--of-surface-hairline)] py-[var(--of-spacing-12)] sm:flex-row sm:gap-4">
+    <div className="flex flex-col gap-0.5 border-t border-[var(--of-surface-hairline)] py-[var(--of-spacing-8)] sm:flex-row sm:gap-4">
       <span className="shrink-0 text-[11px] font-medium tracking-[0.08em] text-[var(--of-ink-3)] uppercase sm:w-24 sm:pt-0.5">
         {label}
       </span>
@@ -91,7 +103,7 @@ export function DecisionBlock({
         </p>
       </div>
 
-      <div className="mt-[var(--of-spacing-16)]">
+      <div className="mt-[var(--of-spacing-12)]">
         {why && <Row label="Neden">{why}</Row>}
         {impact && <Row label="Etki">{impact}</Row>}
 
@@ -112,12 +124,29 @@ export function DecisionBlock({
             )}
           </Row>
         )}
-
-        {provenanceLine && <Row label="Koşum">{provenanceLine}</Row>}
       </div>
 
-      <div className="mt-[var(--of-spacing-16)] border-t border-[var(--of-surface-hairline)] pt-[var(--of-spacing-16)]">
-        {action}
+      {/*
+        Eylem, gerekçeden 33 piksellik bir boşlukla ayrılmıştı ve bloğa sonradan
+        eklenmiş gibi duruyordu. Artık satırlarla aynı hairline ritmini
+        sürdürüyor: neden → koşum → eylem kesintisiz okunuyor.
+
+        Koşum satırı buraya, eylemin yanına indi. Ayrı bir etiket–değer satırı
+        olduğunda "Neden" ile eşit ağırlıktaydı; oysa o bir gerekçe değil,
+        kararın dayandığı koşumun kimliğidir. Yeri, "buna ne kadar
+        güvenebilirim?" sorusunun sorulduğu an — yani eyleme basmadan hemen
+        önce.
+      */}
+      <div className="mt-[var(--of-spacing-12)] flex flex-col gap-[var(--of-spacing-12)] border-t border-[var(--of-surface-hairline)] pt-[var(--of-spacing-12)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="shrink-0">{action}</div>
+        {provenanceLine && (
+          <p className="min-w-0 text-[11px] leading-4 text-[var(--of-ink-3)] sm:text-right">
+            <span className="font-medium tracking-[0.08em] uppercase">
+              Koşum
+            </span>{" "}
+            {provenanceLine}
+          </p>
+        )}
       </div>
     </section>
   );
