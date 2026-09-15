@@ -30,25 +30,14 @@ import { SelectedStationCard } from "../heatmap/SelectedStationCard";
 import { GENERIC_ERROR_MESSAGE } from "../../lib/errorMessages";
 import {
   confidenceLabel,
-  confidenceTone,
   formatMoney,
   provenanceHint,
   provenanceLabel,
-  provenanceTone,
   rateLabel,
   shareOfTotal,
 } from "../../lib/financeFormatting";
-import type { Tone } from "../../lib/resultsFormatting";
 import { Field, NumberField } from "../shared/FormControls";
-import { WarningIcon } from "../shared/icons";
 import { Spinner } from "../wizard/WizardStep3_Confirmation";
-
-const TONE_BADGE: Record<Tone, string> = {
-  good: "bg-emerald-100 text-emerald-800",
-  warning: "bg-amber-100 text-amber-800",
-  bad: "bg-red-100 text-red-800",
-  neutral: "bg-slate-100 text-slate-700",
-};
 
 /** Vardiya süresi hazır seçenekleri — envanter modülüyle aynı değerler. */
 const SHIFT_PRESETS = [
@@ -120,7 +109,7 @@ export function FinancialImpactPanel({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         aria-expanded={isOpen}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        className="flex min-h-[44px] w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
       >
         <span>
           <span className="block text-sm font-semibold text-slate-900">
@@ -137,13 +126,15 @@ export function FinancialImpactPanel({
         <div className="border-t border-slate-200 px-5 py-5">
           <SettingsForm settings={settings} onChange={update} />
 
-          <div className="mt-4 flex flex-wrap items-center gap-3">
+          {/* Tek ana eylem. Yükleme sırasında devre dışı kalır; ikinci bir
+              birincil düğme yoktur (MASTER: bölge başına tek primary). */}
+          <div className="mt-5 flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={() => void calculate()}
               disabled={isLoading || !hasAnyRate}
               title={hasAnyRate ? undefined : "En az bir maliyet oranı girin"}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:text-slate-500"
             >
               {isLoading && <Spinner />}
               Kaybı hesapla
@@ -155,8 +146,10 @@ export function FinancialImpactPanel({
             )}
           </div>
 
+          {/* Hata kutu değil, kenar çizgisidir: kırmızı ölçülmüş bir durumu
+              gösterir (Yasa 3), ama panelin içinde ikinci bir kart açmaz. */}
           {errors.length > 0 && (
-            <ul className="mt-4 list-inside list-disc space-y-1 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+            <ul className="mt-4 space-y-1 border-l-2 border-red-400 pl-3 text-sm text-red-700">
               {errors.map((message) => (
                 <li key={message}>{message}</li>
               ))}
@@ -179,7 +172,12 @@ export function SettingsForm({
   onChange: (patch: Partial<FinancialSettings>) => void;
 }) {
   return (
-    <div>
+    /* Dokunma hedefi burada, yalnızca finans formunda yükseltilir. Paylaşılan
+       `INPUT_CLASS` uygulamadaki her formu (sihirbaz, parametreler, envanter)
+       aynı anda değiştirirdi; bu sprintin kapsamı o değil. Aynı sarmalayıcı
+       girdilerin gölgesini de kaldırır — panelde ölçülen yedi gölgenin altısı
+       bu alanlardan geliyordu. */
+    <div className="[&_input]:min-h-[44px] [&_input]:shadow-none">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <Field label="Birim katkı payı" hint="Satış fiyatı eksi değişken maliyet. Fırsat kaybı bununla hesaplanır — ciroyla değil.">
           {(id) => (
@@ -249,7 +247,9 @@ export function SettingsForm({
         </Field>
       </div>
 
-      <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+      {/* Vardiya süresi artık ayrı bir kartın içinde değil, ince çizgiyle
+          ayrılmış bir alan. Bilgi aynı; kaybolan yalnızca kutu. */}
+      <div className="mt-5 border-t border-slate-200 pt-4">
         <p className="text-sm font-medium text-slate-700">
           Günde kaç dakika üretim yapıyorsunuz?
         </p>
@@ -271,7 +271,9 @@ export function SettingsForm({
                   })
                 }
                 aria-pressed={isActive}
-                className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
+                /* Seçili durum renkle birlikte `aria-pressed` ile de taşınır;
+                   renk tek başına durum anlatmaz. */
+                className={`inline-flex min-h-[44px] items-center rounded-lg border px-3 text-xs font-medium transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 ${
                   isActive
                     ? "border-brand-400 bg-brand-50 text-brand-700"
                     : "border-slate-300 bg-white text-slate-700 hover:border-brand-300"
@@ -335,9 +337,18 @@ export function ReportView({
           </div>
         </div>
       )}
-      {/* --- Başlık kartları --- */}
-      <div className="grid gap-3 sm:grid-cols-3">
-        <HeadlineCard
+      {/*
+        Özet satırları (Sprint 2H-C).
+
+        Burada eskiden üç büyük `HeadlineCard` vardı: yuvarlak kenarlıklı üç
+        kutu, 24 piksellik rakamlarla, bir ızgarada. Sonuç ekranının karar
+        yüzeyi (2H-B) aynı parayı zaten cümleyle söylüyor; panelin görevi
+        kararı tekrar etmek değil, dökümü vermek. Bu yüzden üç değer kutudan
+        çıkarıldı, punto küçültüldü ve kutular ince çizgiye dönüştü — değerler,
+        etiketler ve güven bilgisi aynen korundu.
+      */}
+      <dl className="divide-y divide-slate-200 border-y border-slate-200 sm:flex sm:divide-x sm:divide-y-0">
+        <SummaryItem
           label="Bugünkü tahmini kayıp"
           value={
             report.daily_loss === null || report.daily_loss === undefined
@@ -347,67 +358,72 @@ export function ReportView({
           fallback="Günlük üretim süresi girilmedi"
           hint={`${report.window_minutes.toLocaleString("tr-TR")} dakikalık pencereden ölçeklendi.`}
         />
-        <HeadlineCard
+        <SummaryItem
           label="Kurtarılabilir kayıp"
           value={formatMoney(report.recoverable_loss)}
           hint="Bilinen bir eylemin doğrudan hedefleyebileceği tutar. Fire buna dâhil değildir."
         />
-        <HeadlineCard
+        <SummaryItem
           label="Pencere toplamı"
           value={formatMoney(impact.total_loss)}
-          hint="Simülasyon penceresindeki toplam kayıp."
-          badge={{
-            text: `Güven: ${confidenceLabel(impact.confidence)}`,
-            tone: confidenceTone(impact.confidence),
-          }}
+          hint={`Simülasyon penceresindeki toplam kayıp. Güven: ${confidenceLabel(impact.confidence)}.`}
         />
-      </div>
+      </dl>
 
       {/* --- Eksik oran uyarısı --- */}
       {impact.missing_inputs.length > 0 && (
-        <div className="flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
-          <WarningIcon className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-          <div className="text-sm text-amber-900">
-            <p className="font-medium">
-              Bazı kalemler hesaplanamadı; toplam gerçek kaybın altındadır.
-            </p>
-            <p className="mt-1">
-              Eksik oranlar: {impact.missing_inputs.map(rateLabel).join(", ")}.
-            </p>
-          </div>
+        <div className="border-l-2 border-amber-400 pl-3 text-sm text-amber-700">
+          <p className="font-medium">
+            Bazı kalemler hesaplanamadı; toplam gerçek kaybın altındadır.
+          </p>
+          <p className="mt-1">
+            Eksik oranlar: {impact.missing_inputs.map(rateLabel).join(", ")}.
+          </p>
         </div>
       )}
 
       {/* --- Kalem dökümü --- */}
       <div>
         <h4 className="mb-2 text-sm font-semibold text-slate-900">Kayıp kalemleri</h4>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[560px] text-sm">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50 text-left">
-                <Th>Kalem</Th>
-                <Th>Tutar</Th>
-                <Th>Pay</Th>
-                <Th>Kaynak</Th>
-                <Th>Dayanak</Th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {impact.components.map((component) => (
-                <ComponentRow
-                  key={component.name}
-                  component={component}
-                  total={impact.total_loss}
-                />
-              ))}
-            </tbody>
-          </table>
-        </div>
+
+        {/* 768 altında tablo kayıt listesine döner. Yatay kaydırma kutusu bir
+            çözüm değil, sorunun saklanmasıdır (UI kuralı); aynı dönüşüm Sonuç
+            ekranındaki istasyon tablosunda da uygulanmıştı. */}
+        <ul className="divide-y divide-slate-200 border-y border-slate-200 md:hidden">
+          {impact.components.map((component) => (
+            <ComponentRecord
+              key={component.name}
+              component={component}
+              total={impact.total_loss}
+            />
+          ))}
+        </ul>
+
+        <table className="hidden w-full text-sm md:table">
+          <thead>
+            <tr className="border-b border-slate-200 text-left">
+              <Th>Kalem</Th>
+              <Th>Tutar</Th>
+              <Th>Pay</Th>
+              <Th>Kaynak</Th>
+              <Th>Dayanak</Th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-100">
+            {impact.components.map((component) => (
+              <ComponentRow
+                key={component.name}
+                component={component}
+                total={impact.total_loss}
+              />
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {/* --- Notlar --- */}
       {impact.notes.length > 0 && (
-        <ul className="space-y-1.5 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+        <ul className="space-y-1.5 text-xs text-slate-500">
           {impact.notes.map((note) => (
             <li key={note}>• {note}</li>
           ))}
@@ -423,7 +439,7 @@ export function ReportView({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left">
+                <tr className="border-b border-slate-200 text-left">
                   <Th>İstasyon</Th>
                   <Th>Arıza</Th>
                   <Th>Bekleme</Th>
@@ -468,74 +484,80 @@ export function ReportView({
           <h4 className="mb-2 text-sm font-semibold text-slate-900">
             En yüksek getirili iyileştirme
           </h4>
-          <div className="space-y-2">
-            {report.suggestions.map((suggestion, index) => (
-              <div
-                key={suggestion.station_id}
-                className={`rounded-lg border px-4 py-3 ${
-                  index === 0
-                    ? "border-brand-300 bg-brand-50"
-                    : "border-slate-200 bg-white"
-                }`}
-              >
+          {/*
+            `suggestion.action` bir **metindir**, uygulanabilir bir işlem
+            değil: backend'de `ACTION_BY_COMPONENT` sözlüğünden gelen sabit bir
+            tavsiye cümlesidir ("Önleyici bakım önceliğini bu istasyona
+            verin..."). Arkasında ne bir uç nokta, ne bir hedef ekran, ne de
+            bir parametre var. Bu yüzden düğme ya da bağlantı yapılmadı —
+            tıklanabilir görünen ama hiçbir şey yapmayan bir kontrol, olmayan
+            bir yetenek vaat etmek olurdu.
+          */}
+          <ul className="divide-y divide-slate-200 border-y border-slate-200">
+            {report.suggestions.map((suggestion) => (
+              <li key={suggestion.station_id} className="py-3">
                 <div className="flex flex-wrap items-baseline justify-between gap-2">
-                  <span className="text-sm font-semibold text-slate-900">
+                  <span className="text-sm font-medium text-slate-900">
                     {suggestion.station_name}
                   </span>
-                  <span className="text-sm font-semibold text-brand-700">
+                  <span className="text-sm font-medium text-slate-900 tabular-nums">
                     {formatMoney(suggestion.recoverable_amount)} hedefleniyor
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-slate-600">{suggestion.rationale}</p>
-                <p className="mt-2 text-sm text-slate-800">{suggestion.action}</p>
-              </div>
+                <p className="mt-1 text-xs text-slate-500">{suggestion.rationale}</p>
+                <p className="mt-2 text-sm text-slate-700">{suggestion.action}</p>
+              </li>
             ))}
-          </div>
+          </ul>
         </div>
       )}
     </div>
   );
 }
 
-function HeadlineCard({
+/**
+ * Özet satırı: etiket, değer, açıklama. Kutu yok.
+ *
+ * Ölçülemeyen değer sıfıra düşmez; yerine **nedeni** yazılır — "Günlük üretim
+ * süresi girilmedi" bir tireden daha faydalıdır çünkü eksiği kapatmanın yolunu
+ * söyler (Yasa 4).
+ */
+function SummaryItem({
   label,
   value,
   hint,
   fallback,
-  badge,
 }: {
   label: string;
   value: string | null;
   hint: string;
   fallback?: string;
-  badge?: { text: string; tone: Tone };
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-xs font-medium tracking-wide text-slate-500 uppercase">
-          {label}
-        </p>
-        {badge && (
-          <span
-            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${TONE_BADGE[badge.tone]}`}
-          >
-            {badge.text}
-          </span>
-        )}
-      </div>
+    <div className="py-3 sm:flex-1 sm:px-4 sm:first:pl-0 sm:last:pr-0">
+      <dt className="text-xs font-medium tracking-wide text-slate-500 uppercase">
+        {label}
+      </dt>
       {value === null ? (
-        <p className="mt-1 text-sm text-slate-400">{fallback}</p>
+        <dd className="mt-1 text-sm text-slate-400">{fallback}</dd>
       ) : (
-        <p className="mt-1 text-2xl font-semibold tracking-tight text-slate-900 tabular-nums">
+        <dd className="mt-1 text-base font-semibold text-slate-900 tabular-nums">
           {value}
-        </p>
+        </dd>
       )}
-      <p className="mt-1 text-xs text-slate-500">{hint}</p>
+      <dd className="mt-1 text-xs text-slate-500">{hint}</dd>
     </div>
   );
 }
 
+/**
+ * Kalem satırı (768px ve üstü).
+ *
+ * `is_available === false` olan kalem **asla ₺0 yazmaz**; tutarı 0 gelse bile
+ * "hesaplanamadı" der ve payı tire olur. Bu, panelin en kritik davranışıdır:
+ * hiç oran girmemiş bir kullanıcıya "kaybınız yok" demek, ürünün
+ * yapabileceği en pahalı hatadır.
+ */
 function ComponentRow({
   component,
   total,
@@ -543,11 +565,10 @@ function ComponentRow({
   component: LossComponent;
   total: number;
 }) {
-  const tone = provenanceTone(component.provenance);
   const share = shareOfTotal(component.amount, total);
 
   return (
-    <tr className={component.is_available ? "" : "bg-slate-50"}>
+    <tr>
       <Td>
         <span className="font-medium text-slate-900">{component.label}</span>
       </Td>
@@ -566,10 +587,12 @@ function ComponentRow({
         )}
       </Td>
       <Td>
-        {/* Renk tek basina bilgi tasimaz: rozet her zaman yazi da icerir. */}
+        {/* Kaynak artık renkli bir hap değil, düz yazı. Anlam (Ölçüldü /
+            Hesaplandı / Tahmin) ve açıklaması aynen duruyor; kaybolan yalnızca
+            dört satırda dört renkli yuvarlak yüzey. */}
         <span
           title={provenanceHint(component.provenance)}
-          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${TONE_BADGE[tone]}`}
+          className="text-xs text-slate-500"
         >
           {provenanceLabel(component.provenance)}
         </span>
@@ -581,9 +604,44 @@ function ComponentRow({
   );
 }
 
+/** Aynı kalem, 768px altında kayıt olarak. */
+function ComponentRecord({
+  component,
+  total,
+}: {
+  component: LossComponent;
+  total: number;
+}) {
+  const share = shareOfTotal(component.amount, total);
+
+  return (
+    <li className="py-3">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="text-sm font-medium text-slate-900">
+          {component.label}
+        </span>
+        <span className="text-sm text-slate-900 tabular-nums">
+          {component.is_available ? (
+            formatMoney(component.amount)
+          ) : (
+            <span className="text-xs text-slate-400">hesaplanamadı</span>
+          )}
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-slate-500">
+        {component.is_available ? `Pay %${share.toFixed(0)} · ` : "Pay — · "}
+        <span title={provenanceHint(component.provenance)}>
+          {provenanceLabel(component.provenance)}
+        </span>
+      </p>
+      <p className="mt-0.5 text-xs text-slate-500">{component.basis}</p>
+    </li>
+  );
+}
+
 function Th({ children }: { children: React.ReactNode }) {
   return (
-    <th className="px-3 py-2 text-xs font-semibold tracking-wide text-slate-600 uppercase">
+    <th className="px-3 py-2 text-xs font-medium tracking-wide text-slate-500 uppercase">
       {children}
     </th>
   );

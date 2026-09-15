@@ -242,3 +242,228 @@ describe("finans durumu yukarıdan gelir (Sprint 2H-A)", () => {
     expect(html).not.toMatch(/₺\s*0(?!\d)/);
   });
 });
+
+/* ===================================================================== *
+ * Sprint 2H-C — sadeleştirme
+ *
+ * Yukarıdaki 2H-A karakterizasyon testleri olduğu gibi durur; aşağıdakiler
+ * sadeleştirmenin geri alınmasını zorlaştırır. Tıklama gerektiren yollar
+ * (akordeon, yükleme, hata) burada değil, tarayıcıda doğrulanır — `vitest`
+ * `environment: "node"` ile koşar ve sunucu render'ında olay yoktur.
+ * ===================================================================== */
+
+/** Isı haritası olmayan rapor: panelin kendi yüzeylerini yalıtmak için. */
+const haritasizRapor = (r: FinancialReport = demoReport(3)): FinancialReport => ({
+  ...r,
+  heat: [],
+  top_loss_stations: [],
+});
+
+describe("başlık kartları kaldırıldı", () => {
+  it("rapor görünümünde yuvarlak kenarlıklı kart kalmadı", () => {
+    // `rounded-xl` üç `HeadlineCard`'ın imzasıydı.
+    const html = rapor(haritasizRapor());
+    expect(html).not.toContain("rounded-xl");
+  });
+
+  it("kart ızgarası kalmadı", () => {
+    const html = rapor(haritasizRapor());
+    expect(html).not.toMatch(/grid gap-3 sm:grid-cols-3/);
+  });
+
+  it("üç değer ve etiketleri korundu", () => {
+    const html = rapor(haritasizRapor());
+    expect(html).toContain("Bugünkü tahmini kayıp");
+    expect(html).toContain("Kurtarılabilir kayıp");
+    expect(html).toContain("Pencere toplamı");
+  });
+
+  it("güven bilgisi kaybolmadı, yazıya taşındı", () => {
+    const html = rapor(haritasizRapor());
+    expect(html).toMatch(/Güven: (Yüksek|Orta|Düşük|—)/);
+  });
+});
+
+describe("karar yüzeyindeki büyük rakam burada tekrar edilmiyor", () => {
+  it("panelde 2xl/3xl punto yok", () => {
+    // Sonuç ekranının finansal cümlesi (2H-B) ana ifadedir; panel dökümdür.
+    const html = rapor(haritasizRapor());
+    expect(html).not.toMatch(/text-(2xl|3xl|4xl)/);
+  });
+});
+
+describe("gereksiz yüzey ve gölge kalmadı", () => {
+  it("rapor görünümünde gölge yok", () => {
+    expect(rapor(haritasizRapor())).not.toContain("shadow");
+  });
+
+  it("rapor görünümünde gradient yok", () => {
+    expect(rapor(haritasizRapor())).not.toContain("gradient");
+  });
+
+  it("eksik oran uyarısı kart değil, kenar çizgisi", () => {
+    // Isı haritası dışarıda bırakılır: `HeatLegend` kendi lejant renklerini
+    // (`bg-amber-500`) taşır ve bu sprintin kapsamında değildir.
+    const html = rapor(haritasizRapor(raporlaKalemler([doluKalem, eksikKalem])));
+    expect(html).toContain("border-amber-400");
+    expect(html).not.toMatch(/bg-amber-50/);
+    expect(html).not.toMatch(/border-amber-200/);
+  });
+
+  it("uyarı metni ve eksik oran adları korundu", () => {
+    const html = rapor(raporlaKalemler([doluKalem, eksikKalem]));
+    expect(html).toContain("toplam gerçek kaybın altındadır");
+    expect(html).toContain("Eksik oranlar");
+  });
+});
+
+describe("kaynak (provenance) düz yazıya indi ama korundu", () => {
+  it("renkli hap kalmadı", () => {
+    // Isı haritasının ilerleme çubukları da `rounded-full` kullanır; ölçüm
+    // panelin kendi yüzeyleriyle sınırlanır.
+    const html = rapor(haritasizRapor(raporlaKalemler([doluKalem])));
+    expect(html).not.toContain("rounded-full");
+  });
+
+  it("kaynak etiketi hâlâ yazıyla okunuyor", () => {
+    const html = rapor(raporlaKalemler([doluKalem]));
+    expect(html).toMatch(/Ölçüldü|Hesaplandı|Tahmin/);
+  });
+
+  it("kaynağın açıklaması title olarak duruyor", () => {
+    const html = rapor(raporlaKalemler([doluKalem]));
+    expect(html).toMatch(/title="[^"]+"/);
+  });
+});
+
+describe("dar ekranda kalem tablosu kayıt listesine dönüyor", () => {
+  it("768 altı için liste, üstü için tablo çizilir", () => {
+    const html = rapor(raporlaKalemler([doluKalem, eksikKalem]));
+    expect(html).toContain("md:hidden");
+    expect(html).toContain("md:table");
+  });
+
+  it("kayıt listesinde de hesaplanamayan kalem sıfır TL değildir", () => {
+    const kalemler = kalemTablosu(rapor(raporlaKalemler([eksikKalem])));
+    // Hem listede hem tabloda iki kez "hesaplanamadı" yazar; hiçbirinde ₺0 yok.
+    expect(kalemler.match(/hesaplanamadı/g)?.length).toBe(2);
+    expect(kalemler).not.toMatch(/₺\s*0(?!\d)/);
+  });
+
+  it("kayıt listesi kalemin dayanağını da taşır", () => {
+    const kalemler = kalemTablosu(rapor(raporlaKalemler([doluKalem])));
+    expect(kalemler.match(/saatlik makine maliyeti/g)?.length).toBe(2);
+  });
+});
+
+describe("öneri metni uydurma eyleme çevrilmedi", () => {
+  /**
+   * Backend `ImprovementSuggestion.action` alanı `ACTION_BY_COMPONENT`
+   * sözlüğünden gelen sabit bir tavsiye cümlesidir; arkasında uç nokta, hedef
+   * ekran ya da parametre yoktur. Tıklanabilir yapmak olmayan bir yetenek
+   * vaat etmek olurdu.
+   */
+  const oneriliRapor = (): FinancialReport => ({
+    ...haritasizRapor(),
+    suggestions: [
+      {
+        station_id: "S1",
+        station_name: "Pres",
+        dominant_loss: "downtime_loss",
+        recoverable_amount: 4200,
+        action: "Önleyici bakım önceliğini bu istasyona verin.",
+        rationale: "Duruş kaybının en büyük payı burada.",
+      },
+    ],
+  });
+
+  it("öneri metni gösterilir", () => {
+    const html = rapor(oneriliRapor());
+    expect(html).toContain("Önleyici bakım önceliğini bu istasyona verin.");
+    expect(html).toContain("Duruş kaybının en büyük payı burada.");
+    expect(html).toContain("Pres");
+  });
+
+  it("öneri bölümünde düğme ya da bağlantı yok", () => {
+    const html = rapor(oneriliRapor());
+    const bas = html.indexOf("En yüksek getirili iyileştirme");
+    expect(bas).toBeGreaterThan(-1);
+    const bolum = html.slice(bas);
+    expect(bolum).not.toContain("<button");
+    expect(bolum).not.toContain("<a ");
+  });
+
+  it("hedeflenen tutar korundu", () => {
+    expect(rapor(oneriliRapor())).toContain("4.200");
+  });
+});
+
+describe("dokunma hedefleri (MASTER §14)", () => {
+  it("vardiya ön ayarlarının üçü de 44px", () => {
+    const html = renderToStaticMarkup(
+      <SettingsForm settings={{}} onChange={() => {}} />,
+    );
+    const dugmeler = html.match(/<button[^>]*>/g) ?? [];
+    expect(dugmeler).toHaveLength(3);
+    for (const dugme of dugmeler) {
+      expect(dugme).toContain("min-h-[44px]");
+    }
+  });
+
+  it("maliyet alanları 44px tabanına yükseltildi", () => {
+    const html = renderToStaticMarkup(
+      <SettingsForm settings={{}} onChange={() => {}} />,
+    );
+    expect(html).toContain("[&amp;_input]:min-h-[44px]");
+  });
+
+  it("panelin aç/kapa düğmesi 44px", () => {
+    const html = renderToStaticMarkup(
+      <FinancialImpactPanel
+        result={demoRun(3)}
+        config={config}
+        settings={{}}
+        onSettingsChange={() => {}}
+        report={null}
+        onReportChange={() => {}}
+      />,
+    );
+    expect(html).toMatch(/<button[^>]*min-h-\[44px\]/);
+  });
+});
+
+describe("akordeon ve girdi alanları korundu", () => {
+  const kapaliPanel = renderToStaticMarkup(
+    <FinancialImpactPanel
+      result={demoRun(3)}
+      config={config}
+      settings={{ machine_cost_per_hour: 1550 }}
+      onSettingsChange={() => {}}
+      report={demoReport(3)}
+      onReportChange={() => {}}
+    />,
+  );
+
+  it("panel kapalı başlar ve bunu erişilebilir biçimde bildirir", () => {
+    expect(kapaliPanel).toContain('aria-expanded="false"');
+  });
+
+  it("kapalıyken rapor içeriği çizilmez", () => {
+    expect(kapaliPanel).not.toContain("Kayıp kalemleri");
+  });
+
+  it("kapalıyken de rakam uydurulmaz", () => {
+    expect(kapaliPanel).not.toMatch(/₺\s*0(?!\d)/);
+  });
+
+  it("alanlar etiketleriyle bağlı kalır", () => {
+    const html = renderToStaticMarkup(
+      <SettingsForm settings={{}} onChange={() => {}} />,
+    );
+    const forIds = [...html.matchAll(/<label for="([^"]+)"/g)].map((m) => m[1]);
+    expect(forIds.length).toBe(6);
+    for (const id of forIds) {
+      expect(html).toContain(`id="${id}"`);
+    }
+  });
+});
