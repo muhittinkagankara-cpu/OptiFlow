@@ -104,3 +104,65 @@ describe("ölçümler ve dürüstlük", () => {
     expect(metin).not.toMatch(/\bCanlı veri\b|\bAktif bağlantı\b/i);
   });
 });
+
+describe("kısıt şeridi ve ölçüm şeridi (Sprint 2G-C)", () => {
+  it("Command Center'ın kısıt şeridini çizer", () => {
+    // Ayrı bir Results sürümü yazılmadı: aynı bileşen, aynı erişilebilir ad.
+    expect(render()).toContain('aria-label="Hat kısıdı"');
+  });
+
+  it("yetkili darboğaz istasyonunu kısıt olarak işaretler", () => {
+    const kisit = temelKosum.results.station_metrics.find((s) => s.is_bottleneck)!;
+    const html = render();
+    expect(html).toContain(kisit.station_name);
+    expect(html).toContain("Kısıt");
+    // Tek kısıt: şerit birden fazla istasyonu kısıt gösteremez.
+    expect(html.match(/>Kısıt</g)).toHaveLength(1);
+  });
+
+  it("doluluk station_metrics'ten korunur", () => {
+    const kisit = temelKosum.results.station_metrics.find((s) => s.is_bottleneck)!;
+    const html = render();
+    // Geometri ölçülmüş doluluktan gelir.
+    expect(html).toContain(`flex-grow:${kisit.utilization}`);
+    expect(html).toContain(`%${Math.round(kisit.utilization * 100)}`);
+  });
+
+  it("darboğaz yoksa bir istasyon kısıt olmaya zorlanmaz", () => {
+    const kisitsiz = {
+      ...temelKosum,
+      results: { ...temelKosum.results, bottleneck_station_id: "yok" },
+    };
+    const html = render(kisitsiz);
+    expect(html).toContain('aria-label="Hat kısıdı"');
+    expect(html).not.toContain(">Kısıt<");
+  });
+
+  it("dört ölçümü de şeritte yazar", () => {
+    const html = render();
+    expect(html).toContain("Beklenen üretim");
+    expect(html).toContain("Hat OEE");
+    expect(html).toContain("Ortalama akış süresi");
+    expect(html).toContain("Ortalama WIP");
+  });
+
+  it("eski yuvarlak özet kartları artık çizilmiyor", () => {
+    // SummaryCards ile MetricGroup birebir aynı dört değeri gösteriyordu.
+    const html = render();
+    expect(html).not.toContain("Beklenen Üretim");
+    expect(html).not.toContain("%95 güven aralığı:");
+  });
+
+  it("cümle hâlâ ilk karar ifadesidir", () => {
+    const html = render();
+    expect(html.indexOf("<h2")).toBeLessThan(html.indexOf('aria-label="Hat kısıdı"'));
+    expect(html.indexOf('aria-label="Hat kısıdı"')).toBeLessThan(
+      html.indexOf("Beklenen üretim"),
+    );
+  });
+
+  it("köken satırı cümleden önce gelir", () => {
+    const html = render();
+    expect(html.indexOf("Benzetim")).toBeLessThan(html.indexOf("<h2"));
+  });
+});

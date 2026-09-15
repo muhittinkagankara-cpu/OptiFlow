@@ -35,18 +35,21 @@ import { summarizeFactory } from "../../lib/factoryOverview";
  */
 import {
   freshnessLine,
+  railStations,
   runFreshness,
   runProvenance,
 } from "../../lib/commandCenter";
 import { OriginBadge } from "../ui/OriginBadge";
 import { Statement } from "../ui/Statement";
+import { ConstraintRail } from "../ui/ConstraintRail";
+import { MetricGroup } from "../ui/MetricGroup";
 import { resultsStatement } from "../../lib/results/statement";
+import { resultsMetrics } from "../../lib/results/metrics";
 import { ArrowLeftIcon, ArrowRightIcon } from "../shared/icons";
 import { FactoryAnimation } from "./FactoryAnimation";
 import { FactoryOverview } from "./FactoryOverview";
 import { FinancialImpactPanel } from "./FinancialImpactPanel";
 import { FlowSankey } from "./FlowSankey";
-import { SummaryCards } from "./SummaryCards";
 import { StationMetricsTable } from "./StationMetricsTable";
 import { ValidationPanel } from "./ValidationPanel";
 import { UtilizationBarChart } from "./charts/UtilizationBarChart";
@@ -94,6 +97,12 @@ export function ResultsPage({
   /* Açılış cümlesi seçilir, üretilmez: önce motorun kendi cümlesi, o yoksa
      sayfanın zaten kullandığı kısıt cümlesi (bkz. lib/results/statement). */
   const statement = resultsStatement(result.headline, bottleneck?.station_name);
+  /* Şerit ve ölçümler Command Center'ın **aynı** bileşenleriyle çizilir
+     (`components/ui/`). `railStations` da orada zaten var: istasyon
+     genişliği ölçülmüş doluluktan gelir, kısıt `bottleneck_station_id`
+     üzerinden işaretlenir. Yeni kısıt hesabı ya da yeni pay metriği yok. */
+  const stations = railStations(results);
+  const metrics = resultsMetrics(results);
 
   const summary = useMemo(
     () =>
@@ -168,8 +177,22 @@ export function ResultsPage({
         </div>
       </header>
 
-      {/* --- Bölüm A --- */}
-      <SummaryCards results={results} />
+      {/*
+        Kısıt şeridi: hangi istasyonun hattı sınırladığı, cümleden hemen sonra
+        ve geometriyle. Command Center'daki bileşenin aynısı — iki ekranda iki
+        farklı kısıt dili olsaydı tasarım sistemi ikiye bölünürdü.
+
+        Darboğaz yoksa hiçbir segment kısıt işaretlenmez; bir istasyon o role
+        zorlanmaz.
+      */}
+      <ConstraintRail stations={stations} className="mb-4" />
+
+      {/*
+        Ölçüm şeridi, eski dört yuvarlak karttın yerini alır. Aynı dört değer,
+        aynı kaynaklardan; değişen yalnızca sunum ve iki değerin artık
+        sonucunu taşıması (güven aralığı ve kısıt).
+      */}
+      <MetricGroup items={metrics} className="mb-4" />
 
       {/* Fabrika geneli özet: tablodan önce gelir çünkü kullanıcının ilk
           sorusu "nereye bakmalıyım?" sorusudur. */}
