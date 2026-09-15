@@ -7,6 +7,20 @@
  * kadara mal oluyor?" → "bu sayılara neden güveneyim?".
  *
  * `ResultsPlaceholder.tsx` bu bileşenle tamamen değiştirilmiştir.
+ *
+ * ## Sprint 2G-A — köken ve gauge
+ *
+ * İki denetim bulgusu kapatıldı. Sayfa artık kökenini söylüyor ("Benzetim ·
+ * Son koşum …") ve OEE ibreli gösterge yerine okunur bir ölçüm olarak
+ * yazılıyor. Hesap katmanına dokunulmadı: `line_oee`, istasyon ölçümleri,
+ * darboğaz, finans ve doğrulama aynen duruyor.
+ *
+ * ## Sprint 2G-B — açılış cümlesi
+ *
+ * Sayfa artık bir etiketle ("Simülasyon sonucu") değil, bir sonuçla açılıyor.
+ * Cümle `SimulationRunResponse.headline` alanından gelir — motorun kendi
+ * yazdığı ve bugüne kadar hiç çizilmemiş cümle. Yoksa sayfanın zaten
+ * kullandığı kısıt cümlesine düşülür. Yeni cümle üretilmez.
  */
 
 import { useMemo, useRef, useState } from "react";
@@ -14,6 +28,19 @@ import { Sparkles } from "lucide-react";
 import type { SimulationConfig, SimulationRunResponse } from "../../types/simulationTypes";
 import { formatDecimal, formatUnits } from "../../lib/resultsFormatting";
 import { summarizeFactory } from "../../lib/factoryOverview";
+/*
+ * Köken ve tazelik Sprint 2F-A'da kurulmuş altyapıdan gelir. İkinci bir zaman
+ * kaynağı ya da ikinci bir göreli-zaman uygulaması yazılmaz: tek yetkili damga
+ * `RunHistoryEntry.ranAt` ve onu okuyan işlevler bunlardır.
+ */
+import {
+  freshnessLine,
+  runFreshness,
+  runProvenance,
+} from "../../lib/commandCenter";
+import { OriginBadge } from "../ui/OriginBadge";
+import { Statement } from "../ui/Statement";
+import { resultsStatement } from "../../lib/results/statement";
 import { ArrowLeftIcon, ArrowRightIcon } from "../shared/icons";
 import { FactoryAnimation } from "./FactoryAnimation";
 import { FactoryOverview } from "./FactoryOverview";
@@ -37,6 +64,14 @@ interface ResultsPageProps {
   onOpenIntelligence: () => void;
   /** Karşılaştırma için saklanmış referans senaryonun etiketi. */
   baselineLabel?: string | null;
+  /**
+   * Bu koşumun alındığı an (ISO 8601) — `RunHistoryEntry.ranAt`.
+   *
+   * Command Center ile **aynı** yoldan gelir (`runRanAt`). Eşleşen bir kayıt
+   * yoksa `null` olur ve ekranda tazelik hiç gösterilmez; uydurulmuş bir saat,
+   * eski sonucu taze göstermekten kötüdür.
+   */
+  ranAt?: string | null;
 }
 
 export function ResultsPage({
@@ -48,9 +83,17 @@ export function ResultsPage({
   onOpenComparison,
   onOpenIntelligence,
   baselineLabel,
+  ranAt = null,
 }: ResultsPageProps) {
   const { results } = result;
+  /* Köken burada uydurulmaz: koşum varsa "Benzetim"dir. Aynı işlev Command
+     Center'da da bu kararı veriyor, iki ekran ayrışamaz. */
+  const provenance = runProvenance(results, ranAt);
+  const freshness = freshnessLine(runFreshness(provenance.ranAt));
   const bottleneck = results.station_metrics.find((station) => station.is_bottleneck);
+  /* Açılış cümlesi seçilir, üretilmez: önce motorun kendi cümlesi, o yoksa
+     sayfanın zaten kullandığı kısıt cümlesi (bkz. lib/results/statement). */
+  const statement = resultsStatement(result.headline, bottleneck?.station_name);
 
   const summary = useMemo(
     () =>
@@ -82,14 +125,26 @@ export function ResultsPage({
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
       <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-slate-900">Simülasyon sonucu</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            {config.stations.length} istasyon · {results.num_replications} kez
-            tekrarlandı · {formatDecimal(result.duration_seconds, 1)} saniyede
-            tamamlandı
-          </p>
-        </div>
+        {/*
+          Sayfanın en büyük yazısı artık bir etiket değil, bir sonuç.
+
+          Eskiden burada "Simülasyon sonucu" yazıyordu — TopBar'ın zaten
+          gösterdiği sayfa adının kopyası, sıfır bilgi taşıyan bir başlık
+          (ANTI-PATTERNS #21). Yerine motorun kendi cümlesi geçti; o da yoksa
+          sayfanın zaten yazdığı kısıt cümlesi. `Statement` Command Center'da
+          kurulmuş bileşendir, ikinci bir kopya yazılmadı: kutu, gradient,
+          dekoratif ikon içermez.
+
+          Köken rozeti (Sprint 2G-A) cümlenin üstünde, `meta` yuvasında durur —
+          kullanıcı sayıları okumadan önce neye baktığını bilmelidir. Tazelik
+          mantığı değişmedi.
+        */}
+        <Statement
+          className="min-w-0 flex-1"
+          headline={statement?.headline ?? "Simülasyon sonucu"}
+          detail={`${config.stations.length} istasyon · ${results.num_replications} kez tekrarlandı · ${formatDecimal(result.duration_seconds, 1)} saniyede tamamlandı`}
+          meta={<OriginBadge origin={provenance.origin} detail={freshness} />}
+        />
         <div className="flex flex-wrap items-center gap-2">
           {/* Sonuç sayfası "ne oldu?" sorusunu yanıtlar; asıl merak edilen
               "şimdi ne yapmalıyım?" sorusudur. Bu yüzden Intelligence bağlantısı
@@ -128,11 +183,18 @@ export function ResultsPage({
           söyler. Darboğaz bilgisi kullanıcının en çok işine yarayan tek şeydir. */}
       {bottleneck && (
         <p className="mt-4 rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm leading-relaxed text-slate-700">
-          Hattınızın çıktısını{" "}
-          <strong className="font-semibold text-slate-900">
-            {bottleneck.station_name}
-          </strong>{" "}
-          belirliyor. Bu istasyon zamanının %
+          {/* Bu cümle başlığa yükseldiyse burada ikinci kez yazılmaz; geri
+              kalan açıklama yerinde kalır. */}
+          {statement?.source !== "bottleneck" && (
+            <>
+              Hattınızın çıktısını{" "}
+              <strong className="font-semibold text-slate-900">
+                {bottleneck.station_name}
+              </strong>{" "}
+              belirliyor.{" "}
+            </>
+          )}
+          Bu istasyon zamanının %
           {Math.round(bottleneck.utilization * 100)}'ini işlem yaparak geçiriyor.
           Üretimi artırmak için önce buraya kapasite eklemelisiniz — diğer
           istasyonları hızlandırmak toplam çıktıyı değiştirmez.

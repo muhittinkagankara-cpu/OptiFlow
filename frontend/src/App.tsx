@@ -1098,6 +1098,9 @@ export default function App() {
               onOpenComparison={baseline ? () => setView("comparison") : undefined}
               onOpenIntelligence={() => setView("intelligence")}
               baselineLabel={baseline?.label ?? null}
+              // Command Center ile aynı yol: koşumun saati geçmiş kaydından
+              // `simulation_id` ile eşleştirilir, ikinci bir kaynak yoktur.
+              ranAt={runRanAt(activeResult, activeHistory)}
             />
           )}
 
