@@ -73,15 +73,11 @@ import { RuntimeDiagnosticsPage } from "./components/diagnostics/RuntimeDiagnost
 import { RuntimeBridgePage } from "./components/runtime/RuntimeBridgePage";
 import { EnterpriseSection } from "./components/enterprise/EnterpriseSection";
 import { MachineInventoryManager } from "./components/enterprise/MachineInventoryManager";
-import {
-  First30MinutesGuide,
-  SetupChecklistCard,
-} from "./components/enterprise/SetupCards";
 import { useEnterpriseSetup } from "./components/enterprise/useEnterpriseSetup";
 import { SectionTabs } from "./components/shell/SectionTabs";
 import { Sidebar } from "./components/shell/Sidebar";
 import { TopBar } from "./components/shell/TopBar";
-import { displayName, greeting } from "./components/shell/userDisplay";
+import { displayName } from "./components/shell/userDisplay";
 import { SettingsPage } from "./components/shell/SimplePages";
 import { ReportsPage } from "./components/reports/ReportsPage";
 import {
@@ -935,7 +931,6 @@ export default function App() {
   const activeConfig = demoData ? demoData.config : config;
   const activeResult = demoData ? demoData.run : result;
   const activeReport = demoData ? demoData.report : financeReport;
-  const activeHistory = demoData ? demoData.runHistory : runHistory;
   const activeFactoryName = demoData ? DEMO_FACTORY_NAME : (openFactory?.name ?? null);
   const activeUserName = demoData ? "Demo kullanıcısı" : userName;
 
@@ -1025,31 +1020,14 @@ export default function App() {
           ) : (
           <>
           {view === "dashboard" && (
-            <div className="mx-auto w-full max-w-7xl space-y-3 px-4 pt-6 sm:px-6">
-              <First30MinutesGuide
-                items={enterprise.checklist}
-                report={enterprise.report}
-                onNavigate={(target) => setView(target as View)}
-              />
-              <SetupChecklistCard
-                items={enterprise.checklist}
-                report={enterprise.report}
-                onNavigate={(target) => setView(target as View)}
-              />
-            </div>
-          )}
-
-          {view === "dashboard" && (
             <CommandCenter
-              greetingText={greeting()}
-              userName={activeUserName}
               results={activeResult?.results ?? null}
               report={activeReport}
               analyses={inventoryAnalyses}
-              runHistory={activeHistory}
               factoryCount={isDemo ? 1 : factories.length}
+              setupItems={enterprise.checklist}
               onNavigate={goToTarget}
-              onOpenCopilot={() => goToSection("copilot")}
+              onNavigateView={(target) => setView(target as View)}
             />
           )}
 

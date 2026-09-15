@@ -587,9 +587,17 @@ Teorisi'nin doğrudan görselleştirmesidir.
 
 ### 15.2 Bilgi geometriyle taşınır
 
-En önemli kural: **segment genişliği = istasyonun kapasite payı.** Şerit yalnızca
-renkle değil, **geometriyle** bilgi taşır. Renk körlüğü olan bir kullanıcı da,
-gri tonlamalı bir çıktı da kısıtın nerede olduğunu okuyabilmelidir.
+En önemli kural: **segment genişliği = istasyonun ölçülmüş doluluğu**
+(`utilization`). Şerit yalnızca renkle değil, **geometriyle** bilgi taşır: en
+geniş segment kısıttır. Renk körlüğü olan bir kullanıcı da, gri tonlamalı bir
+çıktı da kısıtın nerede olduğunu okuyabilmelidir.
+
+> **Terminoloji düzeltmesi (Sprint 2D).** Bu alan önce "kapasite payı" diye
+> anılıyordu. Simülasyon çıktısı istasyon başına kapasite payı **üretmez**;
+> ürettiği şey `station_metrics[].utilization` — istasyonun zamanının ne kadarını
+> işlemde geçirdiğidir. Belge, ölçülmeyen bir kavramı adlandırıyordu; uydurulmuş
+> bir pay hesaplamak yerine terim gerçek veriye çekildi. Şeridin işi değişmedi:
+> geometri yine ölçülmüş bir oranı taşır ve kısıtı işaret eder.
 
 Kısıt üç sinyalle işaretlenir ve hiçbiri tek başına yeterli değildir:
 
@@ -605,7 +613,7 @@ Kısıt üç sinyalle işaretlenir ve hiçbiri tek başına yeterli değildir:
 | --- | --- |
 | `id` | Kimlik |
 | `label` | Ekranda görünen ad |
-| `share` | Kapasite payı (0–1). **`null` olabilir** |
+| `share` | Ölçülmüş doluluk oranı (0–1), kaynağı `utilization`. **`null` olabilir** |
 | `utilization` | Doluluk oranı |
 | `state` | `ok` / `warn` / `fault` / `unknown` |
 | `value` + `unit` | Şeridin varyantına göre okuma değeri |
@@ -624,9 +632,9 @@ Aynı bileşen dört ekranda görünür ve **anlamı hiç değişmez.**
 
 > ✅ **Karar (Sprint 1A): geometri her varyantta aynı şeyi kodlar.**
 >
-> Segment genişliği **her varyantta** kapasite/akış payıdır — `money`
-> varyantında da. Genişlik para miktarını **temsil etmez**; finansal kayıp,
-> segmentin üzerinde ayrı bir değer katmanı olarak yazılır.
+> Segment genişliği **her varyantta** aynı şeyi kodlar: istasyonun ölçülmüş
+> doluluğu (`money` varyantında da). Genişlik para miktarını **temsil etmez**;
+> finansal kayıp, segmentin üzerinde ayrı bir değer katmanı olarak yazılır.
 >
 > Gerekçe: bir görsel dilin tek bir kuralı olur. Genişlik Simülasyon'da
 > kapasite, Finans'ta para anlamına gelseydi, dört ekranda aynı görünen bir
@@ -642,7 +650,7 @@ Aynı bileşen dört ekranda görünür ve **anlamı hiç değişmez.**
 ### 15.5 Ölçüm dürüstlüğü (Yasa 4)
 
 - `share` ölçülmemişse segmentler eşit genişlikte ve nötr çizilir; şerit
-  "kapasite payı ölçülmedi" der.
+  "doluluk ölçülmedi" der.
 - `state` `unknown` ise segment nötr kalır, kırmızı olmaz.
 - Kısıt belirlenemiyorsa şerit kısıt işaretlemez ve nedenini yazar.
 
@@ -973,8 +981,15 @@ sorulmalıdır:
 ### Sprint 1A'da karara bağlananlar
 
 - **Radius ad alanı → Seçenek B** (ayrı `--of-radius-*`; §3.5)
-- **ConstraintRail geometrisi → her varyantta kapasite payı** (§15.4)
+- **ConstraintRail geometrisi → her varyantta aynı oranı kodlar** (§15.4)
+  *(Sprint 2D: o oranın adı "kapasite payı" değil, ölçülmüş doluluk.)*
 - **İskelet parıltısı izin verilen hareketlere eklendi** (§3.7)
+
+### Sprint 2D'de karara bağlananlar
+
+- **`ConstraintRail.share` = ölçülmüş doluluk**, kapasite payı değil (§15.2).
+  Belge ölçülmeyen bir kavramı adlandırıyordu; terim gerçek veriye çekildi,
+  sahte bir pay hesabı eklenmedi.
 
 ### Sprint 1B'de karara bağlananlar
 
