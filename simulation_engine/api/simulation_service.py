@@ -431,6 +431,12 @@ def _build_run_response(record: StoredSimulation) -> SimulationRunResponse:
             f"mantik hatasi olabilecegini gosterir."
         )
 
+    # Akış süresi ve WIP için güven aralıkları **zaten** Monte Carlo özetinde
+    # var; buraya kadar yalnızca ortalamaları taşınıyordu. İkinci bir hesap
+    # yapılmaz, aynı `MonteCarloStatistic` nesnesinden okunur.
+    wip_statistic = monte_carlo.metric("avg_wip")
+    flow_time_statistic = monte_carlo.metric("avg_flow_time")
+
     results = SimulationResults(
         total_throughput=int(round(production.mean)),
         confidence_interval_95=(production.ci_lower, production.ci_upper),
@@ -444,8 +450,13 @@ def _build_run_response(record: StoredSimulation) -> SimulationRunResponse:
         littles_law_validation=littles_law_summary,
         num_replications=monte_carlo.num_replications,
         is_stable=all(r.stability.is_stable for r in record.replications),
-        avg_wip=monte_carlo.metric("avg_wip").mean,
-        avg_flow_time=monte_carlo.metric("avg_flow_time").mean,
+        avg_wip=wip_statistic.mean,
+        avg_wip_ci_95=(wip_statistic.ci_lower, wip_statistic.ci_upper),
+        avg_flow_time=flow_time_statistic.mean,
+        avg_flow_time_ci_95=(
+            flow_time_statistic.ci_lower,
+            flow_time_statistic.ci_upper,
+        ),
         throughput_per_minute=monte_carlo.metric("throughput_per_minute").mean,
         line_oee=record.oee.line_oee,
         theoretical_max_throughput_per_minute=(

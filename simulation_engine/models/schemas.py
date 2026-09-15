@@ -1300,7 +1300,13 @@ class SimulationResults(BaseModel):
     num_replications: int
     is_stable: bool = Field(description="Hicbir istasyonda rho >= 1 degil mi?")
     avg_wip: float = Field(description="L — replikasyonlar arasi ortalama WIP")
+    avg_wip_ci_95: Tuple[float, float] = Field(
+        description="Ortalama WIP icin %95 guven araligi [alt, ust]"
+    )
     avg_flow_time: float = Field(description="W — ortalama akis suresi (dk)")
+    avg_flow_time_ci_95: Tuple[float, float] = Field(
+        description="Ortalama akis suresi icin %95 guven araligi [alt, ust]"
+    )
     throughput_per_minute: float
     line_oee: float = Field(description="Darbogaz istasyonunun OEE degeri")
     theoretical_max_throughput_per_minute: float

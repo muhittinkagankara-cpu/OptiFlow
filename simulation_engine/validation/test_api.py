@@ -214,6 +214,89 @@ def test_run_reports_confidence_interval_not_a_point_estimate(
     assert "Beklenen uretim" in mm1_run["headline"]
 
 
+def test_flow_time_and_wip_keep_their_point_estimates(
+    mm1_run: Dict[str, Any],
+) -> None:
+    """Mevcut tuketiciler ortalamalari gormeye devam etmeli.
+
+    Guven araliklari eklenirken bu iki alanin adi, tipi ve anlami
+    degistirilmedi; geriye donuk uyumlulugun sarti budur.
+    """
+    results = mm1_run["results"]
+
+    assert "avg_flow_time" in results
+    assert "avg_wip" in results
+    assert isinstance(results["avg_flow_time"], float)
+    assert isinstance(results["avg_wip"], float)
+
+
+def test_flow_time_and_wip_are_reported_with_confidence_intervals(
+    mm1_run: Dict[str, Any],
+) -> None:
+    """Akis suresi ve WIP de tek bir sayi degil, araligiyla sunulmali.
+
+    Motor bu araliklari zaten hesapliyordu; yanitta yalnizca ortalamalari
+    tasindigi icin arayuz bu iki metrigi sonucsuz gostermek zorunda kaliyordu.
+    """
+    results = mm1_run["results"]
+
+    for key in ("avg_flow_time_ci_95", "avg_wip_ci_95"):
+        assert key in results, f"'{key}' alani yanitta yok"
+        interval = results[key]
+        assert isinstance(interval, list) and len(interval) == 2
+
+
+def test_flow_time_and_wip_intervals_bracket_their_means(
+    mm1_run: Dict[str, Any],
+) -> None:
+    """Aralik ortalamayi icermeli: alt <= ortalama <= ust."""
+    results = mm1_run["results"]
+
+    flow_lower, flow_upper = results["avg_flow_time_ci_95"]
+    assert flow_lower <= results["avg_flow_time"] <= flow_upper
+
+    wip_lower, wip_upper = results["avg_wip_ci_95"]
+    assert wip_lower <= results["avg_wip"] <= wip_upper
+
+
+def test_flow_time_and_wip_intervals_come_from_the_shared_monte_carlo_summary(
+    mm1_run: Dict[str, Any],
+) -> None:
+    """Ikinci bir guven araligi hesabi yazilmadi.
+
+    Aralik, uretim araligiyla **ayni** `summarise()` islevinden gelir. Bunu
+    dogrulamanin yolu, ortalamanin aralik ortasinda durmasidir: `summarise`
+    araligi her zaman ortalama +- yari genislik olarak kurar. Bagimsiz bir
+    ikinci uygulama bu bakisimi korumak zorunda degildir.
+    """
+    results = mm1_run["results"]
+
+    for mean_key, interval_key in (
+        ("avg_flow_time", "avg_flow_time_ci_95"),
+        ("avg_wip", "avg_wip_ci_95"),
+    ):
+        lower, upper = results[interval_key]
+        midpoint = (lower + upper) / 2
+        assert midpoint == pytest.approx(results[mean_key], rel=1e-9, abs=1e-9)
+
+
+def test_flow_time_and_wip_intervals_are_not_degenerate_across_replications(
+    mm1_run: Dict[str, Any],
+) -> None:
+    """Coklu replikasyonda aralik sifir genislikte olamaz.
+
+    Tek replikasyonda `summarise` sifir genislikli bir aralik uretir ve bu
+    bilinclidir; uydurulmus bir belirsizlik eklenmez. Bu fixture birden cok
+    replikasyon kosturdugu icin aralik gercek bir yayilim tasimali.
+    """
+    results = mm1_run["results"]
+    assert results["num_replications"] > 1
+
+    for interval_key in ("avg_flow_time_ci_95", "avg_wip_ci_95"):
+        lower, upper = results[interval_key]
+        assert lower < upper, f"'{interval_key}' araligi sifir genislikte"
+
+
 def test_run_is_reproducible_via_reported_seed(shared_client: TestClient) -> None:
     """Ayni random_seed ile iki kosum ayni sonucu vermeli (TEST 5)."""
     first = shared_client.post(f"{API_PREFIX}/run", json=_mm1_body(seed=777)).json()
@@ -816,3 +899,4 @@ def test_report_api_summary(mm1_run: Dict[str, Any]) -> None:
     )
     lines.append(f"  headline                 : {mm1_run['headline']}")
     print("\n".join(lines))
+
