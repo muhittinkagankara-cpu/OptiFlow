@@ -462,7 +462,11 @@ export function ReportView({
                     {formatMoney(station.total_loss)}
                   </span>
                 </div>
-                <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                {/* Dört kalem alt alta: telefonda sarmalanan tek satır,
+                    kalemlerin nerede bitip nerede başladığını okumayı
+                    zorlaştırıyordu. Etiket solda, tutar sağda — masaüstü
+                    tablosunun sütun anlamı korunur. */}
+                <dl className="mt-1.5 space-y-0.5 text-xs text-slate-500">
                   <StationPart label="Arıza" amount={station.downtime_loss} />
                   <StationPart label="Bekleme" amount={station.waiting_loss} />
                   <StationPart label="Fire" amount={station.scrap_loss} />
@@ -673,13 +677,13 @@ function ComponentRecord({
   );
 }
 
-/** Dar ekran kaydındaki tek kalem: etiket ve tutarı. */
+/** Dar ekran kaydındaki tek kalem: etiket solda, tutarı sağda. */
 function StationPart({ label, amount }: { label: string; amount: number }) {
   return (
-    <span className="whitespace-nowrap">
-      <dt className="inline">{label}</dt>{" "}
-      <dd className="inline tabular-nums">{formatMoney(amount)}</dd>
-    </span>
+    <div className="flex items-baseline justify-between gap-3">
+      <dt>{label}</dt>
+      <dd className="tabular-nums">{formatMoney(amount)}</dd>
+    </div>
   );
 }
 
