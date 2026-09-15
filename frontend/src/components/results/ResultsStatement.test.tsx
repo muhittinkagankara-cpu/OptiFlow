@@ -227,3 +227,48 @@ describe("kapanış adımı ve dokunma hedefleri (Sprint 2G-E)", () => {
     ipuclari.forEach((d) => expect(d).toContain("after:-inset-3"));
   });
 });
+
+describe("mükerrer sunum kaldırıldı (Sprint 2G-F1)", () => {
+  it("düz darboğaz tekrarı yazılmaz", () => {
+    // Kısıt; şeritte, ölçüm sonucunda, istasyon satırında ve kapanışta
+    // zaten söyleniyor. "Genel darboğaz: X (%Y doluluk)" bunlara yeni bir
+    // sonuç eklemiyordu.
+    expect(render()).not.toContain("Genel darboğaz");
+  });
+
+  it("doluluk karşılaştırması grafiği çizilmez", () => {
+    // Aynı ölçümün ikinci görselleştirmesi (ANTI-PATTERNS #4).
+    expect(render()).not.toContain("Doluluk karşılaştırması");
+  });
+
+  it("kısıt yine de dört bağlamda okunur", () => {
+    const html = render();
+    const kisit = temelKosum.results.station_metrics.find((s) => s.is_bottleneck)!;
+    expect(html).toContain('aria-label="Hat kısıdı"');      // şerit
+    expect(html).toContain(`Kısıt ${kisit.station_name}`);   // ölçüm sonucu
+    expect(html).toContain("Darboğaz");                      // istasyon satırı
+    expect(html).toContain("Sonraki adım");                  // eylem
+  });
+
+  it("doluluk değerleri kaybolmadı", () => {
+    const html = render();
+    temelKosum.results.station_metrics.forEach((s) =>
+      expect(html).toContain(`%${Math.round(s.utilization * 100)}`),
+    );
+  });
+
+  it("dekoratif marka zemini kalmadı", () => {
+    const html = render();
+    expect(html).not.toContain("bg-brand-50");
+    expect(html).not.toContain("border-brand-200");
+  });
+
+  it("dekoratif renkli ikon kabı kalmadı", () => {
+    // Canlı akış ikonu çıplak; karo zemini yok.
+    expect(render()).not.toContain("bg-brand-100 text-brand-700");
+  });
+
+  it("karşılaştırma eylemi yerinde duruyor", () => {
+    expect(render()).toContain("Bu Senaryoyu Kopyala ve Karşılaştır");
+  });
+});

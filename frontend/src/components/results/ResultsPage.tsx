@@ -53,7 +53,6 @@ import { FinancialImpactPanel } from "./FinancialImpactPanel";
 import { FlowSankey } from "./FlowSankey";
 import { StationMetricsTable } from "./StationMetricsTable";
 import { ValidationPanel } from "./ValidationPanel";
-import { UtilizationBarChart } from "./charts/UtilizationBarChart";
 
 interface ResultsPageProps {
   result: SimulationRunResponse;
@@ -237,12 +236,16 @@ export function ResultsPage({
           </p>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-5">
-          <h3 className="mb-3 text-sm font-semibold text-slate-900">
-            Doluluk karşılaştırması
-          </h3>
-          <UtilizationBarChart stations={results.station_metrics} />
-        </div>
+        {/*
+          "Doluluk karşılaştırması" çubuk grafiği kaldırıldı (Sprint 2G-F1).
+          Kısıt şeridi aynı ölçümü — istasyon doluluğunu — zaten geometriyle
+          taşıyor ve üstelik kısıtı üç sinyalle işaretliyor. İkinci bir
+          görselleştirme yeni bir karşılaştırma ya da eğilim vermiyordu; yer
+          kaplayan ve dikkat çeken bir tekrardı (ANTI-PATTERNS #4).
+
+          Doluluk değerleri kaybolmadı: şeritte, istasyon tablosunda ve dar
+          ekran kayıt listesinde okunmaya devam ediyor.
+        */}
 
         <StationMetricsTable
           stations={results.station_metrics}
@@ -280,14 +283,21 @@ export function ResultsPage({
       </section>
 
       {/* --- Bölüm D'ye giriş --- */}
-      <section className="mt-8 rounded-xl border border-brand-200 bg-brand-50 px-5 py-5">
+      {/*
+        Marka rengine boyanmış kutu kaldırıldı (Sprint 2G-F1, Yasa 3). Zemin
+        hiçbir ölçümü kodlamıyordu — yalnızca dikkat çekmek için renkliydi.
+        Yerine sayfanın kapanış bölümüyle aynı dil geldi: üstte hairline,
+        nötr zemin, ölçülü boşluk. Karşılaştırma eylemi ve davranışı aynen
+        duruyor.
+      */}
+      <section className="mt-8 border-t border-[var(--of-surface-hairline)] pt-[var(--of-spacing-16)]">
         {baselineLabel && onOpenComparison ? (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-brand-950">
+              <p className="text-sm font-semibold text-slate-900">
                 Karşılaştırmaya hazır
               </p>
-              <p className="mt-0.5 text-sm text-brand-900">
+              <p className="mt-0.5 text-sm text-slate-600">
                 “{baselineLabel}” senaryosu referans olarak saklandı. İki senaryoyu
                 yan yana görebilirsiniz.
               </p>
@@ -304,10 +314,10 @@ export function ResultsPage({
         ) : (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-semibold text-brand-950">
+              <p className="text-sm font-semibold text-slate-900">
                 Bir değişikliğin işe yarayıp yaramadığını ölçün
               </p>
-              <p className="mt-0.5 max-w-xl text-sm text-brand-900">
+              <p className="mt-0.5 max-w-xl text-sm text-slate-600">
                 Bu senaryoyu referans olarak saklayın, modelde bir değişiklik yapıp
                 tekrar çalıştırın. Aradaki farkın gerçek mi yoksa rastgelelik mi
                 olduğunu size söyleyeceğiz.

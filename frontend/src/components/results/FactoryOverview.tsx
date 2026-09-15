@@ -84,7 +84,6 @@ export function FactoryOverview({
  * kısıt düzelmeden değişmez.
  */
 function StatusLine({ summary }: { summary: FactorySummary }) {
-  const { bottleneck, bottleneckLineName } = summary;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
@@ -103,23 +102,17 @@ function StatusLine({ summary }: { summary: FactorySummary }) {
           </strong>
         </span>
 
-        {bottleneck && (
-          <span className="inline-flex items-center gap-1.5 text-slate-700">
-            <WarningIcon className="h-4 w-4 shrink-0 text-red-600" />
-            <span>
-              Genel darboğaz:{" "}
-              {summary.isGrouped && !bottleneckLineName?.startsWith("Genel") && (
-                <span className="text-slate-500">{bottleneckLineName} — </span>
-              )}
-              <strong className="font-semibold text-slate-900">
-                {bottleneck.station_name}
-              </strong>{" "}
-              <span className="tabular-nums text-slate-600">
-                ({formatPercent(bottleneck.utilization)} doluluk)
-              </span>
-            </span>
-          </span>
-        )}
+        {/*
+          "Genel darboğaz: X (%Y doluluk)" satırı buradan kaldırıldı
+          (Sprint 2G-F1). Aynı olguyu sayfada dört yer daha söylüyordu ve bu
+          satır hiçbirine yeni bir sonuç eklemiyordu: kısıt şeridi geometriyle
+          ve "KISIT" etiketiyle, ölçüm şeridi OEE'nin sonucu olarak, istasyon
+          satırı kendi işaretiyle, kapanış adımı da eylem bağlamıyla söylüyor.
+          Düz bir tekrar, tekrar olduğu için bilgi taşımaz.
+
+          Hat kartlarındaki darboğaz işareti **kalır**: o, hangi hatta
+          bakılacağını seçtirir, yani başka bir işi vardır.
+        */}
 
         <span className="inline-flex items-center gap-1.5 text-slate-700">
           <span>

@@ -148,9 +148,13 @@ export function FactoryAnimation({
           className="flex w-full items-center justify-between gap-3 px-5 py-3.5 text-left transition-colors hover:bg-slate-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
         >
           <span className="flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-700">
-              <PlayIcon className="h-4 w-4" />
-            </span>
+            {/*
+              İkon çıplak durur (Sprint 2G-F1). Eskiden 32×32 marka renkli bir
+              karonun içindeydi; o zemin hiçbir ölçümü kodlamıyordu, yalnızca
+              süstü (MASTER: renkli ikon kabı yok). İkonun kendisi ve açma
+              davranışı değişmedi.
+            */}
+            <PlayIcon className="h-4 w-4 shrink-0 text-slate-400" />
             <span>
               <span className="block text-sm font-semibold text-slate-900">
                 Canlı Akışı Gör
