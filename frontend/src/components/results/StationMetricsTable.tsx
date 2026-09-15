@@ -18,6 +18,13 @@
  * fazla hat varsa istasyonlar hat başlıkları altında toplanır ve her grup
  * katlanabilir olur; yirmi satırı düz liste hâlinde göstermek kullanıcıyı
  * boğardı.
+ *
+ * ## Sprint 2G-D — dar ekran
+ *
+ * 768 pikselin altında tablo çizilmez; yerini aynı veriyi taşıyan bir istasyon
+ * kayıt listesi alır (`StationRecordList`). Tablo `min-w-[640px]` taşıyordu ve
+ * 375 pikselde belge düzeyinde 283 piksellik taşma üretiyordu. Yatay kaydırma,
+ * kural gereği çözüm sayılmaz.
  */
 
 import { Fragment, useEffect, useState } from "react";
@@ -114,7 +121,22 @@ export function StationMetricsTable({
     ));
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <>
+      {/*
+        768 altında tablo **çizilmez**. Eskiden `min-w-[640px]` ile duruyordu ve
+        375 pikselde belge düzeyinde 283 piksellik taşma üretiyordu; çözüm
+        yatay kaydırma bırakmak değil, aynı veriyi kayıt listesi olarak
+        sunmaktır (.claude/rules/ui.md). `hidden` düzen kutusunu tümüyle
+        kaldırdığı için asgari genişlik dar ekranda hiç hesaba katılmaz.
+      */}
+      <StationRecordList
+        stations={stations}
+        bottleneckStationId={bottleneckStationId}
+        summary={summary}
+        selectedLine={selectedLine}
+      />
+
+      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
@@ -207,7 +229,136 @@ export function StationMetricsTable({
           ? "Hat başlığına tıklayarak grubu açıp kapatabilir, bir istasyon satırına tıklayarak OEE kırılımını görebilirsiniz."
           : "OEE kırılımını görmek için bir satıra tıklayın."}
       </p>
+      </div>
+    </>
+  );
+}
+
+/**
+ * Dar ekran sunumu — tablo değil, istasyon kayıt listesi.
+ *
+ * Aynı veriyi, aynı sırayla, aynı biçimlendiricilerle ve aynı darboğaz
+ * otoritesiyle gösterir; yeni bir hesap ya da yeni bir renk sistemi yoktur.
+ * Satırlar hairline ile ayrılır: her kayıt kendi kartına konsaydı liste bir
+ * pano ızgarasına dönerdi (ANTI-PATTERNS #1).
+ *
+ * Kayıtlar **etkileşimsizdir**. Tablodaki satır açma (OEE kırılımı) burada
+ * yoktur; dar ekranda her kayda bir açma düğmesi koymak, tablonun altı
+ * sütununu altı dokunma hedefine çevirirdi. Kırılım masaüstünde durmaya devam
+ * eder ve bu, bilinçli bir ödündür.
+ */
+function StationRecordList({
+  stations,
+  bottleneckStationId,
+  summary,
+  selectedLine = null,
+}: StationMetricsTableProps) {
+  const isGrouped = summary?.isGrouped ?? false;
+  const lines = (summary?.lines ?? []).filter(
+    (line) => selectedLine === null || line.lineName === selectedLine,
+  );
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white md:hidden">
+      {!isGrouped && (
+        <ul className="divide-y divide-slate-100">
+          {stations.map((station) => (
+            <StationRecord
+              key={station.station_id}
+              station={station}
+              isBottleneck={station.station_id === bottleneckStationId}
+            />
+          ))}
+        </ul>
+      )}
+
+      {isGrouped &&
+        lines.map((line) => (
+          <div key={line.lineName}>
+            {/* Hat başlığı: gruplama bilgisi dar ekranda da kaybolmaz, ama
+                katlanabilir değildir — yeni dokunma hedefi üretmez. */}
+            <p className="border-y border-slate-200 bg-slate-50 px-4 py-2 text-xs font-semibold text-slate-700">
+              {line.lineName}
+              <span className="ml-1.5 font-normal text-slate-500">
+                {line.stations.length} istasyon
+              </span>
+            </p>
+            <ul className="divide-y divide-slate-100">
+              {line.stations.map((station) => (
+                <StationRecord
+                  key={station.station_id}
+                  station={station}
+                  isBottleneck={station.station_id === bottleneckStationId}
+                />
+              ))}
+            </ul>
+          </div>
+        ))}
     </div>
+  );
+}
+
+/** Tek istasyon kaydı: ad + durum, doluluk, kuyruk ve bekleme. */
+function StationRecord({
+  station,
+  isBottleneck,
+}: {
+  station: StationMetricsResponse;
+  isBottleneck: boolean;
+}) {
+  const utilTone = utilizationTone(station.utilization, isBottleneck);
+  const oeeToneValue = oeeTone(station.oee.oee);
+
+  return (
+    <li className={`px-4 py-3 ${isBottleneck ? "bg-red-50" : ""}`}>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="min-w-0 truncate font-medium text-slate-900">
+          {station.station_name}
+        </span>
+        {isBottleneck && (
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-800">
+            <WarningIcon className="h-3.5 w-3.5" />
+            Darboğaz
+          </span>
+        )}
+      </div>
+
+      {/* Sayı ve çubuk birlikte: biri kesinlik, diğeri karşılaştırma sağlar —
+          tablodaki davranışın aynısı. */}
+      <div className="mt-1.5 flex items-center gap-2.5">
+        <span className="w-11 shrink-0 text-sm tabular-nums text-slate-800">
+          {formatPercent(station.utilization)}
+        </span>
+        <span
+          className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200"
+          role="img"
+          aria-label={`Doluluk ${formatPercent(station.utilization)}`}
+        >
+          <span
+            className={`block h-full rounded-full ${BAR_COLORS[utilTone]}`}
+            style={{
+              width: `${Math.min(Math.max(station.utilization, 0), 1) * 100}%`,
+            }}
+          />
+        </span>
+        <span
+          className={`shrink-0 text-sm font-semibold tabular-nums ${OEE_TEXT_COLORS[oeeToneValue]}`}
+        >
+          OEE {formatPercent(station.oee.oee, 1)}
+        </span>
+      </div>
+
+      <p className="mt-1 text-xs text-slate-500">
+        Kuyruk{" "}
+        <span className="tabular-nums text-slate-700">
+          {formatDecimal(station.avg_queue_length)}
+        </span>{" "}
+        parça · Bekleme{" "}
+        <span className="tabular-nums text-slate-700">
+          {formatMinutes(station.avg_wait_time)}
+        </span>
+      </p>
+    </li>
   );
 }
 
