@@ -25,7 +25,12 @@
 
 import { useMemo, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
-import type { SimulationConfig, SimulationRunResponse } from "../../types/simulationTypes";
+import type {
+  FinancialReport,
+  FinancialSettings,
+  SimulationConfig,
+  SimulationRunResponse,
+} from "../../types/simulationTypes";
 import { formatDecimal } from "../../lib/resultsFormatting";
 import { summarizeFactory } from "../../lib/factoryOverview";
 /*
@@ -74,6 +79,16 @@ interface ResultsPageProps {
    * eski sonucu taze göstermekten kötüdür.
    */
   ranAt?: string | null;
+  /**
+   * Finans durumu — `App`'ten gelir, panele iletilir (Sprint 2H-A).
+   *
+   * Sayfa bu değerleri kullanmaz, yalnızca taşır: tek yetkili finans durumu
+   * `App`'tedir ve Command Center ile Sonuç ekranı aynı raporu görür.
+   */
+  financeSettings: FinancialSettings;
+  onFinanceSettingsChange: (patch: Partial<FinancialSettings>) => void;
+  financeReport: FinancialReport | null;
+  onFinanceReportChange: (report: FinancialReport | null) => void;
 }
 
 export function ResultsPage({
@@ -85,6 +100,10 @@ export function ResultsPage({
   onOpenIntelligence,
   baselineLabel,
   ranAt = null,
+  financeSettings,
+  onFinanceSettingsChange,
+  financeReport,
+  onFinanceReportChange,
 }: ResultsPageProps) {
   const { results } = result;
   /* Köken burada uydurulmaz: koşum varsa "Benzetim"dir. Aynı işlev Command
@@ -262,7 +281,14 @@ export function ResultsPage({
             isin nerede kayboldugunu gorur, sonra bunun ne kadara mal oldugunu.
             Varsayilan olarak kapali durur cunku maliyet oranlari girilmeden
             gosterilecek bir rakam yoktur. */}
-        <FinancialImpactPanel result={result} config={config} />
+        <FinancialImpactPanel
+          result={result}
+          config={config}
+          settings={financeSettings}
+          onSettingsChange={onFinanceSettingsChange}
+          report={financeReport}
+          onReportChange={onFinanceReportChange}
+        />
 
         {/* Animasyon tablonun altinda ve varsayilan olarak kapali durur: izi
             uretmek sunucuda simulasyonu yeniden calistirmayi gerektirir ve

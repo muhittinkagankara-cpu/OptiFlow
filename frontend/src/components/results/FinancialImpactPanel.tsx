@@ -60,24 +60,44 @@ const SHIFT_PRESETS = [
 interface FinancialImpactPanelProps {
   result: SimulationRunResponse;
   config: SimulationConfig;
+  /**
+   * Maliyet oranları ve rapor — **yukarıdan** gelir (Sprint 2H-A).
+   *
+   * Eskiden ikisi de bu bileşenin kendi `useState`'indeydi ve dışarı hiç
+   * taşınmıyordu. Sonuç: aynı koşum için iki ayrı finans durumu oluşuyordu —
+   * kullanıcı oranları bir kez Finans ekranında, bir kez de burada giriyordu
+   * ve Sonuç ekranında hesaplanan rapor Command Center'a hiç ulaşmıyordu.
+   *
+   * `FinancePage` zaten bu kalıbı kullanıyor; panel de aynı kalıba geçti, tek
+   * yetkili kaynak `App` oldu.
+   */
+  settings: FinancialSettings;
+  onSettingsChange: (patch: Partial<FinancialSettings>) => void;
+  report: FinancialReport | null;
+  onReportChange: (report: FinancialReport | null) => void;
 }
 
-export function FinancialImpactPanel({ result, config }: FinancialImpactPanelProps) {
+export function FinancialImpactPanel({
+  result,
+  config,
+  settings,
+  onSettingsChange,
+  report,
+  onReportChange,
+}: FinancialImpactPanelProps) {
+  /* Bunlar gerçekten bu panele ait geçici arayüz durumudur — paylaşılan veri
+     değildir, bu yüzden yukarı taşınmaz. */
   const [isOpen, setIsOpen] = useState(false);
-  const [settings, setSettings] = useState<FinancialSettings>({});
-  const [report, setReport] = useState<FinancialReport | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
-  const update = useCallback((patch: Partial<FinancialSettings>) => {
-    setSettings((current) => ({ ...current, ...patch }));
-  }, []);
+  const update = onSettingsChange;
 
   const calculate = useCallback(async () => {
     setIsLoading(true);
     setErrors([]);
     try {
-      setReport(await getFinancialImpact(result.simulation_id, settings));
+      onReportChange(await getFinancialImpact(result.simulation_id, settings));
     } catch (error) {
       setErrors(
         error instanceof ApiError ? error.userMessages : [GENERIC_ERROR_MESSAGE],
@@ -85,7 +105,7 @@ export function FinancialImpactPanel({ result, config }: FinancialImpactPanelPro
     } finally {
       setIsLoading(false);
     }
-  }, [result.simulation_id, settings]);
+  }, [result.simulation_id, settings, onReportChange]);
 
   // En az bir oran girilmeden hesap anlamsizdir: tum kalemler
   // "hesaplanamadi" doner ve kullanici bos bir tablo gorur.

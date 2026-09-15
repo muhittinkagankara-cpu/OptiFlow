@@ -31,6 +31,10 @@ const render = (
       onBackToEditor={() => {}}
       onCompareFromHere={() => {}}
       onOpenIntelligence={() => {}}
+      financeSettings={{}}
+      onFinanceSettingsChange={() => {}}
+      financeReport={null}
+      onFinanceReportChange={() => {}}
     />,
   );
 

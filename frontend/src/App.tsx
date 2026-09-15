@@ -1097,6 +1097,19 @@ export default function App() {
               onOpenComparison={baseline ? () => setView("comparison") : undefined}
               onOpenIntelligence={() => setView("intelligence")}
               baselineLabel={baseline?.label ?? null}
+              // Finans durumu tek yerde: Finans ekranı ve Sonuç paneli aynı
+              // `financeReport`/`financeSettings` üzerinde çalışır, böylece
+              // oranlar iki kez girilmez ve Command Center raporu görebilir.
+              financeSettings={financeSettings}
+              onFinanceSettingsChange={(patch) =>
+                setFinanceSettings((current) => ({ ...current, ...patch }))
+              }
+              // `activeReport` değil `financeReport`: demo modunda
+              // `activeReport` sabit bir fixture'a düşer ve panel, kullanıcı
+              // hiçbir şey hesaplamadan dolu görünürdü. Panel yalnızca
+              // gerçekten hesaplanmış raporu gösterir.
+              financeReport={financeReport}
+              onFinanceReportChange={setFinanceReport}
               // Command Center ile aynı yol: koşumun saati geçmiş kaydından
               // `simulation_id` ile eşleştirilir, ikinci bir kaynak yoktur.
               ranAt={runRanAt(activeResult, activeHistory)}
