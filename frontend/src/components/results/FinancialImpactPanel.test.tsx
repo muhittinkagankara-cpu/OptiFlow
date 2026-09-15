@@ -467,3 +467,79 @@ describe("akordeon ve girdi alanları korundu", () => {
     }
   });
 });
+
+/* ===================================================================== *
+ * Sprint 2H-D — istasyon kayıplarının dar ekran görünümü
+ *
+ * `StationFinancialImpact` modelinde provenance, `basis` ya da `is_available`
+ * **yoktur** — bunlar kayıp kalemine (`LossComponent`) aittir, istasyona
+ * değil. Bu yüzden istasyon kaydında kaynak etiketi yazılmaz: olmayan bir
+ * alanı uydurmak yerine modelin gerçekten taşıdığı beş tutar gösterilir.
+ * ===================================================================== */
+
+/** Yalnızca "İstasyon bazlı kayıplar" bölümü. */
+const istasyonBolumu = (html: string): string => {
+  const bas = html.indexOf("İstasyon bazlı kayıplar");
+  const son = html.indexOf("En yüksek getirili iyileştirme");
+  return html.slice(bas, son === -1 ? undefined : son);
+};
+
+describe("istasyon kayıpları — mevcut değerler korunur", () => {
+  const html = () => rapor(haritasizRapor());
+
+  it("her istasyon adıyla listelenir", () => {
+    const bolum = istasyonBolumu(html());
+    for (const ad of ["Torna", "Kesme", "Kaynak", "Boyama"]) {
+      expect(bolum).toContain(ad);
+    }
+  });
+
+  it("darboğaz işareti korunur", () => {
+    expect(istasyonBolumu(html())).toContain("darboğaz");
+  });
+
+  it("dört kalem ve toplam başlıkları korunur", () => {
+    const bolum = istasyonBolumu(html());
+    for (const baslik of ["Arıza", "Bekleme", "Fire", "Fırsat", "Toplam"]) {
+      expect(bolum).toContain(baslik);
+    }
+  });
+});
+
+describe("istasyon kayıpları — 768 altında kayıt listesi", () => {
+  const html = () => istasyonBolumu(rapor(haritasizRapor()));
+
+  it("dar ekran listesi ve geniş ekran tablosu birlikte çizilir", () => {
+    expect(html()).toContain("md:hidden");
+    expect(html()).toContain("md:table");
+  });
+
+  it("yatay kaydırma kutusu kalmadı", () => {
+    // Tablo 768 altında kayıt listesine dönüyor; kaydırma kutusu bir çözüm
+    // değil, taşmanın saklanmasıdır (UI kuralı).
+    expect(html()).not.toContain("overflow-x-auto");
+  });
+
+  it("kayıt listesi istasyonun toplamını ve dört kalemini taşır", () => {
+    const bolum = html();
+    const liste = bolum.slice(bolum.indexOf("md:hidden"), bolum.indexOf("md:table"));
+    expect(liste).toContain("Torna");
+    expect(liste).toContain("₺15.818");
+    expect(liste).toContain("Arıza");
+    expect(liste).toContain("Fırsat");
+  });
+
+  it("darboğaz işareti kayıt listesinde de var", () => {
+    const bolum = html();
+    const liste = bolum.slice(bolum.indexOf("md:hidden"), bolum.indexOf("md:table"));
+    expect(liste).toContain("darboğaz");
+  });
+
+  it("istasyon kaydında uydurma kaynak etiketi yok", () => {
+    // Modelde provenance alanı yok; "Ölçüldü" yazmak veriyi metne uydurmak
+    // olurdu. Kaynak yalnızca kayıp kalemlerinde, gerçekten var olduğu yerde.
+    const bolum = html();
+    const liste = bolum.slice(bolum.indexOf("md:hidden"), bolum.indexOf("md:table"));
+    expect(liste).not.toMatch(/Ölçüldü|Hesaplandı|Tahmin/);
+  });
+});

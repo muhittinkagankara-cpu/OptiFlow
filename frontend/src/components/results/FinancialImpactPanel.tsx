@@ -436,45 +436,79 @@ export function ReportView({
           <h4 className="mb-2 text-sm font-semibold text-slate-900">
             İstasyon bazlı kayıplar
           </h4>
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[560px] text-sm">
-              <thead>
-                <tr className="border-b border-slate-200 text-left">
-                  <Th>İstasyon</Th>
-                  <Th>Arıza</Th>
-                  <Th>Bekleme</Th>
-                  <Th>Fire</Th>
-                  <Th>Fırsat</Th>
-                  <Th>Toplam</Th>
+          {/*
+            768 altında kayıt listesi (Sprint 2H-D). Altı sütunluk bir tablo
+            375 pikselde ancak yatay kaydırma kutusuyla sığıyordu; o kutu
+            taşmayı çözmez, saklar (UI kuralı).
+
+            Kayıtta istasyonun **kaynak etiketi yoktur**: provenance ve `basis`
+            `LossComponent` alanlarıdır, `StationFinancialImpact` böyle bir
+            alan taşımaz. Olmayan bir ölçümün etiketini yazmaktansa modelin
+            gerçekten verdiği beş tutar gösterilir (Yasa 4).
+          */}
+          <ul className="divide-y divide-slate-200 border-y border-slate-200 md:hidden">
+            {report.stations.map((station) => (
+              <li key={station.station_id} className="py-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="min-w-0 text-sm font-medium text-slate-900">
+                    {station.station_name}
+                    {station.is_bottleneck && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                        darboğaz
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-sm font-semibold text-slate-900 tabular-nums">
+                    {formatMoney(station.total_loss)}
+                  </span>
+                </div>
+                <dl className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-slate-500">
+                  <StationPart label="Arıza" amount={station.downtime_loss} />
+                  <StationPart label="Bekleme" amount={station.waiting_loss} />
+                  <StationPart label="Fire" amount={station.scrap_loss} />
+                  <StationPart label="Fırsat" amount={station.opportunity_loss} />
+                </dl>
+              </li>
+            ))}
+          </ul>
+
+          <table className="hidden w-full text-sm md:table">
+            <thead>
+              <tr className="border-b border-slate-200 text-left">
+                <Th>İstasyon</Th>
+                <Th>Arıza</Th>
+                <Th>Bekleme</Th>
+                <Th>Fire</Th>
+                <Th>Fırsat</Th>
+                <Th>Toplam</Th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {report.stations.map((station) => (
+                <tr key={station.station_id}>
+                  <Td>
+                    <span className="font-medium text-slate-900">
+                      {station.station_name}
+                    </span>
+                    {station.is_bottleneck && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                        darboğaz
+                      </span>
+                    )}
+                  </Td>
+                  <Td numeric>{formatMoney(station.downtime_loss)}</Td>
+                  <Td numeric>{formatMoney(station.waiting_loss)}</Td>
+                  <Td numeric>{formatMoney(station.scrap_loss)}</Td>
+                  <Td numeric>{formatMoney(station.opportunity_loss)}</Td>
+                  <Td numeric>
+                    <span className="font-semibold text-slate-900">
+                      {formatMoney(station.total_loss)}
+                    </span>
+                  </Td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {report.stations.map((station) => (
-                  <tr key={station.station_id}>
-                    <Td>
-                      <span className="font-medium text-slate-900">
-                        {station.station_name}
-                      </span>
-                      {station.is_bottleneck && (
-                        <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
-                          darboğaz
-                        </span>
-                      )}
-                    </Td>
-                    <Td numeric>{formatMoney(station.downtime_loss)}</Td>
-                    <Td numeric>{formatMoney(station.waiting_loss)}</Td>
-                    <Td numeric>{formatMoney(station.scrap_loss)}</Td>
-                    <Td numeric>{formatMoney(station.opportunity_loss)}</Td>
-                    <Td numeric>
-                      <span className="font-semibold text-slate-900">
-                        {formatMoney(station.total_loss)}
-                      </span>
-                    </Td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -636,6 +670,16 @@ function ComponentRecord({
       </p>
       <p className="mt-0.5 text-xs text-slate-500">{component.basis}</p>
     </li>
+  );
+}
+
+/** Dar ekran kaydındaki tek kalem: etiket ve tutarı. */
+function StationPart({ label, amount }: { label: string; amount: number }) {
+  return (
+    <span className="whitespace-nowrap">
+      <dt className="inline">{label}</dt>{" "}
+      <dd className="inline tabular-nums">{formatMoney(amount)}</dd>
+    </span>
   );
 }
 

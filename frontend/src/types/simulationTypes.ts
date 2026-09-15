@@ -136,7 +136,17 @@ export interface SimulationResults {
   num_replications: number;
   is_stable: boolean;
   avg_wip: number;
+  /**
+   * WIP icin %95 guven araligi [alt, ust].
+   *
+   * Backend `3f1999f`'ten beri doner. Isaretli olmasinin nedeni, daha eski
+   * koşum kayitlari ve demo veri kumesinin bu alani tasimamasidir; olmadiginda
+   * arayuz aralik satirini yazmaz, sinir uydurmaz (Yasa 4).
+   */
+  avg_wip_ci_95?: [number, number];
   avg_flow_time: number;
+  /** Ortalama akis suresi icin %95 guven araligi [alt, ust]. */
+  avg_flow_time_ci_95?: [number, number];
   throughput_per_minute: number;
   line_oee: number;
   theoretical_max_throughput_per_minute: number;

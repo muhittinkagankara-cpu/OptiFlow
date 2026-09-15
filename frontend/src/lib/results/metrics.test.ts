@@ -136,3 +136,77 @@ describe("kapsam dışı iddia üretmez", () => {
     expect(metin).not.toMatch(/₺|öner|kazanan|tavsiye|yapay zekâ/i);
   });
 });
+
+/* ===================================================================== *
+ * Sprint 2H-D — akış süresi ve WIP güven aralıkları
+ *
+ * Önce karakterizasyon: değişmemesi gereken ne varsa burada kilitlenir.
+ * Aralıklar backend'de hesaplanır (`3f1999f`); burada tek satır aritmetik
+ * yoktur, gelen iki sınır biçimlendirilip yazılır.
+ * ===================================================================== */
+
+describe("2H-D öncesi davranış korunur", () => {
+  it("ana değerler aralık eklendikten sonra da aynı kalır", () => {
+    const aralikli = {
+      ...sonuc,
+      avg_flow_time_ci_95: [4.86, 5.23],
+      avg_wip_ci_95: [8.21, 8.79],
+    } as unknown as SimulationResults;
+    expect(bul("flow", aralikli).value).toBe("5.3 dk");
+    expect(bul("wip", aralikli).value).toBe("8.5 parça");
+  });
+
+  it("dört metrik ve sıraları değişmez", () => {
+    expect(resultsMetrics(sonuc).map((m) => m.id)).toEqual([
+      "throughput",
+      "oee",
+      "flow",
+      "wip",
+    ]);
+  });
+
+  it("üretim aralığı eski biçimini korur", () => {
+    expect(bul("throughput").consequence).toBe("%95 aralık 755 – 801");
+  });
+});
+
+describe("akış süresi güven aralığı (Yasa 2)", () => {
+  const aralikli = (patch: Partial<Record<string, unknown>> = {}) =>
+    ({
+      ...sonuc,
+      avg_flow_time_ci_95: [4.86, 5.23],
+      avg_wip_ci_95: [8.21, 8.79],
+      ...patch,
+    }) as unknown as SimulationResults;
+
+  it("aralık ikinci satır olarak taşınır", () => {
+    expect(bul("flow", aralikli()).consequence).toBe("%95 aralık 4.86 – 5.23 dk");
+  });
+
+  it("WIP aralığı kendi birimiyle yazılır", () => {
+    expect(bul("wip", aralikli()).consequence).toBe(
+      "%95 aralık 8.21 – 8.79 parça",
+    );
+  });
+
+  it("aralık gelmezse sonuç uydurulmaz", () => {
+    // Eski koşumlar ve demo kümesi bu alanları taşımıyor; satır yazılmaz.
+    expect(bul("flow").consequence).toBeNull();
+    expect(bul("wip").consequence).toBeNull();
+  });
+
+  it("sınırlardan biri ölçülemiyorsa satır yazılmaz", () => {
+    const bozuk = aralikli({ avg_flow_time_ci_95: [Number.NaN, 5.23] });
+    expect(bul("flow", bozuk).consequence).toBeNull();
+  });
+
+  it("aralık dizi değilse satır yazılmaz", () => {
+    const bozuk = aralikli({ avg_wip_ci_95: null });
+    expect(bul("wip", bozuk).consequence).toBeNull();
+  });
+
+  it("değer ölçülemezse aralık da gösterilmez", () => {
+    const bozuk = aralikli({ avg_flow_time: Number.NaN });
+    expect(bul("flow", bozuk).value).toBeNull();
+  });
+});
