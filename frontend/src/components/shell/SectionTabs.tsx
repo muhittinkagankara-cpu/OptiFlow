@@ -53,7 +53,13 @@ export function SectionTabs({ view, onSelect }: SectionTabsProps) {
       // Dar ekranda yedi sekme sığmaz ve şerit yana kaydırılır. Yatay kaydırma
       // burada meşrudur: kaydırılan şey bir tablo değil, gezinme aletinin
       // kendisidir ve sayfanın kendisi kaymaz.
-      className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 px-3 pt-2"
+      //
+      // Yatay dolgu kabuğun sayfa oluğuyla hizalanır. Ölçüldü: sekme metni
+      // kabın 12 pikseli ile sekmenin kendi 12 pikselini toplayıp 24'ten
+      // başlıyordu; üst çubuk ve sayfa içeriği ise dar ekranda 16'dan
+      // başlıyor. Kap `px-1 sm:px-3` olunca metin 16/24'e oturur ve üçü de aynı
+      // dikey çizgiden başlar.
+      className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 px-1 pt-2 sm:px-3"
     >
       {tabs.map((tab) => {
         const isActive = tab.id === section;

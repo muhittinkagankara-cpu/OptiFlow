@@ -39,7 +39,13 @@ export function TopBar({
   const [isProfileOpen, setProfileOpen] = useState(false);
 
   return (
-    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3 backdrop-blur-xl sm:px-6">
+    /* Zemin opak; cam (yarı saydam + bulanıklık) bilinçli olarak kaldırıldı.
+       Ölçüldü: `bg-slate-50/80` + `backdrop-blur(24px)` cam yüzey üretiyordu ve
+       bu, tasarım otoritesinin açıkça dışladığı bir görünüm (MASTER §1). Ayrıca
+       altındaki içeriğin bulanık hayaleti, üst çubuğun taşıdığı sayfa adının
+       okunurluğunu düşürüyordu. Opak yüzey hem kuralı karşılar hem de
+       enstrüman panelinin sakin dilini korur. */
+    <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-6">
       <button
         type="button"
         onClick={onOpenMenu}

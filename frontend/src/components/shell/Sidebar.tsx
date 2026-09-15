@@ -105,7 +105,7 @@ export function Sidebar({
       >
         {/* Renkten bağımsız ikinci sinyal. */}
         {isActive && (
-          <span className="absolute top-1.5 bottom-1.5 -left-3 w-0.5 rounded-r-full bg-brand-500" />
+          <span className="absolute top-1.5 bottom-1.5 -left-1 w-0.5 rounded-r-full bg-brand-500" />
         )}
         <Icon className="h-4 w-4 shrink-0" />
         <span className="truncate">{item.label}</span>
@@ -153,7 +153,15 @@ export function Sidebar({
           </button>
         </div>
 
-        <nav aria-label="Ana gezinme" className="flex-1 overflow-y-auto px-3 py-2">
+        {/* Yatay dolgu `px-3` değil `px-1`.
+         *
+         * Ölçüldü: kenar çubuğunda iki rakip sol hizalama rayı vardı — marka
+         * bloğu ve alt bilgi 16 pikselden, gezinme ikonları ve grup başlıkları
+         * 24 pikselden başlıyordu. Gezinme kabı 4 piksele indiğinde maddenin
+         * kendi 12 piksellik dolgusuyla ikon da 16'ya oturur ve kenar çubuğu
+         * tek bir raya hizalanır. Enstrüman panelinde hizalama, süslemeden önce
+         * gelir. */}
+        <nav aria-label="Ana gezinme" className="flex-1 overflow-y-auto px-1 py-2">
           {groups.map((group, index) => (
             <div
               key={group.id}
@@ -162,8 +170,8 @@ export function Sidebar({
               // bir kenarlık belirirdi.
               className={
                 index === 0
-                  ? "space-y-0.5"
-                  : "mt-3 space-y-0.5 border-t border-slate-200 pt-3"
+                  ? "space-y-1"
+                  : "mt-3 space-y-1 border-t border-slate-200 pt-3"
               }
             >
               <p className="px-3 pb-1 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
@@ -180,8 +188,8 @@ export function Sidebar({
             <div
               className={
                 groups.length === 0
-                  ? "space-y-0.5"
-                  : "mt-3 space-y-0.5 border-t border-slate-200 pt-3"
+                  ? "space-y-1"
+                  : "mt-3 space-y-1 border-t border-slate-200 pt-3"
               }
             >
               {ungrouped.map(renderItem)}
