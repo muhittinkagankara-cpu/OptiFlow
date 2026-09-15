@@ -166,6 +166,22 @@ export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
 
 export type BadgeTone = "neutral" | "good" | "warning" | "bad" | "info";
 
+/**
+ * `info` tonu yeni tasarım otoritesiyle çelişiyor — yeni kodda kullanılmaz.
+ *
+ * Tasarım otoritesinin 3. Yasası mavinin **yalnızca tıklanabilirlik** demesini
+ * istiyor (`docs/design-system/MASTER.md` §3.3). `info` mavi bir rozet üretir
+ * ama rozet tıklanabilir değildir; kullanıcıya olmayan bir eylem vaat eder.
+ *
+ * Ton **bilinçli olarak kaldırılmadı**: bugün 7 ekranda kullanılıyor ve rengini
+ * değiştirmek Sprint 1A'nın "mevcut ekranlarda sıfır görsel fark" sözleşmesini
+ * bozardı. Çelişki bu yüzden kuralla çözülüyor, pikselle değil — mevcut
+ * kullanımlar olduğu gibi kalır, yeni kullanım eklenmez.
+ *
+ * Göç hedefi: nötr bilgi için `neutral`, ölçülmüş bir duruma bağlıysa
+ * `good`/`warning`/`bad`. Kullanımlar sıfıra indiğinde ton ve bu not birlikte
+ * silinir (MASTER §25).
+ */
 const BADGE_TONE: Record<BadgeTone, string> = {
   neutral: "bg-slate-100 text-slate-600 border-slate-200",
   good: "bg-emerald-50 text-emerald-800 border-emerald-200",
@@ -258,9 +274,26 @@ export function ProgressBar({
       aria-valuemin={0}
       aria-valuemax={100}
     >
+      {/* Dolum süresi bir token'dan okunur.
+       *
+       * Değer değişmedi: `duration-500` sınıfı da 500ms'ti, `--of-motion-progress`
+       * de 500ms. Sprint 1A'nın sözleşmesi mevcut ekranlarda sıfır görsel fark
+       * olduğu için süre olduğu gibi bırakıldı; yalnızca **tek bir yerden**
+       * yönetilebilir hâle geldi.
+       *
+       * Bu süre tasarım otoritesinin 240ms tavanını aşıyor (MASTER §3.7, C3) ve
+       * token orada belgelenmiş bir istisna olarak duruyor. Tavana çekme kararı
+       * ayrı bir sprintte verilir; o zaman değişecek tek şey token'ın değeri
+       * olacak, bu dosya değil.
+       *
+       * `var(...)` içindeki 500ms yedeği bilinçlidir: token bir gün silinirse
+       * `transition-all`ın 150ms varsayılanına düşüp sessizce hızlanmasın. */}
       <div
-        className={`h-full rounded-full transition-all duration-500 ${PROGRESS_TONE[tone]}`}
-        style={{ width: `${pct}%` }}
+        className={`h-full rounded-full transition-all ${PROGRESS_TONE[tone]}`}
+        style={{
+          width: `${pct}%`,
+          transitionDuration: "var(--of-motion-progress, 500ms)",
+        }}
       />
     </div>
   );
