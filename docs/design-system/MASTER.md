@@ -304,7 +304,14 @@ düşürülebilir. Karar §25'te açık maddedir.
 
 ## 4. Tipografi 🟡
 
-**Tek ve en önemli kural:** *Ölçülen her sayı mono + tabular; her kelime sans.*
+**Tek ve en önemli kural:** *Ölçülen her sayı `tabular-nums` taşır; her kelime
+sans.*
+
+Hizalamayı sağlayan şey **tabular rakamlardır**, mono bir aile değil. Ölçüldü
+(Sprint 1B): Inter'de `tabular-nums` kapalıyken rakam genişlikleri 5,09–8,08 px
+arasında değişiyor (**2,99 px fark**); açıkken fark **0 px**. Mono, sayı
+hizalaması için bir gereklilik değil, kod benzeri değerler (`code` rolü) için
+bir karakter tercihidir.
 
 | Rol | Boyut / Satır | Ağırlık | Kullanım |
 | --- | --- | --- | --- |
@@ -317,17 +324,50 @@ düşürülebilir. Karar §25'te açık maddedir.
 | `body` | 13 / 20 | 400 | Gövde |
 | `body-s` | 12 / 18 | 400 | Yardım metni |
 | `label` | 11 / 12, 0.08em, BÜYÜK HARF | 500 | Etiket |
-| `data` | 12.5 / 18 | 400 | Tablo metni (condensed) |
+| `data` | 12.5 / 18 | 400 | Tablo metni |
 | `code` | 11.5 / 16 | 400 | Tag, endpoint, ID |
 
 **Kural:** Ürünün tamamında 15px üstü yalnızca **üç** boyut vardır (`display`,
 `metric-l`, `title-page`). Dördüncüsü eklenmez.
 
-**Font ailesi:** Mevcut durum Inter (`index.html` içinden Google Fonts ile
-yükleniyor, `--font-sans` token'ı tanımlı, `cv02/cv03/cv04/cv11` özellikleri
-açık). Font değişimi **bu belgeyle kararlaştırılmamıştır** ve ayrı bir karar
-konusudur (§25). Değiştirilene kadar yukarıdaki ölçek Inter üzerinde uygulanır;
-`data` satırı için condensed bir kesim yoksa `body-s` kullanılır.
+### 4.1 Yazı tipi kararı ✅ (Sprint 1B'de kapatıldı)
+
+Karar ölçüme dayanır; ölçüm apparatı `labs/typography-lab.html` dosyasındadır.
+
+**1 · Inter üretim sans'ı olarak kalır.** `index.html` içinden yükleniyor,
+`--font-sans` token'ı tanımlı, `cv02/cv03/cv04/cv11` özellikleri açık. Yeni bir
+sans ailesi eklenmez.
+
+**2 · Condensed bir kesime ihtiyaç yok.** Ölçüldü: 6 sütunlu istasyon tablosu
+12,5 px Inter ile **338,5 px** içerik, 24 px sütun aralığıyla **458,5 px** yer
+kaplıyor. Kullanılabilir genişlik 768 px'te 704 px (**%65 doluluk, 246 px
+boşluk**), 1440 px'te 1100 px (%42). Yoğunluk sorunu yok; 768 px altında tablo
+zaten kayıt listesine dönüşüyor (§10), yani yoğun tablo senaryosu o genişlikte
+hiç oluşmuyor. Condensed, olmayan bir sorunu çözerdi.
+
+**3 · Ölçülen sayılar `tabular-nums` taşır.** Rakam genişliği farkını sıfırlayan
+şey budur (bkz. §4 başındaki ölçüm). Ayrı bir mono aile hizalama için gerekli
+değildir.
+
+**4 · `font-mono` Tailwind'in mevcut varsayılan token'ı olarak kalır.** Projeye
+ikinci bir `--font-mono` tanımı eklenmez. Doğrulandı (Tailwind 4.3.3):
+varsayılan `@theme` bloğu `node_modules/tailwindcss/theme.css` içinde
+`--font-mono`'yu tanımlıyor, build çıktısı `.font-mono{font-family:var(--font-mono)}`
+kuralını ve değişkenin kendisini içeriyor, runtime'da `:root` üzerinde
+çözülüyor. Aynı değeri projede tekrar tanımlamak saf bir kopya olurdu.
+
+**5 · Platformlar arası mono farkı kabul edilmiştir.** Sistem yığını Windows'ta
+Consolas (bu makinede genişlik eşleştirmesiyle doğrulandı), macOS'ta SF Mono,
+Linux'ta Liberation Mono çizer. Üçü de gerçek monospace ailelerdir; bu, sistem
+yığını kullanmanın tanımı gereği sonucudur, bir kusur değildir. Birebir aynı
+mono görünüm istenirse tek yol bir font dosyası barındırmaktır ve bu ayrı bir
+karardır.
+
+**Açıkta kalan:** B/C/D adaylarının (IBM Plex, Barlow) *estetik* üstünlüğü test
+edilmedi — bu yazı tipleri ne projede ne de ölçüm yapılan makinede mevcuttu, ve
+harici kaynak eklemek sprint kapsamı dışındaydı. Karar fonksiyonel kriterlere
+dayanır; estetik soru açılmak istenirse lab hazırdır ve tek gereken yazı tipi
+kaynağıdır.
 
 ---
 
@@ -925,21 +965,26 @@ bırakılmıştır. Blocker olarak raporlanmazlar.
 Bunlar **bilinçli olarak** karara bağlanmamıştır ve ilgili sprint'te
 sorulmalıdır:
 
-1. **Font ailesi** — Inter korunacak mı, teknik karakterli bir aileye geçilecek
-   mi? Geçiş metrikleri değiştirir ve 375px'te yeniden doğrulama gerektirir.
-   §4'teki `data` satırı (12.5px condensed) bu karara bağlıdır: Inter'in
-   condensed kesimi yoktur, o yüzden tablo yoğunluğu hedefi bugün tam
-   karşılanamıyor.
-2. **Açık tema** — Şu an `color-scheme: dark` sabit. Saha ekranları (Operatör,
+1. **Açık tema** — Şu an `color-scheme: dark` sabit. Saha ekranları (Operatör,
    Tanılama) parlak atölye ışığında kullanılıyor. Açık/koyu/sistem tercihi
    eklenecek mi?
-3. **1600px davranışı** — Özel breakpoint mi, yalnızca kenar boşluğu artışı mı?
+2. **1600px davranışı** — Özel breakpoint mi, yalnızca kenar boşluğu artışı mı?
 
 ### Sprint 1A'da karara bağlananlar
 
 - **Radius ad alanı → Seçenek B** (ayrı `--of-radius-*`; §3.5)
 - **ConstraintRail geometrisi → her varyantta kapasite payı** (§15.4)
 - **İskelet parıltısı izin verilen hareketlere eklendi** (§3.7)
+
+### Sprint 1B'de karara bağlananlar
+
+Beşi de §4.1'de gerekçeleri ve ölçümleriyle yazılıdır.
+
+- **Inter üretim sans'ı olarak kalır** — yeni sans ailesi eklenmez
+- **Condensed kesim gerekmez** — ölçülen tablo genişliği 458,5 / 704 px (%65)
+- **Ölçülen sayılar `tabular-nums` taşır** — rakam genişlik farkı 2,99 px → 0 px
+- **`font-mono` Tailwind varsayılanı olarak kalır** — proje token'ı eklenmez
+- **Platformlar arası mono farkı kabul edilir** — sistem yığınının doğal sonucu
 
 ---
 

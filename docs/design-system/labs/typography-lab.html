@@ -1,0 +1,510 @@
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>OptiFlow · Typography Lab (Sprint 1B)</title>
+
+    <!--
+      OptiFlow Typography Lab
+      =======================
+
+      Ne işe yarar: dört yazı tipi adayını OptiFlow'un GERÇEK kullanım
+      bağlamlarında yan yana koyar ve aralarındaki farkı gözle değil ÖLÇÜMLE
+      gösterir.
+
+      Nerede durur: bu dosya bağımsızdır. Uygulama paketine girmez, hiçbir
+      üretim dosyasına dokunmaz, hiçbir bileşen onu içe aktarmaz. Tarayıcıda
+      doğrudan açılır.
+
+      Renkler: `frontend/src/index.css` §3'teki `--of-*` token'larının
+      aynalarıdır. Burada yeni bir renk sistemi kurulmaz. Ayna olması bilinçli
+      bir ödündür: lab bağımsız bir dosya olduğu için Tailwind kaynağını
+      okuyamaz. Değerler değişirse ikisi birlikte güncellenir; doğruluk kaynağı
+      her zaman index.css'tir.
+
+      DÜRÜSTLÜK KURALI
+      ----------------
+      Bir aday yazı tipi tarayıcıda yüklü değilse, tarayıcı sessizce yedek bir
+      yazı tipine düşer ve o adayın ölçümleri aslında yedeğin ölçümleri olur.
+      Bu, hiçbir uyarı vermeden yanlış bir karşılaştırma üretir — ürünün
+      kaçındığı hata sınıfının ta kendisi.
+
+      Bu yüzden lab her adayı çizmeden ÖNCE gerçekten çözülüp çözülmediğini
+      ölçer (genişlik karşılaştırması yöntemiyle) ve çözülmeyen adayı
+      "YÜKLENMEDİ · ölçüm geçersiz" olarak işaretler. Yüklenmemiş bir adayın
+      sayıları rapora girmez.
+    -->
+
+    <style>
+      /* -- index.css §3 aynası (bkz. dosya başlığı) ------------------------ */
+      :root {
+        --of-surface-canvas: #0a0d12;
+        --of-surface-sunken: #0d1117;
+        --of-surface-1: #12161d;
+        --of-surface-2: #171c25;
+        --of-surface-hairline: #232a35;
+        --of-ink-1: #f2f5f8;
+        --of-ink-2: #a9b4c2;
+        --of-ink-3: #6b7685;
+        --of-ink-4: #454e5c;
+        --of-interactive: #3d7dff;
+        --of-semantic-ok: #22c55e;
+        --of-semantic-warn: #f59e0b;
+        --of-semantic-fault: #ef4444;
+        --of-semantic-unknown: #6b7685;
+        --of-semantic-value-ink: #f2d9a0;
+        --of-spacing-4: 4px;
+        --of-spacing-8: 8px;
+        --of-spacing-12: 12px;
+        --of-spacing-16: 16px;
+        --of-spacing-24: 24px;
+        --of-spacing-32: 32px;
+        --of-radius-xs: 3px;
+        --of-radius-sm: 5px;
+        --of-radius-md: 8px;
+      }
+
+      /* -- Aday yazı tipi yığınları ---------------------------------------- */
+      /* Her aday için sans ve mono ayrı tanımlanır. `A` mevcut üretim
+         yığınıdır; ötekiler onunla aynı yedeklere düşer ki, yüklenmedikleri
+         zaman fark ölçülebilsin. */
+      .cand-A {
+        --lab-sans: "Inter", ui-sans-serif, system-ui, -apple-system,
+          "Segoe UI", sans-serif;
+        --lab-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+          "Liberation Mono", "Courier New", monospace;
+      }
+      .cand-B {
+        --lab-sans: "IBM Plex Sans", ui-sans-serif, system-ui, "Segoe UI",
+          sans-serif;
+        --lab-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+      }
+      .cand-C {
+        --lab-sans: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+        --lab-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+      }
+      .cand-D {
+        --lab-sans: "Barlow", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+        --lab-mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+      }
+
+      /* -- Roller (MASTER §4) ---------------------------------------------- */
+      /* Dört adayda da BİREBİR aynı boyut, satır yüksekliği ve ağırlık. Tek
+         değişken yazı tipinin kendisidir; aksi hâlde ölçüm iki değişkeni
+         birden taşır ve hiçbir şey söylemez. */
+      .r-display   { font: 500 44px/44px var(--lab-mono); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+      .r-metric-l  { font: 500 30px/32px var(--lab-mono); font-variant-numeric: tabular-nums; }
+      .r-metric-m  { font: 500 20px/24px var(--lab-mono); font-variant-numeric: tabular-nums; }
+      .r-metric-s  { font: 500 15px/20px var(--lab-mono); font-variant-numeric: tabular-nums; }
+      .r-title-pg  { font: 600 20px/26px var(--lab-sans); letter-spacing: -0.01em; }
+      .r-title-pn  { font: 600 15px/20px var(--lab-sans); }
+      .r-body      { font: 400 13px/20px var(--lab-sans); }
+      .r-body-s    { font: 400 12px/18px var(--lab-sans); }
+      .r-label     { font: 500 11px/12px var(--lab-sans); letter-spacing: 0.08em; text-transform: uppercase; }
+      .r-data      { font: 400 12.5px/18px var(--lab-sans); font-variant-numeric: tabular-nums; }
+      .r-mono-num  { font: 500 13px/18px var(--lab-mono); font-variant-numeric: tabular-nums; }
+      .r-code      { font: 400 11.5px/16px var(--lab-mono); }
+
+      /* -- Sayfa iskeleti -------------------------------------------------- */
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--of-surface-canvas);
+        color: var(--of-ink-2);
+        font: 400 13px/20px ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 1440px; margin: 0 auto; padding: var(--of-spacing-24); }
+      h1 { font-size: 20px; line-height: 26px; font-weight: 600; color: var(--of-ink-1); margin: 0 0 var(--of-spacing-4); }
+      h2 { font-size: 15px; line-height: 20px; font-weight: 600; color: var(--of-ink-1); margin: var(--of-spacing-32) 0 var(--of-spacing-12); }
+      .lede { margin: 0 0 var(--of-spacing-24); color: var(--of-ink-3); max-width: 68ch; }
+      .panel { background: var(--of-surface-1); border-radius: var(--of-radius-md); padding: var(--of-spacing-16); }
+      .hair { border: 0; border-top: 1px solid var(--of-surface-hairline); margin: var(--of-spacing-12) 0; }
+      .lbl { font-size: 11px; line-height: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--of-ink-3); font-weight: 500; }
+
+      /* Dört sütun: adaylar yan yana. Dar ekranda alt alta iner. */
+      .grid4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--of-spacing-12); }
+      @media (max-width: 1100px) { .grid4 { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+      @media (max-width: 640px)  { .grid4 { grid-template-columns: 1fr; } }
+
+      .cand-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--of-spacing-8); margin-bottom: var(--of-spacing-8); }
+      .cand-name { color: var(--of-ink-1); font-weight: 600; font-size: 13px; }
+      .chip { display: inline-flex; align-items: center; gap: 6px; border-radius: var(--of-radius-xs); padding: 2px 6px; font-size: 11px; font-weight: 500; }
+      .chip .dot { width: 6px; height: 6px; border-radius: 999px; }
+      .chip--ok   { color: var(--of-ink-2); } .chip--ok .dot   { background: var(--of-semantic-ok); }
+      .chip--miss { color: var(--of-ink-2); } .chip--miss .dot { background: var(--of-semantic-unknown); }
+
+      .specimen { color: var(--of-ink-1); }
+      .specimen + .lbl { margin-top: var(--of-spacing-12); }
+      .muted { color: var(--of-ink-3); }
+      .value-ink { color: var(--of-semantic-value-ink); }
+
+      /* İstasyon tablosu — yoğunluk ölçümü buradan alınır. */
+      table.sim { width: 100%; border-collapse: collapse; }
+      table.sim th { text-align: left; color: var(--of-ink-3); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; font-weight: 500; padding: 0 0 6px; }
+      table.sim td { padding: 6px 0; border-top: 1px solid var(--of-surface-hairline); color: var(--of-ink-1); }
+      table.sim td.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+      /* Ölçüm çıktısı tablosu. */
+      table.out { width: 100%; border-collapse: collapse; font-size: 12px; }
+      table.out th, table.out td { padding: 6px 10px; border-top: 1px solid var(--of-surface-hairline); text-align: left; }
+      table.out th { color: var(--of-ink-3); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 500; }
+      table.out td { color: var(--of-ink-1); font-variant-numeric: tabular-nums; }
+      table.out td.n { text-align: right; }
+
+      .warnbox { border-left: 2px solid var(--of-semantic-warn); padding-left: var(--of-spacing-12); color: var(--of-ink-2); }
+      .clamp { border-left: 2px solid var(--of-semantic-fault); padding-left: var(--of-spacing-12); }
+      .wrapbox { width: 260px; }
+    </style>
+  </head>
+
+  <body>
+    <div class="wrap">
+      <h1>OptiFlow · Typography Lab</h1>
+      <p class="lede">
+        Dört aday, OptiFlow'un gerçek kullanım bağlamlarında, birebir aynı
+        boyut / satır yüksekliği / ağırlık / içerikle. Tek değişken yazı
+        tipidir. Ölçümler sayfanın sonundadır ve tarayıcıdan alınır.
+      </p>
+
+      <h2>0 · Aday yazı tipleri gerçekten yüklendi mi?</h2>
+      <div class="panel">
+        <p class="muted" style="margin-top: 0">
+          Yüklenmemiş bir aday sessizce yedeğe düşer ve ölçümleri yedeğin
+          ölçümü olur. Aşağıdaki denetim, her aile için metin genişliğini bilinen
+          bir yedekle karşılaştırır: fark yoksa aile çözülmemiştir.
+        </p>
+        <div id="availability"></div>
+      </div>
+
+      <h2>1 · Rol matrisi (MASTER §4)</h2>
+      <div class="grid4" id="roleGrid"></div>
+
+      <h2>2 · Gerçek OptiFlow kullanım bağlamları</h2>
+      <div class="grid4" id="usageGrid"></div>
+
+      <h2>3 · Ölçümler</h2>
+      <div class="panel">
+        <div id="measurements"></div>
+      </div>
+    </div>
+
+    <script>
+      /* ------------------------------------------------------------------ */
+      /* Adaylar                                                             */
+      /* ------------------------------------------------------------------ */
+      const CANDIDATES = [
+        { id: "A", cls: "cand-A", name: "A · Mevcut yığın", sans: "Inter", mono: null },
+        { id: "B", cls: "cand-B", name: "B · Plex Sans + Plex Mono", sans: "IBM Plex Sans", mono: "IBM Plex Mono" },
+        { id: "C", cls: "cand-C", name: "C · Inter + Plex Mono", sans: "Inter", mono: "IBM Plex Mono" },
+        { id: "D", cls: "cand-D", name: "D · Barlow + Plex Mono", sans: "Barlow", mono: "IBM Plex Mono" },
+      ];
+
+      /* ------------------------------------------------------------------ */
+      /* Yazı tipi çözülme denetimi                                          */
+      /* ------------------------------------------------------------------ */
+      /* `document.fonts.check()` yalnızca @font-face ile TANIMLANMIŞ aileleri
+         bilir; işletim sisteminde kurulu bir aileyi de, hiç olmayan bir aileyi
+         de aynı biçimde raporlayabilir. Bu yüzden klasik genişlik yöntemi
+         kullanılır: aynı metin, önce yalnızca yedek aileyle, sonra "aday,
+         yedek" sırasıyla çizilir. Genişlikler aynıysa aday çözülmemiştir. */
+      function familyResolves(family) {
+        const probe = "İşlem gücü ığdır ŞÇÖÜ 0123456789 mmmiii";
+        const measure = (stack) => {
+          const el = document.createElement("span");
+          el.textContent = probe;
+          el.style.cssText =
+            "position:absolute;left:-9999px;top:-9999px;white-space:nowrap;" +
+            "font-size:72px;font-weight:400;font-family:" + stack;
+          document.body.appendChild(el);
+          const w = el.getBoundingClientRect().width;
+          el.remove();
+          return w;
+        };
+        const baselines = ["monospace", "serif", "sans-serif"];
+        return baselines.some(
+          (b) => Math.abs(measure('"' + family + '",' + b) - measure(b)) > 0.5,
+        );
+      }
+
+      const availability = {};
+      for (const c of CANDIDATES) {
+        availability[c.id] = {
+          sans: c.sans ? familyResolves(c.sans) : true,
+          mono: c.mono ? familyResolves(c.mono) : true,
+        };
+      }
+      // A adayının mono'su sistem yığınıdır; her zaman bir şey çözer.
+      availability.A.mono = true;
+
+      function candidateUsable(id) {
+        return availability[id].sans && availability[id].mono;
+      }
+
+      document.getElementById("availability").innerHTML = CANDIDATES.map((c) => {
+        const a = availability[c.id];
+        const ok = candidateUsable(c.id);
+        const missing = [];
+        if (!a.sans) missing.push(c.sans);
+        if (!a.mono) missing.push(c.mono);
+        return (
+          '<div style="display:flex;gap:10px;align-items:baseline;padding:6px 0;border-top:1px solid var(--of-surface-hairline)">' +
+          '<span class="chip ' + (ok ? "chip--ok" : "chip--miss") + '"><span class="dot"></span>' +
+          (ok ? "Çözüldü" : "YÜKLENMEDİ") + "</span>" +
+          '<span style="color:var(--of-ink-1);font-weight:600">' + c.name + "</span>" +
+          '<span class="muted">' +
+          (ok
+            ? "ölçümler geçerli"
+            : "eksik: " + missing.join(", ") + " · bu adayın ölçümleri GEÇERSİZ, rapora girmez") +
+          "</span></div>"
+        );
+      }).join("");
+
+      /* ------------------------------------------------------------------ */
+      /* Roller ve içerik — gerçek Türkçe                                    */
+      /* ------------------------------------------------------------------ */
+      const ROLES = [
+        ["r-display",  "Display metric",     "₺5.900"],
+        ["r-metric-l", "Large metric",       "%74,4"],
+        ["r-metric-m", "Medium metric",      "112 adet/gün"],
+        ["r-metric-s", "Small metric",       "42,0 sn"],
+        ["r-title-pg", "Page title",         "Simülasyon Sonucu"],
+        ["r-title-pn", "Panel title",        "Kapasite kullanımı"],
+        ["r-body",     "Body",               "Bugün hattınızı Torna sınırlıyor. Çevrim süresi hedefin üzerinde ve kuyruk sekiz dakikadır büyüyor."],
+        ["r-body-s",   "Small body",         "Son ölçüm 2 dk önce · benzetim verisi"],
+        ["r-label",    "Uppercase label",    "Kapasite kullanımı"],
+        ["r-data",     "Dense data/table",   "Torna · %82 doluluk · 2,0 parça · 4,8 dk"],
+        ["r-mono-num", "Mono numeric",       "₺178.772,50"],
+        ["r-code",     "Code-like",          "opc.tcp://10.0.4.12:4840"],
+      ];
+
+      /* Türkçe'nin yazı tipini en çok zorlayan yeri: noktalı/noktasız i ve
+         art arda gelen aksanlı harfler. Bir yazı tipi burada tökezliyorsa
+         Türkçe bir üründe kullanılamaz. */
+      const TURKISH_STRESS = "İstasyon ığdır çığlığı · ĞİŞÇÖÜ ğişçöü · Iıİi";
+
+      document.getElementById("roleGrid").innerHTML = CANDIDATES.map((c) => {
+        const usable = candidateUsable(c.id);
+        const rows = ROLES.map(
+          ([cls, label, text]) =>
+            '<div class="lbl">' + label + "</div>" +
+            '<div class="specimen ' + cls + '">' + text + "</div>",
+        ).join('<hr class="hair">');
+        return (
+          '<div class="panel ' + c.cls + '">' +
+          '<div class="cand-head"><span class="cand-name">' + c.name + "</span>" +
+          '<span class="chip ' + (usable ? "chip--ok" : "chip--miss") + '"><span class="dot"></span>' +
+          (usable ? "çözüldü" : "yüklenmedi") + "</span></div>" +
+          rows +
+          '<hr class="hair"><div class="lbl">Türkçe zorlama</div>' +
+          '<div class="specimen r-body">' + TURKISH_STRESS + "</div>" +
+          "</div>"
+        );
+      }).join("");
+
+      /* ------------------------------------------------------------------ */
+      /* Gerçek kullanım bağlamları                                          */
+      /* ------------------------------------------------------------------ */
+      function usageBlock() {
+        return [
+          '<div class="lbl">Command Center · statement</div>',
+          '<div class="specimen r-title-pg">Bugün hattınızı Torna sınırlıyor.</div>',
+          '<div class="r-body-s muted">Kapasitenin %18\'i burada kayboluyor · vardiya 2/3</div>',
+
+          '<hr class="hair"><div class="lbl">MetricRow</div>',
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">' +
+            '<span class="r-body muted">Günlük üretim</span><span class="specimen r-metric-s">778 birim</span></div>',
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">' +
+            '<span class="r-body muted">Ortalama akış süresi</span><span class="specimen r-metric-s">5,3 dk</span></div>',
+          '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px">' +
+            '<span class="r-body muted">Fire oranı</span><span class="specimen r-metric-s">—</span></div>',
+
+          '<hr class="hair"><div class="lbl">ConstraintRail · etiket + değer</div>',
+          '<div style="display:flex;gap:16px">' +
+            '<div><div class="r-label muted">KESME</div><div class="specimen r-metric-m">%55</div></div>' +
+            '<div><div class="r-label" style="color:var(--of-semantic-warn)">TORNA · KISIT</div><div class="specimen r-metric-m">%82</div></div>' +
+            '<div><div class="r-label muted">KAYNAK</div><div class="specimen r-metric-m">%58</div></div></div>',
+
+          '<hr class="hair"><div class="lbl">DecisionBlock</div>',
+          '<div class="specimen r-title-pn">Torna çevrim süresini 42 sn → 35 sn düşürün.</div>',
+          '<div class="r-body muted" style="margin-top:4px">Torna zamanının %82\'sini işlemde geçiriyor; kuyruk büyüyor.</div>',
+          '<div style="margin-top:8px"><span class="r-label muted">Geri kazanım</span> ' +
+            '<span class="specimen r-metric-m value-ink">₺5.900 / gün</span></div>',
+
+          '<hr class="hair"><div class="lbl">Simülasyon · istasyon tablosu</div>',
+          '<table class="sim r-data" id="simtable"><thead><tr>' +
+            "<th>İstasyon</th><th>Doluluk</th><th>Kuyruk</th><th>Bekleme</th><th>OEE</th><th>Kayıp/gün</th>" +
+            "</tr></thead><tbody>" +
+            "<tr><td>Kesme</td><td class='num'>%55</td><td class='num'>1,0</td><td class='num'>2,4 dk</td><td class='num'>%75,1</td><td class='num'>₺420</td></tr>" +
+            "<tr><td>Torna</td><td class='num'>%82</td><td class='num'>2,0</td><td class='num'>4,8 dk</td><td class='num'>%73,5</td><td class='num'>₺4.900</td></tr>" +
+            "<tr><td>Kaynak</td><td class='num'>%58</td><td class='num'>1,0</td><td class='num'>2,4 dk</td><td class='num'>%75,5</td><td class='num'>₺510</td></tr>" +
+            "<tr><td>Boyama</td><td class='num'>%44</td><td class='num'>0,0</td><td class='num'>0,0 dk</td><td class='num'>%73,3</td><td class='num'>₺310</td></tr>" +
+            "<tr><td>Montaj</td><td class='num'>%61</td><td class='num'>1,5</td><td class='num'>3,1 dk</td><td class='num'>%74,8</td><td class='num'>₺380</td></tr>" +
+            "<tr><td>Paketleme</td><td class='num'>%39</td><td class='num'>0,0</td><td class='num'>0,0 dk</td><td class='num'>%71,2</td><td class='num'>₺140</td></tr>" +
+            "</tbody></table>",
+
+          '<hr class="hair"><div class="lbl">Finans · para metriği</div>',
+          '<div class="r-label muted">Aylık geri kazanım</div>',
+          '<div class="specimen r-display value-ink">₺140.338</div>',
+
+          '<hr class="hair"><div class="lbl">Canlı · alarm</div>',
+          '<div class="clamp"><div class="specimen r-title-pn">Torna kuyruğu 3 parçaya çıktı</div>' +
+            '<div class="r-body-s muted">08:02 · 8 dakikadır büyüyor</div></div>',
+
+          '<hr class="hair"><div class="lbl">Operatör · sıkışık etiket</div>',
+          '<div style="display:flex;gap:12px">' +
+            '<div><div class="r-label muted">Bugünkü görevler</div><div class="specimen r-metric-l">4</div></div>' +
+            '<div><div class="r-label muted">Tamamlanan</div><div class="specimen r-metric-l">0</div></div></div>',
+
+          '<hr class="hair"><div class="lbl">Uzun Türkçe cümle · 260px sarma</div>',
+          '<div class="wrapbox specimen r-body" data-wrap="1">Çevrim süresi hedefin üzerinde olduğu için hattın toplam çıktısı bu istasyonla sınırlanıyor ve günlük kayıp büyüyor.</div>',
+
+          '<hr class="hair"><div class="lbl">Kod benzeri değer</div>',
+          '<div class="specimen r-code">st-torna-01 · opc.tcp://10.0.4.12:4840</div>',
+        ].join("");
+      }
+
+      document.getElementById("usageGrid").innerHTML = CANDIDATES.map((c) => {
+        const usable = candidateUsable(c.id);
+        return (
+          '<div class="panel ' + c.cls + '" data-cand="' + c.id + '">' +
+          '<div class="cand-head"><span class="cand-name">' + c.name + "</span>" +
+          '<span class="chip ' + (usable ? "chip--ok" : "chip--miss") + '"><span class="dot"></span>' +
+          (usable ? "çözüldü" : "yüklenmedi") + "</span></div>" +
+          usageBlock() +
+          "</div>"
+        );
+      }).join("");
+
+      /* ------------------------------------------------------------------ */
+      /* Ölçüm                                                               */
+      /* ------------------------------------------------------------------ */
+      /* Gizli bir ölçüm alanı kullanılır: sayfadaki görünür örneklerin
+         genişliği kapsayıcıya göre kırpılır, ölçüm ise kırpılmamış doğal
+         genişliği ister. */
+      function measureRole(candClass, roleClass, text, widthPx) {
+        const host = document.createElement("div");
+        host.className = candClass;
+        host.style.cssText =
+          "position:absolute;left:-99999px;top:0;" +
+          (widthPx ? "width:" + widthPx + "px;" : "white-space:nowrap;");
+        const el = document.createElement("div");
+        el.className = roleClass;
+        el.textContent = text;
+        host.appendChild(el);
+        document.body.appendChild(host);
+        const cs = getComputedStyle(el);
+        const rect = el.getBoundingClientRect();
+        const lineHeight = parseFloat(cs.lineHeight);
+        const out = {
+          width: Math.round(rect.width * 100) / 100,
+          height: Math.round(rect.height * 100) / 100,
+          lineHeight: Math.round(lineHeight * 100) / 100,
+          lines: widthPx ? Math.round(rect.height / lineHeight) : 1,
+          family: cs.fontFamily.split(",")[0].replace(/["']/g, ""),
+        };
+        host.remove();
+        return out;
+      }
+
+      /* Rakam hizalaması: 0-9 arası her rakamın tek tek genişliği ölçülür.
+         Hepsi aynıysa yazı tipi gerçekten tabular rakam veriyordur; fark
+         varsa tablodaki sayılar dikeyde kaymaya devam eder. */
+      function digitVariance(candClass, roleClass) {
+        const widths = [];
+        for (let d = 0; d <= 9; d++) {
+          widths.push(measureRole(candClass, roleClass, String(d)).width);
+        }
+        const min = Math.min(...widths);
+        const max = Math.max(...widths);
+        return { min, max, spread: Math.round((max - min) * 1000) / 1000 };
+      }
+
+      function tableHeight(candId) {
+        const t = document.querySelector('[data-cand="' + candId + '"] table.sim');
+        return t ? Math.round(t.getBoundingClientRect().height * 100) / 100 : null;
+      }
+
+      function wrapLines(candId) {
+        const el = document.querySelector('[data-cand="' + candId + '"] [data-wrap]');
+        if (!el) return null;
+        const lh = parseFloat(getComputedStyle(el).lineHeight);
+        return {
+          lines: Math.round(el.getBoundingClientRect().height / lh),
+          height: Math.round(el.getBoundingClientRect().height * 100) / 100,
+        };
+      }
+
+      function runMeasurements() {
+        const result = { viewport: window.innerWidth, candidates: {} };
+        for (const c of CANDIDATES) {
+          const usable = candidateUsable(c.id);
+          /* `getComputedStyle().fontFamily` yığının BİLDİRİLEN ilk adını
+             döndürür — o ailenin gerçekten çizildiğini söylemez. İkisini
+             karıştırmak, yüklenmemiş bir yazı tipini yüklenmiş gibi
+             raporlar. Bu yüzden bildirilen ad ile çözülen ad ayrı alanlarda
+             durur ve çözülme kararı genişlik denetiminden gelir. */
+          result.candidates[c.id] = {
+            name: c.name,
+            usable,
+            declaredSans: measureRole(c.cls, "r-body", "x").family,
+            declaredMono: measureRole(c.cls, "r-mono-num", "x").family,
+            resolvedSans: availability[c.id].sans ? c.sans : "YEDEK (sistem sans)",
+            resolvedMono:
+              c.mono === null
+                ? "sistem mono yığını"
+                : availability[c.id].mono
+                  ? c.mono
+                  : "YEDEK (sistem mono)",
+            statementWidth: measureRole(c.cls, "r-title-pg", "Bugün hattınızı Torna sınırlıyor.").width,
+            displayWidth: measureRole(c.cls, "r-display", "₺140.338").width,
+            dataRowWidth: measureRole(c.cls, "r-data", "Torna · %82 doluluk · 2,0 parça · 4,8 dk").width,
+            labelWidth: measureRole(c.cls, "r-label", "KAPASİTE KULLANIMI").width,
+            codeWidth: measureRole(c.cls, "r-code", "opc.tcp://10.0.4.12:4840").width,
+            monoDigits: digitVariance(c.cls, "r-mono-num"),
+            sansDigits: digitVariance(c.cls, "r-data"),
+            tableHeight: tableHeight(c.id),
+            wrap260: wrapLines(c.id),
+          };
+        }
+        return result;
+      }
+
+      // Dışarıdan çağrılabilsin: tarayıcı aracı bunu okuyup rapora taşır.
+      window.__typographyLab = runMeasurements;
+
+      function renderMeasurements() {
+        const r = runMeasurements();
+        const rows = CANDIDATES.map((c) => {
+          const m = r.candidates[c.id];
+          const cell = (v) => (m.usable ? v : "—");
+          return (
+            "<tr><td>" + c.id + "</td>" +
+            "<td>" + m.resolvedSans + " / " + m.resolvedMono + "</td>" +
+            '<td class="n">' + cell(m.statementWidth + " px") + "</td>" +
+            '<td class="n">' + cell(m.displayWidth + " px") + "</td>" +
+            '<td class="n">' + cell(m.dataRowWidth + " px") + "</td>" +
+            '<td class="n">' + cell(m.tableHeight === null ? "—" : m.tableHeight + " px") + "</td>" +
+            '<td class="n">' + cell(m.wrap260 ? m.wrap260.lines + " satır" : "—") + "</td>" +
+            '<td class="n">' + cell(m.monoDigits.spread + " px") + "</td>" +
+            "</tr>"
+          );
+        }).join("");
+
+        document.getElementById("measurements").innerHTML =
+          '<p class="muted" style="margin-top:0">Viewport genişliği: <strong style="color:var(--of-ink-1)">' +
+          r.viewport +
+          "px</strong>. Yüklenmemiş adayların hücreleri &mdash; ile gösterilir; " +
+          "yedek yazı tipinin ölçüsünü o adayınmış gibi raporlamak yanlış olurdu.</p>" +
+          '<table class="out"><thead><tr>' +
+          "<th>Aday</th><th>Çözülen aile (sans / mono)</th><th>Statement</th><th>Display ₺</th>" +
+          "<th>Veri satırı</th><th>6 satır tablo</th><th>260px sarma</th><th>Rakam farkı</th>" +
+          "</tr></thead><tbody>" + rows + "</tbody></table>";
+      }
+
+      renderMeasurements();
+      window.addEventListener("resize", renderMeasurements);
+    </script>
+  </body>
+</html>
