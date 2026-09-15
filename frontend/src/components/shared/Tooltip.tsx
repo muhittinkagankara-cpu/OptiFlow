@@ -29,7 +29,17 @@ export function Tooltip({ content, label = "Açıklama" }: TooltipProps) {
         aria-label={label}
         aria-describedby={open ? tooltipId : undefined}
         aria-expanded={open}
-        className="cursor-help rounded-full p-0.5 text-slate-400 transition-colors hover:text-brand-600 focus:text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+        /*
+         * Dokunma hedefi (MASTER §14: en az 44×44).
+         *
+         * Düğme gerçekten etkileşimlidir — aşağıdaki `onClick`, hover'ı olmayan
+         * dokunmatik cihazlar için balonu açıp kapatır — ama görünür alanı
+         * 20×20 pikseldi. İkonu büyütmek satır yüksekliğini her kullanıldığı
+         * yerde bozardı; bunun yerine tıklanabilir alan görünmez bir
+         * `::after` katmanıyla 44×44'e genişletilir. İkon 16 piksel kalır,
+         * düzen hiç değişmez.
+         */
+        className="relative cursor-help rounded-full p-0.5 text-slate-400 transition-colors after:absolute after:-inset-3 after:content-[''] hover:text-brand-600 focus:text-brand-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
         onMouseEnter={() => setOpen(true)}
         onMouseLeave={() => setOpen(false)}
         onFocus={() => setOpen(true)}

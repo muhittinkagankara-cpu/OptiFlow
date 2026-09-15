@@ -26,7 +26,7 @@
 import { useMemo, useRef, useState } from "react";
 import { Sparkles } from "lucide-react";
 import type { SimulationConfig, SimulationRunResponse } from "../../types/simulationTypes";
-import { formatDecimal, formatUnits } from "../../lib/resultsFormatting";
+import { formatDecimal } from "../../lib/resultsFormatting";
 import { summarizeFactory } from "../../lib/factoryOverview";
 /*
  * Köken ve tazelik Sprint 2F-A'da kurulmuş altyapıdan gelir. İkinci bir zaman
@@ -45,6 +45,7 @@ import { ConstraintRail } from "../ui/ConstraintRail";
 import { MetricGroup } from "../ui/MetricGroup";
 import { resultsStatement } from "../../lib/results/statement";
 import { resultsMetrics } from "../../lib/results/metrics";
+import { resultsClosing } from "../../lib/results/closing";
 import { ArrowLeftIcon, ArrowRightIcon } from "../shared/icons";
 import { FactoryAnimation } from "./FactoryAnimation";
 import { FactoryOverview } from "./FactoryOverview";
@@ -58,7 +59,6 @@ interface ResultsPageProps {
   result: SimulationRunResponse;
   config: SimulationConfig;
   onBackToEditor: () => void;
-  onStartOver: () => void;
   /** Bu senaryoyu karşılaştırma referansı yapıp editöre döner. */
   onCompareFromHere: () => void;
   /** Referans senaryo varsa karşılaştırma görünümünü açar. */
@@ -81,7 +81,6 @@ export function ResultsPage({
   result,
   config,
   onBackToEditor,
-  onStartOver,
   onCompareFromHere,
   onOpenComparison,
   onOpenIntelligence,
@@ -103,6 +102,9 @@ export function ResultsPage({
      üzerinden işaretlenir. Yeni kısıt hesabı ya da yeni pay metriği yok. */
   const stations = railStations(results);
   const metrics = resultsMetrics(results);
+  /* Kapanış adımı: ölçülmüş kısıt bilgisini var olan bir ekrana bağlar.
+     Öneri, para ya da kazanç iddiası üretilmez (bkz. lib/results/closing). */
+  const closing = resultsClosing(bottleneck?.station_name);
 
   const summary = useMemo(
     () =>
@@ -161,7 +163,9 @@ export function ResultsPage({
           <button
             type="button"
             onClick={onOpenIntelligence}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            /* Dokunma hedefi 36 pikseldi (MASTER §14: en az 44). Yükseklik
+               `min-h` ile açılır; punto, dolgu ve renk değişmez. */
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
             <Sparkles className="h-4 w-4" />
             Ne yapmalıyım?
@@ -169,7 +173,7 @@ export function ResultsPage({
           <button
             type="button"
             onClick={onBackToEditor}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-brand-300 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition-colors hover:border-brand-300 hover:text-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
             <ArrowLeftIcon className="h-4 w-4" />
             Modeli düzenle
@@ -291,7 +295,7 @@ export function ResultsPage({
             <button
               type="button"
               onClick={onOpenComparison}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
               Senaryoları Karşılaştır
               <ArrowRightIcon className="h-4 w-4" />
@@ -312,7 +316,7 @@ export function ResultsPage({
             <button
               type="button"
               onClick={onCompareFromHere}
-              className="inline-flex items-center gap-2 rounded-lg border border-brand-300 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-brand-300 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
               Bu Senaryoyu Kopyala ve Karşılaştır
               <ArrowRightIcon className="h-4 w-4" />
@@ -321,16 +325,37 @@ export function ResultsPage({
         )}
       </section>
 
-      <p className="mt-6 text-center text-xs text-slate-500">
-        Beklenen üretim {formatUnits(results.total_throughput)} birim ·{" "}
+      {/*
+        Yasa 5: sayfa eylemle biter.
+
+        Burada eskiden 16 piksellik gri bir satır vardı: "Beklenen üretim 778
+        birim · Yeni bir model kur". Beklenen üretim zaten ölçüm şeridinde
+        yazılıydı ve "yeni bir model kur" okunan kısıtla ilgisi olmayan genel
+        bir çıkıştı — üstelik 16 piksellik bir dokunma hedefiydi. Aynı eylem
+        Fabrikalar ekranında duruyor, yani kaldırmak onu erişilemez yapmıyor.
+
+        Yerine kısıtla bağlantılı tek bir adım geldi. Kutu, gradient, ikon ya
+        da ikinci düğme yok: üstte bir hairline, altında etiket, cümle ve tek
+        birincil eylem.
+      */}
+      <section className="mt-8 flex flex-col gap-[var(--of-spacing-12)] border-t border-[var(--of-surface-hairline)] pt-[var(--of-spacing-16)] sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-[11px] font-medium tracking-[0.08em] text-[var(--of-ink-3)] uppercase">
+            Sonraki adım
+          </h2>
+          <p className="mt-[var(--of-spacing-4)] max-w-2xl text-[13px] leading-5 text-[var(--of-ink-2)]">
+            {closing.text}
+          </p>
+        </div>
         <button
           type="button"
-          onClick={onStartOver}
-          className="font-medium text-slate-500 underline-offset-4 transition-colors hover:text-brand-700 hover:underline"
+          onClick={onBackToEditor}
+          className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
         >
-          Yeni bir model kur
+          {closing.actionLabel}
+          <ArrowRightIcon className="h-4 w-4" />
         </button>
-      </p>
+      </section>
     </div>
   );
 }

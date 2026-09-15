@@ -29,7 +29,6 @@ const render = (
       config={config}
       ranAt={ranAt}
       onBackToEditor={() => {}}
-      onStartOver={() => {}}
       onCompareFromHere={() => {}}
       onOpenIntelligence={() => {}}
     />,
@@ -164,5 +163,67 @@ describe("kısıt şeridi ve ölçüm şeridi (Sprint 2G-C)", () => {
   it("köken satırı cümleden önce gelir", () => {
     const html = render();
     expect(html.indexOf("Benzetim")).toBeLessThan(html.indexOf("<h2"));
+  });
+});
+
+describe("kapanış adımı ve dokunma hedefleri (Sprint 2G-E)", () => {
+  it("sayfa bağlamlı bir sonraki adımla biter", () => {
+    const html = render();
+    expect(html).toContain("Sonraki adım");
+    expect(html.indexOf("Sonraki adım")).toBeGreaterThan(
+      html.indexOf("Beklenen üretim"),
+    );
+  });
+
+  it("kapanış, ölçülmüş kısıt istasyonunu anar", () => {
+    const kisit = temelKosum.results.station_metrics.find((s) => s.is_bottleneck)!;
+    expect(render()).toContain(`${kisit.station_name} bu koşumda hattın kısıtı`);
+  });
+
+  it("kapanış eylemi var olan editör hedefini kullanır", () => {
+    const html = render();
+    const son = html.slice(html.indexOf("Sonraki adım"));
+    expect(son).toContain("Modeli düzenle");
+  });
+
+  it("kapanışta tek birincil eylem vardır", () => {
+    const son = render().slice(render().indexOf("Sonraki adım"));
+    expect(son.match(/<button/g)).toHaveLength(1);
+  });
+
+  it("genel alt bağlantı kaldırıldı", () => {
+    // "Yeni bir model kur" sonucun karar zinciriyle ilgisiz, 16 piksellik bir
+    // dokunma hedefiydi; aynı eylem Fabrikalar ekranında duruyor.
+    expect(render()).not.toContain("Yeni bir model kur");
+  });
+
+  it("kapanış kutu, gradient ya da ikon kabı üretmez", () => {
+    const son = render().slice(render().indexOf("Sonraki adım"));
+    expect(son).not.toContain("gradient");
+    expect(son).not.toContain("rounded-xl");
+  });
+
+  it("kapanış eylemi 44 piksel tabanı taşır", () => {
+    const son = render().slice(render().indexOf("Sonraki adım"));
+    expect(son).toMatch(/<button[^>]*min-h-\[44px\]/);
+  });
+
+  it("başlık ve karşılaştırma eylemleri 44 piksel tabanı taşır", () => {
+    const html = render();
+    ["Ne yapmalıyım?", "Modeli düzenle", "Kopyala"].forEach((etiket) => {
+      const yer = html.indexOf(etiket);
+      expect(yer).toBeGreaterThan(-1);
+      // Etiketten geriye doğru en yakın <button açılışı 44 tabanını taşımalı.
+      const acilis = html.lastIndexOf("<button", yer);
+      expect(html.slice(acilis, yer)).toContain("min-h-[44px]");
+    });
+  });
+
+  it("ipucu düğmelerinin tıklama alanı genişletilmiştir", () => {
+    // İkon 16 piksel kalır; alan görünmez bir ::after katmanıyla büyür.
+    const html = render();
+    const ipuclari = html.match(/<button[^>]*aria-label="[^"]*hakkında"[^>]*>/g) ?? [];
+    expect(ipuclari.length).toBeGreaterThan(0);
+    ipuclari.forEach((d) => expect(d).toContain("after:-inset-3"));
   });
 });

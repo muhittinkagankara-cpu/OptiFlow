@@ -1093,7 +1093,6 @@ export default function App() {
               result={activeResult}
               config={activeConfig}
               onBackToEditor={() => setView("editor")}
-              onStartOver={startNewFactory}
               onCompareFromHere={startComparison}
               onOpenComparison={baseline ? () => setView("comparison") : undefined}
               onOpenIntelligence={() => setView("intelligence")}
