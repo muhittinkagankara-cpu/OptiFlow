@@ -51,6 +51,8 @@ import { MetricGroup } from "../ui/MetricGroup";
 import { resultsStatement } from "../../lib/results/statement";
 import { resultsMetrics } from "../../lib/results/metrics";
 import { resultsClosing } from "../../lib/results/closing";
+import { financialSummary } from "../../lib/results/financialImpact";
+import { provenanceLabel } from "../../lib/financeFormatting";
 import { ArrowLeftIcon, ArrowRightIcon } from "../shared/icons";
 import { FactoryAnimation } from "./FactoryAnimation";
 import { FactoryOverview } from "./FactoryOverview";
@@ -123,6 +125,11 @@ export function ResultsPage({
   /* Kapanış adımı: ölçülmüş kısıt bilgisini var olan bir ekrana bağlar.
      Öneri, para ya da kazanç iddiası üretilmez (bkz. lib/results/closing). */
   const closing = resultsClosing(bottleneck?.station_name);
+  /* Finansal etki, karar zincirinin dördüncü halkasıdır: SONUÇ → KISIT →
+     ÖLÇÜM → FİNANSAL ETKİ → AKSİYON. Özet burada üretilmez, yalnızca backend
+     raporundan okunur (bkz. lib/results/financialImpact). Rapor yoksa `null`
+     döner ve bölüm hiç çizilmez. */
+  const financeImpact = financialSummary(financeReport);
 
   const summary = useMemo(
     () =>
@@ -137,6 +144,7 @@ export function ResultsPage({
   /** Hat kartıyla seçilen hat; `null` ise tüm istasyonlar gösterilir. */
   const [selectedLine, setSelectedLine] = useState<string | null>(null);
   const stationsRef = useRef<HTMLElement | null>(null);
+  const financeRef = useRef<HTMLDivElement | null>(null);
 
   /**
    * Kart tıklanınca tabloyu filtreler ve oraya kaydırır.
@@ -216,6 +224,75 @@ export function ResultsPage({
       */}
       <MetricGroup items={metrics} className="mb-4" />
 
+      {/*
+        Finansal etki (Sprint 2H-B). Ölçüm şeridinin hemen ardından gelir:
+        kullanıcı önce hattın ne kadar ürettiğini, sonra bunun ne kadara mal
+        olduğunu okur.
+
+        Bu bir pano değil. Kart yok, ızgara yok, gradient yok, ikon kutusu
+        yok — kapanış bölümünün aynısı: bir hairline, üstünde etiket, altında
+        cümle. Kalem kalem döküm zaten aşağıdaki panelde duruyor; burada
+        tekrar edilmez.
+
+        Hesaplanamayan kalem asla ₺0 olarak yazılmaz (Yasa 4): tutar yerine
+        neden eksik olduğu söylenir ve eksiği kapatan panele bağlanır.
+      */}
+      {financeImpact && (
+        <section className="mb-4 border-t border-[var(--of-surface-hairline)] pt-[var(--of-spacing-16)]">
+          <h2 className="text-[11px] font-medium tracking-[0.08em] text-[var(--of-ink-3)] uppercase">
+            Finansal etki
+          </h2>
+          <p
+            className={`mt-[var(--of-spacing-8)] max-w-3xl text-[15px] leading-6 ${
+              financeImpact.hasAmounts
+                ? "font-medium text-[var(--of-ink-1)]"
+                : "text-[var(--of-ink-2)]"
+            }`}
+          >
+            {financeImpact.headline}
+          </p>
+
+          {/* Baskın kalem: para tek başına bırakılmaz, hangi kayıp türünden
+              geldiği ve nasıl elde edildiği aynı satırda durur (Yasa 2). */}
+          {financeImpact.primarySource && (
+            <p className="mt-[var(--of-spacing-4)] max-w-3xl text-[13px] leading-5 text-[var(--of-ink-2)]">
+              En büyük kalem{" "}
+              <strong className="font-medium text-[var(--of-ink-1)]">
+                {financeImpact.primarySource.label}
+              </strong>{" "}
+              — {financeImpact.primarySource.amount}{" "}
+              <span className="text-[var(--of-ink-3)]">
+                ({provenanceLabel(financeImpact.primarySource.provenance)})
+              </span>
+            </p>
+          )}
+
+          {/* Eksik girdiler sayıyla değil adıyla söylenir: kullanıcının neyi
+              girmesi gerektiğini bilmesi gerekir. */}
+          {financeImpact.missingNote && (
+            <p className="mt-[var(--of-spacing-4)] max-w-3xl text-[13px] leading-5 text-[var(--of-ink-3)]">
+              {financeImpact.missingNote}
+            </p>
+          )}
+
+          <button
+            type="button"
+            onClick={() =>
+              financeRef.current?.scrollIntoView({
+                behavior: "smooth",
+                block: "start",
+              })
+            }
+            className="mt-[var(--of-spacing-4)] inline-flex min-h-[44px] items-center gap-1.5 rounded text-[13px] font-medium text-[var(--of-interactive)] transition-colors hover:text-[var(--of-interactive-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          >
+            {financeImpact.hasAmounts
+              ? "Kayıp kalemlerini gör"
+              : "Maliyet oranlarını gir"}
+            <ArrowRightIcon className="h-3.5 w-3.5" />
+          </button>
+        </section>
+      )}
+
       {/* Fabrika geneli özet: tablodan önce gelir çünkü kullanıcının ilk
           sorusu "nereye bakmalıyım?" sorusudur. */}
       <FactoryOverview
@@ -281,14 +358,16 @@ export function ResultsPage({
             isin nerede kayboldugunu gorur, sonra bunun ne kadara mal oldugunu.
             Varsayilan olarak kapali durur cunku maliyet oranlari girilmeden
             gosterilecek bir rakam yoktur. */}
-        <FinancialImpactPanel
-          result={result}
-          config={config}
-          settings={financeSettings}
-          onSettingsChange={onFinanceSettingsChange}
-          report={financeReport}
-          onReportChange={onFinanceReportChange}
-        />
+        <div ref={financeRef} className="scroll-mt-6">
+          <FinancialImpactPanel
+            result={result}
+            config={config}
+            settings={financeSettings}
+            onSettingsChange={onFinanceSettingsChange}
+            report={financeReport}
+            onReportChange={onFinanceReportChange}
+          />
+        </div>
 
         {/* Animasyon tablonun altinda ve varsayilan olarak kapali durur: izi
             uretmek sunucuda simulasyonu yeniden calistirmayi gerektirir ve
