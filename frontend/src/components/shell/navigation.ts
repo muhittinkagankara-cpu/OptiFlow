@@ -334,3 +334,77 @@ export const SECTION_HUB: Partial<Record<Section, Section>> = {
   diagnostics: "connectors",
   operations: "connectors",
 };
+
+/* --------------------------------------------------------------------------
+   Bölüm sekmeleri (Sprint 2B)
+   --------------------------------------------------------------------------
+   Bağlantı ekranları kenar çubuğunda yedi ayrı satır kaplıyordu ve adları
+   birbirinden ayırt edilmiyordu. Artık menüde tek bir "Bağlantılar" satırı
+   var; yedisi arasında geçiş, içerik alanının üstündeki sekme şeridiyle
+   yapılıyor.
+
+   Yeni bir yönlendirme sistemi kurulmadı: sekmeye basmak mevcut görünüm
+   ayarlayıcısını çağırır, hepsi bu. `View`, `Section`, `SECTION_OF_VIEW`,
+   `VIEW_TITLE` ve `NAV_ITEMS` değişmedi.
+   -------------------------------------------------------------------------- */
+
+/** Sekme şeridinde çizilecek tek bir sekme. */
+export interface SectionTab {
+  id: Section;
+  label: string;
+  view: View;
+}
+
+/**
+ * Bir hub'ın sekmeleri, görünecekleri sırayla.
+ *
+ * Burada yalnızca **sıra** durur; etiket ve hedef görünüm `NAV_ITEMS`'tan
+ * okunur (bkz. `sectionTabs`). İkinci bir etiket listesi tutulsaydı, bir
+ * bölümün adı değiştiğinde menüde bir türlü, sekmede başka türlü görünürdü.
+ *
+ * Hub'ın kendisi listenin **ilk** sekmesidir. Dışarıda bırakılsaydı, hub'ın
+ * kendi sayfasındayken hiçbir sekme seçili görünmez ve şerit bozuk sanılırdı.
+ */
+export const SECTION_TABS: Partial<Record<Section, Section[]>> = {
+  connectors: [
+    "connectors",
+    "runtime",
+    "provisioning",
+    "pilot",
+    "trends",
+    "diagnostics",
+    "operations",
+  ],
+};
+
+/**
+ * Hub'ın sekmelerini etiket ve hedef görünümleriyle birlikte verir.
+ *
+ * Sekmesi olmayan bir bölüm için boş dizi döner; çağıran o zaman şeridi hiç
+ * çizmez.
+ */
+export function sectionTabs(hub: Section): SectionTab[] {
+  const order = SECTION_TABS[hub];
+  if (order === undefined) {
+    return [];
+  }
+  return order.flatMap((section) => {
+    const item = NAV_ITEMS.find((entry) => entry.id === section);
+    return item === undefined
+      ? []
+      : [{ id: item.id, label: item.label, view: item.view }];
+  });
+}
+
+/**
+ * Bu bölüm başka bir hub'ın sekmesi mi?
+ *
+ * Kenar çubuğu bunu kullanarak sekme hâline gelmiş bölümleri listeden çıkarır:
+ * hem menüde hem sekmede görünselerdi, kullanıcı aynı yere iki ayrı yoldan
+ * gider ve hangisinin "asıl" olduğunu bilemezdi. Hub'ın kendisi kendi sekmesi
+ * olduğu için menüde kalır.
+ */
+export function isTabChild(section: Section): boolean {
+  const hub = SECTION_HUB[section];
+  return hub !== undefined && hub !== section;
+}

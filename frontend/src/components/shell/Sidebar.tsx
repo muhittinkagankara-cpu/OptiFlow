@@ -16,6 +16,7 @@ import {
   NAV_GROUPS,
   NAV_ITEMS,
   SECTION_HUB,
+  isTabChild,
   type NavItem,
   type Section,
 } from "./navigation";
@@ -46,7 +47,19 @@ export function Sidebar({
   factoryName,
   items,
 }: SidebarProps) {
-  const visible = items ?? NAV_ITEMS;
+  /*
+   * Sekme hâline gelmiş bölümler menüden çıkar.
+   *
+   * Bağlantı ekranları artık "Bağlantılar" sayfasının sekmeleri; hem menüde
+   * hem sekmede görünselerdi aynı yere iki ayrı yoldan gidilir ve hangisinin
+   * asıl yol olduğu belirsizleşirdi. Hub'ın kendisi kendi sekmesi olduğu için
+   * menüde kalır.
+   *
+   * Eleme burada yapılır, `NAV_ITEMS` ya da `NAV_GROUPS` içinde değil: o iki
+   * liste hangi bölümün var olduğunu ve nereye ait olduğunu anlatır; hangisinin
+   * o an menüde satır hak ettiği bir sunum kararıdır.
+   */
+  const visible = (items ?? NAV_ITEMS).filter((item) => !isTabChild(item.id));
 
   /*
    * Kenar çubuğunda hangi maddenin yanacağı.

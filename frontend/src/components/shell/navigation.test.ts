@@ -16,8 +16,11 @@ import {
   NAV_GROUPS,
   NAV_ITEMS,
   SECTION_HUB,
+  SECTION_TABS,
   VIEW_TITLE,
+  isTabChild,
   sectionOfView,
+  sectionTabs,
   type NavGroupId,
   type Section,
   type View,
@@ -217,6 +220,97 @@ describe("SECTION_HUB", () => {
       const highlighted = SECTION_HUB[item.id] ?? item.id;
       expect(NAV_ITEMS.some((entry) => entry.id === highlighted)).toBe(true);
     }
+  });
+});
+
+describe("SECTION_TABS", () => {
+  it("bağlantı hub'ının yedi bölümünü de kapsar", () => {
+    expect(SECTION_TABS.connectors).toEqual(CONNECTION_SECTIONS);
+  });
+
+  it("hub kendi sekmelerinin ilkidir", () => {
+    // Dışarıda bırakılsaydı hub'ın kendi sayfasında hiçbir sekme seçili
+    // görünmez, şerit bozuk sanılırdı.
+    expect(SECTION_TABS.connectors?.[0]).toBe("connectors");
+  });
+
+  it("sıralama deterministiktir", () => {
+    expect(sectionTabs("connectors").map((tab) => tab.id)).toEqual(
+      CONNECTION_SECTIONS,
+    );
+    expect(sectionTabs("connectors").map((tab) => tab.id)).toEqual(
+      sectionTabs("connectors").map((tab) => tab.id),
+    );
+  });
+
+  it("her sekmenin hedefi geçerli bir görünümdür", () => {
+    for (const tab of sectionTabs("connectors")) {
+      expect(VIEW_TITLE[tab.view]).toBeTruthy();
+    }
+  });
+
+  it("her sekmenin hedefi kendi bölümüne çözülür", () => {
+    for (const tab of sectionTabs("connectors")) {
+      expect(sectionOfView(tab.view)).toBe(tab.id);
+    }
+  });
+
+  it("sekme etiketleri benzersizdir", () => {
+    const labels = sectionTabs("connectors").map((tab) => tab.label);
+    expect(labels.length).toBe(new Set(labels).size);
+  });
+
+  it("etiketler menüdeki adların aynısıdır", () => {
+    // İkinci bir etiket listesi tutulsaydı bir bölümün adı menüde bir türlü,
+    // sekmede başka türlü görünebilirdi.
+    for (const tab of sectionTabs("connectors")) {
+      const item = NAV_ITEMS.find((entry) => entry.id === tab.id);
+      expect(tab.label).toBe(item?.label);
+      expect(tab.view).toBe(item?.view);
+    }
+  });
+
+  it("sekmesi olmayan bölüm için boş dizi döner", () => {
+    expect(sectionTabs("finance")).toEqual([]);
+    expect(sectionTabs("dashboard")).toEqual([]);
+  });
+
+  it("yalnızca bağlantı hub'ının sekmesi vardır", () => {
+    expect(Object.keys(SECTION_TABS)).toEqual(["connectors"]);
+  });
+});
+
+describe("isTabChild — menüden çıkan bölümler", () => {
+  it("hub'ın kendisi menüde kalır", () => {
+    expect(isTabChild("connectors")).toBe(false);
+  });
+
+  it("diğer altı bağlantı bölümü menüden çıkar", () => {
+    for (const section of CONNECTION_SECTIONS.filter(
+      (id) => id !== "connectors",
+    )) {
+      expect(isTabChild(section)).toBe(true);
+    }
+  });
+
+  it("bağlantı dışındaki hiçbir bölüm menüden çıkmaz", () => {
+    for (const item of NAV_ITEMS) {
+      if (!CONNECTION_SECTIONS.includes(item.id)) {
+        expect(isTabChild(item.id)).toBe(false);
+      }
+    }
+  });
+
+  it("menüde kalan bölüm sayısı yirmi üçten on yediye iner", () => {
+    const remaining = NAV_ITEMS.filter((item) => !isTabChild(item.id));
+    expect(NAV_ITEMS).toHaveLength(23);
+    expect(remaining).toHaveLength(17);
+  });
+
+  it("demo menüsü elemeden etkilenmez", () => {
+    // Demoda hiçbir bağlantı bölümü yok; eleme bu listeyi değiştirmemeli.
+    const remaining = DEMO_NAV_ITEMS.filter((item) => !isTabChild(item.id));
+    expect(remaining.map((item) => item.id)).toEqual(DEMO_ITEM_IDS);
   });
 });
 

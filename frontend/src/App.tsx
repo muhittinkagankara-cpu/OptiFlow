@@ -78,6 +78,7 @@ import {
   SetupChecklistCard,
 } from "./components/enterprise/SetupCards";
 import { useEnterpriseSetup } from "./components/enterprise/useEnterpriseSetup";
+import { SectionTabs } from "./components/shell/SectionTabs";
 import { Sidebar } from "./components/shell/Sidebar";
 import { TopBar } from "./components/shell/TopBar";
 import { displayName, greeting } from "./components/shell/userDisplay";
@@ -1005,6 +1006,11 @@ export default function App() {
             </p>
           </div>
         )}
+
+        {/* Hub bölümlerinin sekme şeridi. Kendi görünürlüğüne kendisi karar
+            verir: bulunulan bölümün hub'ı yoksa hiçbir şey çizmez. Bu yüzden
+            burada koşul yok. */}
+        <SectionTabs view={view} onSelect={setView} />
 
         <main className="min-h-0 flex-1 overflow-y-auto">
           {/* Demoda kapalı ekranlar: hepsi oturum gerektiren bir uca yazar.
