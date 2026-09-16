@@ -70,13 +70,13 @@ function StationDrawerInner({
         className="fixed inset-0 z-30 bg-black/50 lg:hidden"
       />
 
-      <aside className="optiflow-screen fixed inset-y-0 right-0 z-40 flex w-full max-w-sm flex-col border-l border-slate-200 bg-slate-50 shadow-2xl lg:absolute">
-        <header className="flex items-start justify-between gap-2 border-b border-slate-200 px-4 py-3">
+      <aside className="optiflow-screen fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-[var(--of-cc-border)] bg-[var(--of-cc-panel)] shadow-[var(--of-cc-shadow)] lg:absolute">
+        <header className="flex items-start justify-between gap-2 border-b border-[var(--of-cc-border)] px-5 py-4">
           <div className="min-w-0">
-            <h3 className="truncate text-base font-semibold text-slate-900">
+            <h3 className="truncate text-[22px] leading-7 font-semibold text-[var(--of-cc-ink)]">
               {station.stationName}
             </h3>
-            <p className="mt-0.5 flex items-center gap-1.5 text-xs text-slate-500">
+            <p className="mt-1 flex items-center gap-1.5 text-[13px] text-[var(--of-cc-ink-muted)]">
               <span className={`h-2 w-2 rounded-full ${style.dot}`} />
               {STATUS_LABEL[station.status]}
               {station.setupProduct && ` · ${station.setupProduct}`}
@@ -86,13 +86,13 @@ function StationDrawerInner({
             type="button"
             onClick={onClose}
             aria-label="Kapat"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-[var(--of-cc-ink-muted)] transition-colors hover:bg-[var(--of-cc-card)] hover:text-[var(--of-cc-ink)] focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
             <X className="h-4 w-4" />
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-3">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-5 py-5">
           {station.faultReason && (
             <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
               {station.faultReason}
@@ -143,8 +143,8 @@ function StationDrawerInner({
             </p>
           </section>
 
-          <section className="rounded-xl border border-slate-200 bg-white p-3">
-            <h4 className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+          <section className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] p-4">
+            <h4 className="text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
               Son alarm
             </h4>
             {lastAlarm ? (
@@ -174,17 +174,17 @@ function StationDrawerInner({
             olmadan düğme koymak olmayan bir yeteneği vaat etmek olurdu.
           */}
           {action !== null && onOpenSimulation && (
-            <section className="border-t border-slate-200 pt-3">
-              <h4 className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+            <section className="border-t border-[var(--of-cc-border)] pt-5">
+              <h4 className="text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
                 Sonraki adım
               </h4>
-              <p className="mt-1 text-xs leading-relaxed text-slate-600">
+              <p className="mt-2 text-[13px] leading-5 text-[var(--of-cc-ink-muted)]">
                 {action.reason}
               </p>
               <button
                 type="button"
                 onClick={onOpenSimulation}
-                className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                className="mt-3 inline-flex min-h-[44px] w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-5 text-[15px] font-semibold text-white transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
               >
                 {action.label}
               </button>
@@ -206,14 +206,14 @@ function Field({
   hint?: string;
 }) {
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-      <dt className="text-[10px] tracking-wide text-slate-500 uppercase">
+    <div className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] p-4">
+      <dt className="text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
         {label}
       </dt>
-      <dd className="mt-0.5 text-lg font-semibold text-slate-900 tabular-nums">
+      <dd className="mt-1.5 font-mono text-[22px] leading-7 text-[var(--of-cc-ink)] tabular-nums">
         {value}
       </dd>
-      {hint && <p className="text-[10px] text-slate-500">{hint}</p>}
+      {hint && <p className="mt-1 text-[12px] text-[var(--of-cc-ink-muted)]">{hint}</p>}
     </div>
   );
 }

@@ -39,17 +39,24 @@ function ReplayControlsInner({ controls }: { controls: Controls }) {
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* Dokunma hedefi 44px, görünen kare 32px: düğmenin kendisi saydam ve
+          büyük, renkli yüzey içteki kutuda. Böylece MASTER §14 kapanırken
+          çubuğun görsel yoğunluğu değişmez. */}
       <button
         type="button"
         onClick={() => (controls.isPlaying ? controls.pause() : controls.play())}
         aria-label={controls.isPlaying ? "Duraklat" : "Oynat"}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-white transition-colors hover:bg-brand-700 focus:outline-none"
+        className="group flex h-11 w-11 shrink-0 items-center justify-center focus:outline-none"
       >
-        {controls.isPlaying ? (
-          <Pause className="h-3.5 w-3.5" />
-        ) : (
-          <Play className="h-3.5 w-3.5" />
-        )}
+        {/* Vurgu tüm 44px alanda verilir, yalnızca görünen karede değil:
+            tıklanabilir alanın neresi olduğu geri bildirimle örtüşmeli. */}
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white transition-colors group-hover:bg-brand-700">
+          {controls.isPlaying ? (
+            <Pause className="h-3.5 w-3.5" />
+          ) : (
+            <Play className="h-3.5 w-3.5" />
+          )}
+        </span>
       </button>
 
       <input
@@ -59,7 +66,9 @@ function ReplayControlsInner({ controls }: { controls: Controls }) {
         value={controls.positionMs}
         onChange={(event) => controls.seek(Number(event.target.value))}
         aria-label="Kayıt konumu"
-        className="h-1.5 min-w-[7rem] flex-1 cursor-pointer appearance-none rounded-full bg-slate-200 accent-brand-600"
+        /* Yükseklik ve ray artık `optiflow-touch-range` içinde: öğe 44px,
+           görünür ray 6px. Yerel sınıf; paylaşılan girdi stiline dokunulmadı. */
+        className="optiflow-touch-range min-w-[7rem] flex-1 cursor-pointer appearance-none accent-brand-600"
       />
 
       <span className="shrink-0 text-[10px] text-slate-500 tabular-nums">
@@ -75,7 +84,11 @@ function ReplayControlsInner({ controls }: { controls: Controls }) {
             type="button"
             onClick={() => controls.setSpeed(speed)}
             aria-pressed={controls.speed === speed}
-            className={`rounded px-1.5 py-0.5 text-[10px] font-semibold transition-colors ${
+            /* Sözde öğeyle büyütmek burada güvenli değildi: düğmeler arası
+               boşluk 2px, 44px'e çıkmak için gereken taşma ise ±12px. Hedefler
+               üst üste biner ve komşu düğmenin tıklamasını çalardı. Bu yüzden
+               gerçek yükseklik büyütüldü; punto 10px kaldı. */
+            className={`flex min-h-[44px] min-w-[44px] items-center justify-center rounded text-[10px] font-semibold transition-colors ${
               controls.speed === speed
                 ? "bg-brand-600 text-white"
                 : "text-slate-600 hover:text-slate-900"

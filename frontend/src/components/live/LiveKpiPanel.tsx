@@ -126,6 +126,7 @@ function LiveKpiPanelInner({
         }
         series={trends.throughput}
         color={COLOR.brand}
+        formatScale={(v) => formatDecimal(v, 1)}
         flipKey={eventCount}
       />
       <KpiCard
@@ -138,6 +139,7 @@ function LiveKpiPanelInner({
         unit={totals.oee === null ? "istasyon yok" : "hat ortalaması"}
         series={trends.oee}
         color={COLOR.emerald}
+        formatScale={(v) => `%${Math.round(v * 100)}`}
         flipKey={eventCount}
       />
       <KpiCard
@@ -160,6 +162,7 @@ function LiveKpiPanelInner({
         }
         series={trends.queue}
         color={COLOR.amber}
+        formatScale={(v) => String(Math.round(v))}
         flipKey={eventCount}
       />
       {/*
@@ -190,6 +193,7 @@ function LiveKpiPanelInner({
         }
         series={trends.cycle}
         color={COLOR.violet}
+        formatScale={(v) => String(Math.round(v))}
         flipKey={eventCount}
       />
       {/*
@@ -211,6 +215,7 @@ function LiveKpiPanelInner({
         }
         series={trends.alarms}
         color={COLOR.red}
+        formatScale={(v) => String(Math.round(v))}
         flipKey={eventCount}
       />
       {/*
@@ -219,8 +224,8 @@ function LiveKpiPanelInner({
         Bu yüzden gerçek beslemede kart, saat yerine çalışan makine sayısını
         gösterir.
       */}
-      <div className="rounded-xl border border-slate-200 bg-white p-2.5">
-        <p className="flex items-center gap-1.5 text-[10px] font-medium text-slate-500">
+      <div className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] p-3">
+        <p className="flex items-center gap-1.5 text-[10px] font-medium tracking-[0.1em] text-[var(--of-cc-ink-label)] uppercase">
           <Clock className="h-3 w-3" />
           {live ? "Çalışan makine" : "Son güncelleme"}
         </p>
@@ -251,6 +256,13 @@ interface KpiCardProps {
   color: string;
   flipKey: number;
   /**
+   * Sparkline ölçek etiketinin biçimlendiricisi (Sprint 2I-D).
+   *
+   * Birimi yalnızca kart bilir; grafiğe geçirilmezse ölçek çıplak bir
+   * ondalık olarak okunurdu.
+   */
+  formatScale?: (value: number) => string;
+  /**
    * Yalnızca görünürlük için ek sınıf (Sprint 2I-B.2).
    *
    * Kartın içeriğine, rengine ya da ölçüm davranışına dokunmaz; tek işi
@@ -267,13 +279,16 @@ const KpiCard = memo(function KpiCard({
   series,
   color,
   flipKey,
+  formatScale,
   className = "",
 }: KpiCardProps) {
   const direction = trendDirection(series);
 
   return (
-    <div className={`rounded-xl border border-slate-200 bg-white p-2.5 ${className}`}>
-      <p className="flex items-center gap-1.5 text-[10px] font-medium text-slate-500">
+    <div
+      className={`rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] p-3 ${className}`}
+    >
+      <p className="flex items-center gap-1.5 text-[10px] font-medium tracking-[0.1em] text-[var(--of-cc-ink-label)] uppercase">
         <Icon className="h-3 w-3" />
         {label}
       </p>
@@ -294,7 +309,7 @@ const KpiCard = memo(function KpiCard({
         )}
       </div>
       <p className="text-[10px] text-slate-500">{unit}</p>
-      <Sparkline series={series} color={color} />
+      <Sparkline series={series} color={color} format={formatScale} />
     </div>
   );
 });

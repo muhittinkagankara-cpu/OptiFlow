@@ -34,28 +34,29 @@ function LiveStationNodeInner({ data }: NodeProps<LiveNodeData>) {
 
   return (
     <div
-      className={`w-52 overflow-hidden rounded-xl border-2 shadow-[0_2px_10px_rgba(0,0,0,0.25)] transition-colors duration-300 ${style.box} ${
+      /* Sprint 2I-D: 2 piksellik kenarlık ve sert gölge kalktı. Düğüm artık
+         komuta merkezinin kart yüzeyini kullanıyor; durum rengi ince
+         kenarlıkta ve alttaki şeritte taşınmaya devam ediyor. Kısıt parıltısı
+         korundu — o, ölçülmüş bir durumu işaretler. */
+      className={`w-52 overflow-hidden rounded-[var(--of-cc-radius-card)] border bg-[var(--of-cc-card)] transition-colors duration-300 ${style.box} ${
         data.isBottleneck ? "optiflow-node-glow" : ""
       }`}
     >
       <Handle
         type="target"
         position={Position.Left}
-        className="!h-2.5 !w-2.5 !border-2 !border-slate-100 !bg-slate-400"
+        className="!h-2 !w-2 !border !border-[var(--of-cc-bg)] !bg-[var(--of-cc-ink-label)]"
       />
 
       <div className="flex items-start gap-2 px-2.5 py-2">
-        <span
-          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 ${style.text}`}
-        >
-          <TypeIcon className="h-4 w-4" />
-        </span>
+        {/* İkon kabı kaldırıldı (ANTI-PATTERNS #6): ikon çıplak durur. */}
+        <TypeIcon className={`mt-0.5 h-4 w-4 shrink-0 ${style.text}`} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold text-slate-900">
+          <p className="truncate text-sm font-semibold text-[var(--of-cc-ink)]">
             {data.stationName}
           </p>
           {/* Renk tek başına konuşmaz: durum yazıyla da verilir. */}
-          <p className="flex items-center gap-1 text-[10px] font-medium text-slate-500">
+          <p className="flex items-center gap-1 text-[10px] font-medium text-[var(--of-cc-ink-muted)]">
             <span className={`h-1.5 w-1.5 rounded-full ${style.dot}`} />
             {STATUS_LABEL[data.status]}
             {data.isBottleneck && " · darboğaz"}
@@ -63,7 +64,7 @@ function LiveStationNodeInner({ data }: NodeProps<LiveNodeData>) {
         </div>
       </div>
 
-      <dl className="grid grid-cols-3 gap-px border-t border-black/10 bg-black/10 text-center">
+      <dl className="grid grid-cols-3 gap-px border-t border-[var(--of-cc-border)] bg-[var(--of-cc-border)] text-center">
         {/* Ölçülmemiş OEE "—" gösterilir: "%0" yazmak, ölçüm yapılmadığı hâlde
             istasyonun hiç verimli çalışmadığını bildirmek olurdu. */}
         <Cell
@@ -79,7 +80,7 @@ function LiveStationNodeInner({ data }: NodeProps<LiveNodeData>) {
       <Handle
         type="source"
         position={Position.Right}
-        className="!h-2.5 !w-2.5 !border-2 !border-slate-100 !bg-brand-500"
+        className="!h-2 !w-2 !border !border-[var(--of-cc-bg)] !bg-brand-500"
       />
     </div>
   );
@@ -87,11 +88,11 @@ function LiveStationNodeInner({ data }: NodeProps<LiveNodeData>) {
 
 function Cell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="bg-slate-50/60 px-1 py-1">
-      <dt className="text-[9px] tracking-wide text-slate-500 uppercase">
+    <div className="bg-[var(--of-cc-card)] px-1 py-1.5">
+      <dt className="text-[9px] tracking-wide text-[var(--of-cc-ink-label)] uppercase">
         {label}
       </dt>
-      <dd className="text-xs font-semibold text-slate-900 tabular-nums">
+      <dd className="text-xs font-semibold text-[var(--of-cc-ink)] tabular-nums">
         {value}
       </dd>
     </div>

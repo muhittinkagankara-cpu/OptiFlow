@@ -83,7 +83,8 @@ export function LiveSection({
             type="button"
             onClick={() => setTab(item.id)}
             aria-current={tab === item.id ? "page" : undefined}
-            className={`-mb-px flex items-center gap-1.5 rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-200 focus:outline-none ${
+            /* 44px dokunma hedefi; alt çizgi ve punto aynen korunur. */
+            className={`-mb-px flex min-h-[44px] items-center gap-1.5 rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors duration-200 focus:outline-none ${
               tab === item.id
                 ? "border-brand-500 text-brand-700"
                 : "border-transparent text-slate-500 hover:text-slate-900"

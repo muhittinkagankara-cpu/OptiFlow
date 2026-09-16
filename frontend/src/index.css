@@ -1046,6 +1046,66 @@ input[type="number"] {
     background-image: none;
   }
 }
+
+/* ==========================================================================
+   Dokunma hedefi: aralık kaydırıcısı (Sprint 2I-C, MASTER §14)
+   ==========================================================================
+
+   Kayıttan oynatma kaydırıcısının gerçek dokunma alanı 6 pikseldi: öğenin
+   kendi yüksekliği ray olarak kullanılıyordu, dolayısıyla rayı inceltmek
+   hedefi de inceltiyordu. `elementFromPoint` ile ölçüldüğünde merkezden 10
+   piksel yukarı ya da aşağı bir dokunuş kaydırıcıyı hiç yakalamıyordu.
+   Eldivenli bir operatörün sahada kullanabileceği bir kontrol değildi.
+
+   Çözüm, rayı öğenin zemininden ayırmaktır: öğe 44 piksele çıkar ve saydam
+   kalır, görünür ray `::-webkit-slider-runnable-track` üzerinde 6 piksel
+   olarak çizilir. Böylece görsel incelik korunur, hedef büyür.
+
+   Tutamaç ayrıca tanımlanır. `appearance: none` verilmiş bir aralık girdisinde
+   tarayıcı tutamacı hiç çizmez; bugünkü hâlinde kaydırıcının görünür bir
+   tutacağı yoktu ve kullanıcı konumu yalnızca yanındaki yüzdeden okuyabiliyordu.
+
+   Yerel bir sınıftır: yalnızca `ReplayControls` kullanır. Paylaşılan girdi
+   stilleri (`FormControls.INPUT_CLASS`) değiştirilmedi, çünkü o sınıf
+   sihirbazdan envantere kadar her formu aynı anda değiştirirdi.
+   ========================================================================== */
+
+.optiflow-touch-range {
+  height: 44px;
+  background-color: transparent;
+}
+
+.optiflow-touch-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background-color: var(--color-slate-200);
+}
+
+.optiflow-touch-range::-webkit-slider-thumb {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 16px;
+  width: 16px;
+  /* (16 - 6) / 2 = 5: tutamaç rayın dikey ortasına oturur. */
+  margin-top: -5px;
+  border-radius: 9999px;
+  background-color: var(--color-brand-600);
+}
+
+.optiflow-touch-range::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background-color: var(--color-slate-200);
+}
+
+.optiflow-touch-range::-moz-range-thumb {
+  height: 16px;
+  width: 16px;
+  border: none;
+  border-radius: 9999px;
+  background-color: var(--color-brand-600);
+}
+
 /* ==========================================================================
    Komuta merkezi yüzey dili (Sprint 2J, MASTER §3.8)
    ==========================================================================
