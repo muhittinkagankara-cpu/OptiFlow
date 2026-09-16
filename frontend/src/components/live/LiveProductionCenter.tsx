@@ -45,6 +45,8 @@ import {
   liveStatement,
   liveRailStations,
   liveMetrics,
+  formatClock,
+  bottleneckStationId,
   type ScenarioId,
 } from "../../lib/live";
 import {
@@ -63,7 +65,8 @@ import { EmptyState } from "../ui/Primitives";
    kurulur; canlı için ikinci bir kopya yazılmadı (MASTER §15, §19.1). */
 import { Statement } from "../ui/Statement";
 import { ConstraintRail } from "../ui/ConstraintRail";
-import { MetricGroup } from "../ui/MetricGroup";
+import { LiveKpiCards } from "./LiveKpiCards";
+import { LiveStatusBar } from "./LiveStatusBar";
 import { AlarmCenter } from "./AlarmCenter";
 import { EventTimeline } from "./EventTimeline";
 import { LiveFlowCanvas } from "./LiveFlowCanvas";
@@ -294,11 +297,25 @@ export function LiveProductionCenter({
   });
 
   return (
-    <div className="flex h-full flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden bg-[var(--of-cc-bg)] text-[var(--of-cc-ink)]">
       {/* Verinin nereden geldiği kalıcı olarak yazılır: sahte sensör verisini
           gerçek sanan bir yönetici, olmayan bir arızaya ekip gönderebilir.
           Dört durum ayrı ayrı gösterilir — "Gerçek Veri", "Veri Bekleniyor",
           "Benzetim" ve "Doğrulanmadı" kullanıcı için farklı eylemler demektir. */}
+      {/* Üst durum çubuğu (Sprint 2J): ekranın kimliği ve dört ölçülmüş
+          alan. Köken şeridi hemen altında kalır — kaynağın ne olduğunu
+          söyleyen cümle hiçbir koşulda kaybolmaz. */}
+      <LiveStatusBar
+        feedLabel={activeFeed.label}
+        feedTone={activeFeed.status}
+        clock={formatClock(state.clockMinutes)}
+        constraintName={
+          state.stations.find(
+            (item) => item.stationId === bottleneckStationId(state.stations),
+          )?.stationName ?? null
+        }
+      />
+
       <p
         className={`shrink-0 border-b px-4 py-1.5 text-center text-[11px] font-medium ${
           FEED_BANNER_CLASS[activeFeed.status]
@@ -307,13 +324,13 @@ export function LiveProductionCenter({
         <span className="font-semibold">{activeFeed.label}</span> — {activeFeed.reason}
       </p>
 
-      <header className="flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-200 px-4 py-2.5">
+      <header className="flex shrink-0 flex-wrap items-center gap-x-5 gap-y-2 border-b border-[var(--of-cc-border)] bg-[var(--of-cc-panel)] px-4 py-2.5 sm:px-6">
         <div className="flex items-center gap-2">
           <span
-            className={`flex items-center gap-1.5 rounded-lg border px-2 py-1 text-[11px] font-semibold ${
+            className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold ${
               isConnected
-                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border-slate-200 bg-slate-100 text-slate-600"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+                : "border-[var(--of-cc-border)] bg-[var(--of-cc-card)] text-[var(--of-cc-ink-muted)]"
             }`}
           >
             {isConnected ? (
@@ -325,13 +342,16 @@ export function LiveProductionCenter({
           </span>
         </div>
 
-        <label className="flex items-center gap-1.5 text-[11px] text-slate-500">
+        {/* Dar ekranda etiket seçicinin üstüne çıkar ve iki seçici yan yana
+            durur: yan yana etiketlerle her seçici 375'te tam satır kaplıyor,
+            kontrol şeridi 226 piksele çıkıyordu (ölçüldü). */}
+        <label className="flex min-w-0 flex-1 flex-col gap-1 text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase sm:flex-initial sm:flex-row sm:items-center sm:gap-1.5 sm:tracking-normal sm:normal-case">
           Kaynak
           <select
             value={sourceId}
             onChange={(event) => setSourceId(event.target.value as SourceId)}
-            /* Dokunma hedefi 44px (MASTER §14); punto ve dolgu değişmedi. */
-            className="min-h-[44px] rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-800 focus:outline-none"
+            /* Dokunma hedefi 44px (MASTER §14). */
+            className="min-h-[44px] w-full rounded-lg border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-2 py-1 text-[12px] font-medium text-[var(--of-cc-ink)] normal-case focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:w-auto"
           >
             {SOURCE_OPTIONS.map((choice) => (
               <option key={choice.id} value={choice.id}>
@@ -352,7 +372,7 @@ export function LiveProductionCenter({
         </label>
 
         <label
-          className={`flex items-center gap-1.5 text-[11px] text-slate-500 ${
+          className={`flex min-w-0 flex-1 flex-col gap-1 text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase sm:flex-initial sm:flex-row sm:items-center sm:gap-1.5 sm:tracking-normal sm:normal-case ${
             sourceId === RUNTIME_SOURCE_ID ? "opacity-40" : ""
           }`}
           title={
@@ -365,7 +385,7 @@ export function LiveProductionCenter({
           <select
             value={scenario}
             onChange={(event) => setScenario(event.target.value as ScenarioId)}
-            className="min-h-[44px] rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-800 focus:outline-none"
+            className="min-h-[44px] w-full rounded-lg border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-2 py-1 text-[12px] font-medium text-[var(--of-cc-ink)] normal-case focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:w-auto"
           >
             {SCENARIOS.map((item) => (
               <option key={item.id} value={item.id}>
@@ -376,7 +396,7 @@ export function LiveProductionCenter({
         </label>
 
         {replayControls && (
-          <div className="min-w-[16rem] flex-1">
+          <div className="w-full min-w-[16rem] sm:w-auto sm:flex-1">
             <ReplayControls controls={replayControls} />
           </div>
         )}
@@ -415,65 +435,101 @@ export function LiveProductionCenter({
         - `lg+`: satır yatay ve taşma gizli; sol sütun ile kenar panel kendi
           içlerinde kayar — 2I-B'deki masaüstü davranışının aynısı.
       */}
-      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-        <div className="flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-          {statement && (
-            <div className="shrink-0 space-y-3 border-b border-slate-200 px-4 py-3">
+      {/*
+        Komuta merkezi yerleşimi (Sprint 2J).
+
+        Karar zinciri tam genişlikte ve en üstte durur: cümle → kısıt şeridi.
+        Altında üç sütun — solda üretim göstergeleri, ortada fabrika
+        görselleştirmesi, sağda alarm merkezi. Görselleştirme ortadadır ve en
+        geniş paydır: ekranın merkez parçası odur.
+
+        `lg` altında satırın kendisi tek kaydırma kabıdır (2I-B.2'de
+        düzeltilen çökme buradan geliyordu); sütunlar doğal yüksekliklerini
+        alır ve alt alta dizilir.
+      */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto lg:overflow-hidden">
+        {statement && (
+          <div className="shrink-0 space-y-4 border-b border-[var(--of-cc-border)] px-4 py-5 sm:px-6">
+            {/* Hero tipografisi: 20 / 24 / 32px. Paylaşılan `Statement`
+                bileşeninin kendi sınıfları değişmez; ölçek yalnızca burada,
+                sarmalayıcı üzerinden ayarlanır. */}
+            <div className="[&_h2]:text-[20px] [&_h2]:leading-7 [&_p]:text-[15px] [&_p]:text-[var(--of-cc-ink-muted)] sm:[&_h2]:text-[24px] sm:[&_h2]:leading-8 lg:[&_h2]:text-[32px] lg:[&_h2]:leading-10">
               <Statement
                 headline={statement.headline}
                 detail={statement.detail ?? undefined}
               />
-              <ConstraintRail stations={railStations} />
-              {/* Ölçüm şeridi 375'te tek sütunda 353 piksel tutuyordu. Sarmalayıcı
-                  yalnızca `sm` altında iki sütuna indirir; paylaşılan
-                  `MetricGroup` bileşeninin kendi sınıfları değişmez, dolayısıyla
-                  Command Center ve Sonuç ekranı etkilenmez. */}
-              <div className="max-sm:[&>section]:grid-cols-2">
-                <MetricGroup items={metrics} />
-              </div>
             </div>
-          )}
 
-          {/* Diyagram yalnızca geniş ekranda; dar ekranda okunabilir bir liste.
-              Mobilde `flex-1` yok: sayfa akışında doğal yüksekliğini alır. */}
-          <div className="min-h-[22rem] lg:flex-1">
-          <div className="hidden h-full lg:block">
-            <LiveFlowCanvas
-              config={config}
-              stations={state.stations}
-              onSelectStation={handleSelectStation}
-              selectedStationId={selectedStationId}
-            />
+            <ConstraintRail stations={railStations} />
           </div>
-          <div className="h-full lg:hidden">
-            <LiveStationList
-              stations={state.stations}
-              onSelectStation={handleSelectStation}
-            />
-          </div>
-          </div>
-        </div>
+        )}
 
-        <aside className="w-full shrink-0 space-y-3 border-t border-slate-200 px-3 py-3 lg:w-[23rem] lg:overflow-y-auto lg:border-t-0 lg:border-l">
-          <LiveKpiPanel
-            totals={totals}
-            trends={trends}
-            clockMinutes={state.clockMinutes}
-            eventCount={state.eventCount}
-            runtimeKpi={activeFeed.status === "real" ? runtimeKpi : null}
-          />
-
-          <section>
-            <h3 className="mb-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
-              Alarm merkezi
+        {/* Kısa ekranda görselleştirmeyi ezmek yerine satır kaydırılır:
+            1440x900'de diyagram 157 piksele düşüyordu (ölçüldü) ve dört
+            istasyonluk bir akış şeması o yükseklikte okunmuyor. Taban 20rem;
+            1080p ve üstünde satır zaten sığar ve kaydırma görünmez. */}
+        <div className="flex min-h-0 flex-1 flex-col lg:flex-row lg:overflow-y-auto">
+          {/* Sol sütun — üretim göstergeleri */}
+          {/* Mobil sıra V3 §3.8.5: istasyonlar → alarmlar → ölçümler.
+              Telefonda önce hattın hâli okunur, ölçümler sonra gelir; mobil
+              masaüstünün küçüğü değildir. `lg`'de DOM sırası geri döner ve
+              sütunlar sol → orta → sağ dizilir. */}
+          <section className="order-3 shrink-0 border-b border-[var(--of-cc-border)] px-4 py-5 sm:px-6 lg:order-none lg:w-[19rem] lg:overflow-y-auto lg:border-r lg:border-b-0 xl:w-[21rem]">
+            <h3 className="mb-4 text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
+              Üretim göstergeleri
             </h3>
-            <AlarmCenter
-              alarms={state.alarms}
-              clockMinutes={state.clockMinutes}
-              onSelectStation={handleSelectStation}
-            />
+            <LiveKpiCards items={metrics} />
           </section>
-        </aside>
+
+          {/* Orta sütun — fabrika görselleştirmesi, ekranın merkez parçası */}
+          <section className="order-1 flex min-h-[24rem] flex-col lg:order-none lg:min-h-[20rem] lg:flex-1">
+            <div className="hidden h-full p-4 lg:block">
+              <LiveFlowCanvas
+                config={config}
+                stations={state.stations}
+                onSelectStation={handleSelectStation}
+                selectedStationId={selectedStationId}
+              />
+            </div>
+            <div className="h-full lg:hidden">
+              <LiveStationList
+                stations={state.stations}
+                onSelectStation={handleSelectStation}
+              />
+            </div>
+          </section>
+
+          {/* Sağ sütun — alarm merkezi ve eğilim paneli */}
+          <aside className="order-2 w-full shrink-0 space-y-6 border-t border-[var(--of-cc-border)] px-4 py-5 sm:px-6 lg:order-none lg:w-[22rem] lg:overflow-y-auto lg:border-t-0 lg:border-l xl:w-[24rem]">
+            <section>
+              <h3 className="mb-3 text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
+                Alarm merkezi
+              </h3>
+              <AlarmCenter
+                alarms={state.alarms}
+                clockMinutes={state.clockMinutes}
+                onSelectStation={handleSelectStation}
+                onOpenSimulation={onStartSimulation}
+              />
+            </section>
+
+            {/* Eğilim paneli: 15 dakikalık seriler ve kart başına kaynak
+                etiketi. Örtüşen dört metrik `lg` altında gizli kalır
+                (2I-B.2, ANTI-PATTERNS #9). */}
+            <section>
+              <h3 className="mb-3 text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
+                Eğilim
+              </h3>
+              <LiveKpiPanel
+                totals={totals}
+                trends={trends}
+                clockMinutes={state.clockMinutes}
+                eventCount={state.eventCount}
+                runtimeKpi={activeFeed.status === "real" ? runtimeKpi : null}
+              />
+            </section>
+          </aside>
+        </div>
 
         <StationDrawer
           station={selectedStation}
@@ -487,7 +543,7 @@ export function LiveProductionCenter({
         />
       </div>
 
-      <footer className="h-32 shrink-0 border-t border-slate-200 lg:h-40">
+      <footer className="h-32 shrink-0 border-t border-[var(--of-cc-border)] bg-[var(--of-cc-panel)] lg:h-36">
         <EventTimeline feed={state.feed} onSelectStation={handleSelectStation} />
       </footer>
     </div>
