@@ -136,7 +136,7 @@ export function StationMetricsTable({
         selectedLine={selectedLine}
       />
 
-      <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
+      <div className="hidden overflow-hidden rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] md:block">
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px] text-sm">
           <thead>
@@ -259,7 +259,7 @@ function StationRecordList({
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white md:hidden">
+    <div className="overflow-hidden rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] md:hidden">
       {!isGrouped && (
         <ul className="divide-y divide-slate-100">
           {stations.map((station) => (

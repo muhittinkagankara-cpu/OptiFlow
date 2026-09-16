@@ -86,7 +86,7 @@ export function FactoryOverview({
 function StatusLine({ summary }: { summary: FactorySummary }) {
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white px-5 py-4">
+    <div className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-5 py-4">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
         <span className="text-slate-700">
           {summary.isGrouped && (

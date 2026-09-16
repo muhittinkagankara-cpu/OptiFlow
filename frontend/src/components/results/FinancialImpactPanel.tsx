@@ -104,7 +104,7 @@ export function FinancialImpactPanel({
   );
 
   return (
-    <section className="mt-6 overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <section className="mt-6 overflow-hidden rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)]">
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}

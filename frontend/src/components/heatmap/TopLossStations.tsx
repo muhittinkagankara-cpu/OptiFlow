@@ -33,9 +33,11 @@ export function TopLossStations({
 }: TopLossStationsProps) {
   if (stations.length === 0) {
     return (
-      <div className="rounded-lg border border-slate-200 bg-white px-3 py-3">
-        <p className="text-xs font-semibold text-slate-700">En çok kaybeden</p>
-        <p className="mt-1.5 text-xs text-slate-500">
+      <div className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-3 py-3">
+        <p className="text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
+          En çok kaybeden
+        </p>
+        <p className="mt-2 text-xs text-[var(--of-cc-ink-muted)]">
           Hiçbir istasyonda parasal kayıp hesaplanamadı. Maliyet oranlarını
           girdiğinizde bu liste dolar.
         </p>
@@ -46,11 +48,13 @@ export function TopLossStations({
   const worst = stations[0].total_loss;
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-      <p className="mb-0.5 text-xs font-semibold text-slate-700">
+    <div className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-3 py-3">
+      <p className="text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
         En çok kaybeden
       </p>
-      <p className="mb-2 text-[11px] text-slate-500">Tutara göre sıralı</p>
+      <p className="mt-1 mb-2.5 text-[11px] text-[var(--of-cc-ink-muted)]">
+        Tutara göre sıralı
+      </p>
 
       <ol className="space-y-1">
         {stations.map((station, index) => {

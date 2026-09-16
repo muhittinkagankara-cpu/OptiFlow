@@ -191,7 +191,7 @@ export function ResultsPage({
             onClick={onOpenIntelligence}
             /* Dokunma hedefi 36 pikseldi (MASTER §14: en az 44). Yükseklik
                `min-h` ile açılır; punto, dolgu ve renk değişmez. */
-            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+            className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
             <Sparkles className="h-4 w-4" />
             Ne yapmalıyım?
@@ -304,7 +304,7 @@ export function ResultsPage({
       {/* Tek cümlelik yorum: sayıları okumadan önce ne anlama geldiklerini
           söyler. Darboğaz bilgisi kullanıcının en çok işine yarayan tek şeydir. */}
       {bottleneck && (
-        <p className="mt-4 rounded-xl border border-slate-200 bg-white px-5 py-4 text-sm leading-relaxed text-slate-700">
+        <p className="mt-4 rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-5 py-4 text-sm leading-relaxed text-slate-700">
           {/* Bu cümle başlığa yükseldiyse burada ikinci kez yazılmaz; geri
               kalan açıklama yerinde kalır. */}
           {statement?.source !== "bottleneck" && (
@@ -410,7 +410,7 @@ export function ResultsPage({
             <button
               type="button"
               onClick={onOpenComparison}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
               Senaryoları Karşılaştır
               <ArrowRightIcon className="h-4 w-4" />
@@ -431,7 +431,7 @@ export function ResultsPage({
             <button
               type="button"
               onClick={onCompareFromHere}
-              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-brand-300 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 shadow-sm transition-colors hover:bg-brand-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              className="inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-brand-300 bg-white px-4 py-2.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
               Bu Senaryoyu Kopyala ve Karşılaştır
               <ArrowRightIcon className="h-4 w-4" />
@@ -465,7 +465,7 @@ export function ResultsPage({
         <button
           type="button"
           onClick={onBackToEditor}
-          className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+          className="inline-flex min-h-[44px] shrink-0 items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
         >
           {closing.actionLabel}
           <ArrowRightIcon className="h-4 w-4" />

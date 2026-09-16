@@ -21,20 +21,26 @@ const BANDS: { band: HeatBand; range: string }[] = [
 
 export function HeatLegend({ isRelative }: { isRelative: boolean }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-      <p className="mb-2 text-xs font-semibold text-slate-700">Isı skoru</p>
+    <div className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-3 py-3">
+      <p className="mb-2 text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
+        Isı skoru
+      </p>
 
       <ul className="space-y-1.5">
         {BANDS.map(({ band, range }) => (
           <li key={band} className="flex items-center gap-2 text-xs">
             <span className={`inline-block h-3 w-3 rounded ${bandDot(band)}`} />
-            <span className="font-medium text-slate-800">{bandLabel(band)}</span>
-            <span className="ml-auto tabular-nums text-slate-500">{range}</span>
+            <span className="font-medium text-[var(--of-cc-ink)]">
+              {bandLabel(band)}
+            </span>
+            <span className="ml-auto text-[var(--of-cc-ink-muted)] tabular-nums">
+              {range}
+            </span>
           </li>
         ))}
       </ul>
 
-      <p className="mt-2.5 border-t border-slate-100 pt-2 text-[11px] leading-snug text-slate-500">
+      <p className="mt-3 border-t border-[var(--of-cc-border)] pt-2.5 text-[11px] leading-snug text-[var(--of-cc-ink-muted)]">
         %40 kayıp · %25 kullanım · %20 bekleme · %15 fire
       </p>
 
@@ -42,7 +48,7 @@ export function HeatLegend({ isRelative }: { isRelative: boolean }) {
         // Skorun goreli oldugu gizlenmemeli: kayiplarin tamami onemsizse bile
         // en kotu istasyon kirmiziya boyanir. Kullanici bunu bilmeden kirmizi
         // bir kutuyu felaket sanabilir.
-        <p className="mt-1.5 text-[11px] leading-snug text-slate-500">
+        <p className="mt-1.5 text-[11px] leading-snug text-[var(--of-cc-ink-muted)]">
           Kayıp bileşeni bu koşumdaki <strong>en kötü istasyona</strong> göre
           ölçülür. Kutulardaki tutarlara da bakın.
         </p>

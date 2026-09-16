@@ -97,7 +97,7 @@ function HeatmapCanvas({ config, heat, focusedId, onFocus }: FactoryHeatmapProps
   };
 
   return (
-    <div className="optiflow-stage h-[420px] w-full overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+    <div className="optiflow-stage h-[420px] w-full overflow-hidden rounded-[var(--of-cc-radius-panel)] border border-[var(--of-cc-border)] bg-[var(--of-cc-panel)]">
       <ReactFlow
         nodes={decorated}
         edges={edges}
@@ -189,9 +189,11 @@ function HeatStationNode({ data, selected }: NodeProps<HeatStationData>) {
   // tasiyorsa) notr gri kalir; cokmez, sessizce "veri yok" gosterir.
   if (!heat) {
     return (
-      <div className="w-44 rounded-xl border-2 border-dashed border-slate-300 bg-white px-3 py-3 text-center shadow-sm">
-        <p className="truncate text-sm font-medium text-slate-500">{data.station.name}</p>
-        <p className="mt-1 text-[11px] text-slate-400">Isı verisi yok</p>
+      <div className="w-44 rounded-[var(--of-cc-radius-card)] border border-dashed border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-3 py-3 text-center">
+        <p className="truncate text-sm font-medium text-[var(--of-cc-ink-muted)]">
+          {data.station.name}
+        </p>
+        <p className="mt-1 text-[11px] text-[var(--of-cc-ink-label)]">Isı verisi yok</p>
       </div>
     );
   }
@@ -209,7 +211,7 @@ function HeatStationNode({ data, selected }: NodeProps<HeatStationData>) {
         role="button"
         tabIndex={0}
         aria-label={`${heat.station_name}: ısı skoru ${formatScore(heat.score)}`}
-        className={`w-44 cursor-pointer rounded-xl border-2 px-3 py-2.5 shadow-sm transition-shadow hover:shadow-md ${bandSurface(
+        className={`optiflow-cc-lift w-44 cursor-pointer rounded-[var(--of-cc-radius-card)] border px-3 py-2.5 ${bandSurface(
           heat.band,
         )} ${pulse} ${ring}`}
       >
@@ -218,7 +220,7 @@ function HeatStationNode({ data, selected }: NodeProps<HeatStationData>) {
             {heat.station_name}
           </p>
           {heat.is_bottleneck && (
-            <span className="shrink-0 rounded bg-white/70 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-600">
+            <span className="shrink-0 rounded border border-[var(--of-cc-border)] px-1.5 py-0.5 text-[9px] font-bold text-[var(--of-cc-ink-muted)] uppercase">
               darboğaz
             </span>
           )}
@@ -229,7 +231,7 @@ function HeatStationNode({ data, selected }: NodeProps<HeatStationData>) {
           <span className={`text-lg font-bold tabular-nums ${bandText(heat.band)}`}>
             {formatScore(heat.score)}
           </span>
-          <span className="text-[10px] text-slate-500">/100</span>
+          <span className="text-[10px] text-[var(--of-cc-ink-muted)]">/100</span>
         </div>
       </div>
 
@@ -245,7 +247,7 @@ function HeatStationNode({ data, selected }: NodeProps<HeatStationData>) {
 /** Varış kutusu — ısı taşımaz, yalnızca akışın başlangıcını gösterir. */
 function PlainArrivalNode() {
   return (
-    <div className="flex w-32 items-center justify-center rounded-xl border-2 border-emerald-300 bg-emerald-50 px-3 py-2.5">
+    <div className="flex w-32 items-center justify-center rounded-[var(--of-cc-radius-card)] border border-emerald-500/30 bg-emerald-500/10 px-3 py-2.5">
       <p className="text-xs font-medium text-emerald-800">Giriş</p>
     </div>
   );

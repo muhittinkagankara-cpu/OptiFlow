@@ -29,8 +29,12 @@ interface CardProps {
 export function Card({ children, className = "", interactive, index }: CardProps) {
   return (
     <div
-      className={`rounded-xl border border-slate-200 bg-white ${
-        interactive ? "optiflow-lift hover:border-slate-300" : ""
+      /* Sprint 2J: yüzey Anayasa V4 tokenlarına taşındı (MASTER §3.8.1).
+         İmza ve davranış değişmedi; değişen yalnızca renk ve yarıçap, bu
+         yüzden `Card` kullanan 68 dosya tek hamlede aynı dile geçer —
+         ekran ekran override etmek tekrar üretirdi. */
+      className={`rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] ${
+        interactive ? "optiflow-lift hover:border-[var(--of-cc-border-strong)]" : ""
       } optiflow-enter ${className}`}
       style={index === undefined ? undefined : { animationDelay: `${index * 45}ms` }}
     >
@@ -74,7 +78,8 @@ type ButtonSize = "sm" | "md";
 
 const BUTTON_VARIANT: Record<ButtonVariant, string> = {
   primary:
-    "bg-brand-600 text-white shadow-sm hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400",
+    // Dekoratif gölge kaldırıldı (V4 §6): birincil düğme rengiyle ayrışır.
+    "bg-brand-600 text-white hover:bg-brand-700 disabled:bg-slate-200 disabled:text-slate-400",
   secondary:
     "border border-slate-200 bg-slate-100 text-slate-700 hover:border-slate-300 hover:text-slate-900 disabled:text-slate-400",
   ghost:

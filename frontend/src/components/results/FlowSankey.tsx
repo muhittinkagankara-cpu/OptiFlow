@@ -51,7 +51,7 @@ export function FlowSankey({ stations, config }: FlowSankeyProps) {
   );
 
   return (
-    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <div className="overflow-hidden rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)]">
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}

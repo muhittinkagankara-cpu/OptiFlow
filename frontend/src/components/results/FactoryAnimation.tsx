@@ -139,7 +139,7 @@ export function FactoryAnimation({
   }, [simulationId]);
 
   return (
-    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+    <section className="overflow-hidden rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)]">
       {!hideHeader && (
         <button
           type="button"

@@ -97,7 +97,7 @@ export function ScenarioComparison({
       </header>
 
       {isLoading && (
-        <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-5 py-6">
+        <div className="flex items-center gap-3 rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-5 py-6">
           <Spinner />
           <div>
             <p className="text-sm font-medium text-slate-800">
@@ -169,7 +169,7 @@ function ComparisonBody({
       </div>
 
       {/* --- Değişim grafiği --- */}
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
+      <section className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] p-5">
         <h2 className="text-sm font-semibold text-slate-900">
           “{nameFor(0)}” senaryosuna göre değişim
         </h2>

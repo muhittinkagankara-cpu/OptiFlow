@@ -72,7 +72,7 @@ export function ValidationPanel({ simulationId, warnings }: ValidationPanelProps
         <WarningBanner key={`${warning.kind}-${index}`} warning={warning} />
       ))}
 
-      <div className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="overflow-hidden rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)]">
         <button
           type="button"
           onClick={() => setIsOpen((previous) => !previous)}
