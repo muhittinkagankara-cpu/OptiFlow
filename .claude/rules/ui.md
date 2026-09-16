@@ -6,6 +6,11 @@ Enforceable rules for any change to `frontend/`. Full reasoning lives in
 
 ## Before you start
 
+0. **Read MASTER §3.8 first — the Design Constitution V4.** It is the
+   permanent authority for every new screen and every refactor: priority
+   order, canonical tokens, layout skeleton, component rules, and the
+   required end-of-sprint measurements. Unless an instruction is explicitly
+   higher priority, §3.8 decides.
 1. Read `docs/design-system/MASTER.md` and `docs/design-system/ANTI-PATTERNS.md`.
 2. Check the status marks in MASTER: 🟢 implemented, 🟡 partial, 🔴 target only.
    **A 🔴 token does not exist in the code.** Never reference it until the sprint

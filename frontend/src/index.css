@@ -1046,3 +1046,99 @@ input[type="number"] {
     background-image: none;
   }
 }
+/* ==========================================================================
+   Komuta merkezi yüzey dili (Sprint 2J, MASTER §3.8)
+   ==========================================================================
+
+   Bu blok komuta merkezi dilinin **adlandırma katmanıdır**, ayrı bir palet
+   değildir: değerleri §3.1 yüzey ölçeğiyle ve §3.2 mürekkep ölçeğiyle
+   birebir aynıdır.
+
+   Sprint 2J'de burada daha koyu, uydurulmuş değerler vardı (#070b11,
+   #0f1722, #151f2d). Tasarım Anayasası V3 bunu düzeltti: palet zaten
+   vardı, yeniden icat edilmesi gerekmiyordu. Hizalandıktan sonra ürünün
+   iki yüzey dili taşıması sorunu da ortadan kalktı — `--of-cc-*` ile
+   `--of-surface-*` aynı rengi gösterir; ilki komuta merkezi bağlamında
+   hangi katmana bakıldığını okutur (zemin / panel / kart).
+
+   Diğer ekranların bu ada geçmesi görsel bir değişiklik değil, yalnızca
+   okunabilirlik kazancıdır; sıraya alınmıştır.
+
+   Kaynak: Tasarım Anayasası V3 — Industrial Command Center.
+   ========================================================================== */
+
+:root {
+  /* -- Yüzeyler -- */
+  /* Ekranın zemini; panellerin altında kalan en koyu katman. */
+  --of-cc-bg: #0a0d12;
+  /* Bölüm paneli: zeminden bir kademe açık, kenarlıkla değil tonla ayrılır. */
+  --of-cc-panel: #12161d;
+  /* Kart: panelin üstündeki üçüncü ve **son** katman. Dördüncü katman yoktur;
+     kart içinde kart kuralı (ANTI-PATTERNS #2) yürürlükte kalır. */
+  --of-cc-card: #171c25;
+  /* Kartın üstünde duran yükseltilmiş yüzey (hover / açılır). */
+  --of-cc-card-raised: #1c222c;
+
+  /* -- Kenarlık -- */
+  /* Kenarlık rengi ton değil **saydamlık** taşır: üç yüzey katmanının
+     üzerinde de aynı algısal ağırlıkta kalır. */
+  --of-cc-border: rgb(255 255 255 / 0.08);
+  --of-cc-border-strong: rgb(255 255 255 / 0.14);
+
+  /* -- Metin -- */
+  --of-cc-ink: #f2f5f8;
+  --of-cc-ink-muted: #a9b4c2;
+  /* Küçük büyük harfli etiketler; değerden bir kademe geride durur. */
+  --of-cc-ink-label: #6b7685;
+
+  /* -- Yükselti --
+     Tek bir gölge değeri vardır ve yalnızca **etkileşimli** yüzeylerde
+     kullanılır (kart hover, çekmece). Dekoratif gölge yoktur. */
+  --of-cc-shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 8px 24px rgb(0 0 0 / 0.24);
+
+  /* -- Yuvarlaklık --
+     Komuta merkezi ölçeği: kart 16px, panel 20px. Brifteki 24px yalnızca
+     çekmece gibi büyük yüzeylerde kullanılır; küçük kartlarda 24px, kartı
+     düğmeye benzetir (ANTI-PATTERNS #7). */
+  --of-cc-radius-card: 16px;
+  --of-cc-radius-panel: 20px;
+  --of-cc-radius-drawer: 24px;
+  --of-cc-radius-button: 14px;
+
+  /* -- V4 kanonik adlar --------------------------------------------------
+     Anayasa V4 yüzey, kenarlık ve metin için tek kaynak adları tanımlar.
+     Değerler §3.1/§3.2 ölçeğiyle aynıdır; `--of-surface-3` ve `--of-border*`
+     V4 ile eklendi. `--of-cc-*` bunların komuta merkezi takma adıdır ve
+     aynı değerleri gösterir. */
+  --of-surface-3: #202733;
+  --of-border: rgb(255 255 255 / 0.08);
+  --of-border-strong: rgb(255 255 255 / 0.14);
+  --of-text: #f2f5f8;
+  --of-text-muted: #9ca6b3;
+
+  /* -- Hareket --
+     Endüstriyel yazılım sakin hisseder: 150-220ms, ease-out, zıplama yok. */
+  --of-cc-motion: 180ms;
+  --of-cc-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Kart yükseltisi yalnızca işaretçi cihazlarda ve hareket kısıtlaması
+   yokken uygulanır. */
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .optiflow-cc-lift {
+    transition:
+      background-color var(--of-cc-motion) var(--of-cc-ease),
+      border-color var(--of-cc-motion) var(--of-cc-ease),
+      transform var(--of-cc-motion) var(--of-cc-ease);
+  }
+
+  .optiflow-cc-lift:hover {
+    transform: translateY(-1px);
+    background-color: var(--of-cc-card-raised);
+    border-color: var(--of-cc-border-strong);
+  }
+
+  .optiflow-cc-lift:active {
+    transform: translateY(0);
+  }
+}

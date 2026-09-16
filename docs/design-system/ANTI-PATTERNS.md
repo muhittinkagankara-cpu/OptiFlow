@@ -185,6 +185,22 @@ düzeyinde, bir kez ayrıntı düzeyinde. Üçüncüsü silinir.
 
 ---
 
+> ℹ️ **Sprint 2J istisnası — komuta merkezi (yalnızca Canlı Üretim).**
+>
+> #1 (kart enflasyonu) ve #7 (aşırı yuvarlaklık) maddeleri, MASTER §3.8'de
+> onaylanan komuta merkezi dilinde şu sınırlarla uygulanır:
+>
+> - Kart **bir bilgi birimini** taşıdığında meşrudur (bir gösterge, bir alarm).
+>   "Her şeyi kart içine koymak" hâlâ yanlıştır: karar zinciri (cümle, kısıt
+>   şeridi) kart değildir, ince çizgiyle ayrılır.
+> - Katman sayısı **üçü geçemez**: zemin → panel → kart. Kart içinde kart yok.
+> - Yarıçap kartta 16px, panelde 20px, yalnızca çekmecede 24px'tir.
+> - Gölge dekoratif olamaz; tek değer ve yalnızca etkileşimli yüzeyde.
+>
+> Bu istisna Canlı Üretim dışındaki ekranlar için geçerli değildir.
+
+---
+
 ## 10. Anlamsız animasyon (meaningless animation)
 
 **Nasıl görünür.** Nefes alan kutular, tarama çizgileri, dalgalanan kuyruklar,

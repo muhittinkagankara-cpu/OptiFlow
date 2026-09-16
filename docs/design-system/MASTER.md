@@ -302,6 +302,144 @@ düşürülebilir. Karar §25'te açık maddedir.
 
 ---
 
+### 3.8 Tasarım Anayasası V4 — Industrial Command Center 🟢
+
+> ✅ **Bu bölüm OptiFlow'un kalıcı tasarım anayasasıdır.**
+>
+> Bu saatten sonra **tüm yeni ekranlar ve tüm refactor'lar** buna uymak
+> zorundadır. Başka bir talimat açıkça daha yüksek öncelikli değilse, tasarım
+> kararlarını bu belge belirler.
+>
+> Referans aralığı: Siemens Opcenter, Ignition Perspective, HighByte
+> Intelligence Hub, Tulip, FactoryTalk Optix. Hedef kullanıcı fabrika müdürü,
+> operasyon yöneticisi, üretim mühendisi, vardiya lideri. **AI dashboard
+> görünümü yasaktır.**
+
+#### 3.8.0 Öncelik sırası
+
+Çakışma olduğunda sıra şudur ve tartışmaya kapalıdır:
+
+1. **Veri doğruluğu**
+2. **Operatör kullanılabilirliği**
+3. **Karar okunabilirliği**
+4. **Görsel kalite**
+
+*Hiçbir estetik karar, ölçülmemiş veri üretmeye izin vermez.* Bir tasarım
+isteği Yasa 4 ile çakışıyorsa, isteği değil veriyi esas al ve durumu bildir.
+
+#### 3.8.1 Kanonik tokenlar — tek kaynak
+
+Yeni renk üretmek yasaktır.
+
+| Token | Değer |
+| --- | --- |
+| `--of-surface-canvas` | `#0a0d12` |
+| `--of-surface-1` | `#12161d` |
+| `--of-surface-2` | `#171c25` |
+| `--of-surface-3` | `#202733` |
+| `--of-border` | `rgb(255 255 255 / 0.08)` |
+| `--of-border-strong` | `rgb(255 255 255 / 0.14)` |
+| `--of-text` | `#f2f5f8` |
+| `--of-text-muted` | `#9ca6b3` |
+
+`--of-cc-*` bunların komuta merkezi takma adıdır ve **aynı değerleri**
+gösterir (zemin / panel / kart okunurluğu için).
+
+**Anlamsal renkler korunur** — kontrast testinden geçmiş mevcut palet
+kullanılır, 600 tonlarına geçilmez:
+
+| Durum | Token | Değer |
+| --- | --- | --- |
+| OK | `--of-semantic-ok` | `#22c55e` |
+| Uyarı | `--of-semantic-warn` | `#f59e0b` |
+| Arıza | `--of-semantic-fault` | `#ef4444` |
+| Etkileşim | `--of-interactive` | `#3d7dff` |
+
+#### 3.8.2 Yarıçap
+
+Panel 20px · Kart 16px · Çekmece 24px · Düğme 14px.
+24px yalnızca büyük yüzeylerde.
+
+#### 3.8.3 Kenarlık, gölge, gradient, hareket
+
+- Kenarlık **hairline**: `1px rgb(255 255 255 / 0.08)`. Kalın kenarlık yasak.
+- **Dekoratif gölge yasak.** İzin verilen tek gölgeler: ölçülmüş parıltı
+  (darboğaz) ve alarm nabzı.
+- **Gradient yasak**: kart, grafik dolgusu, zemin yıkaması, parıltı paneli.
+  Sparkline yalnızca düz çizgi.
+- Hareket 180ms ease-out; yalnızca hover, press, çekmece, akordeon.
+
+#### 3.8.4 Yasaklar
+
+Glassmorphism · kart patlaması · yüzen pano · dekoratif gradient · dev
+yuvarlak baloncuklar · sahte KPI · sahte güven · üçlü metrik tekrarı ·
+dekoratif renkli ikon.
+
+**Bir olgu bir ekranda en fazla iki yerde görünür** (ANTI-PATTERNS #9).
+
+#### 3.8.5 Tipografi
+
+H1 32 · H2 24 · H3 20 · KPI 30 · Body 14.
+
+#### 3.8.6 Yerleşim
+
+**Masaüstü:** durum çubuğu → statement → kısıt şeridi → üç sütun
+(sol: karar + KPI · orta: fabrika tuvali · sağ: alarm + eğilim) → zaman tüneli.
+**Tuval merkezdir ve 288px altına düşmez.**
+
+**Tablet:** tuval korunur; kenar sütunu alta inebilir.
+
+**Mobil, masaüstünün küçüğü değildir.** Sıra bozulmaz:
+durum → statement → şerit → **istasyonlar → alarmlar → ölçümler** → zaman tüneli.
+
+#### 3.8.7 Durum çubuğu
+
+72px. Yalnızca ölçülmüş üç alan: **besleme, vardiya saati, kısıt.**
+"Mod" kaldırıldı — aşağıdaki seçici zaten söylüyor. Aynı bilgi başka bir
+kontrolde okunuyorsa durum çubuğunda tekrar edilmez.
+
+#### 3.8.8 Bileşen kuralları
+
+- **KPI kartı:** başlık → değer → sonuç. Sparkline varsa düz çizgi + ölçek +
+  "15 dk" etiketi.
+- **Sparkline:** `LineChart`, ölçek etiketi, aralık metni (`15 dk  %74–%78`).
+  Pencere sabitse tek değer (`241`).
+- **İstasyon düğümü:** hairline kenarlık, gölge yok, tek yüzey. Amber halka ve
+  kırmızı nabız yalnızca gerçek ölçülmüş alarmda.
+- **Alarm kartı:** tür → istasyon → ölçüm → **gerçek** sonraki adım. Hedef
+  yoksa düğme yazılmaz.
+- **Çekmece:** 24px; bölümler Durum / Ölçümler / Sonraki adım; tek büyük CTA.
+
+#### 3.8.9 Dokunma hedefi ve erişilebilirlik
+
+Minimum 44px. **Tek istisna:** zaman tüneli satırları (bilgi yoğunluğu
+gerekçesiyle korunur — Sprint 2I-C ölçümü). `aria-label`, `aria-expanded`,
+`aria-pressed`, `focus-visible` hiçbir sadeleştirmede silinmez.
+
+#### 3.8.10 Uygulama kuralları
+
+Sprint başlamadan: bağımlılık haritası → blast radius → karakterizasyon
+testleri.
+
+Kod yazarken: paylaşılan primitifi yeniden kullan · backend'e dokunma ·
+simülasyon motoruna dokunma · mevcut helper'ları kullan · yeni eşik yazma ·
+yeni veri üretme.
+
+Sprint sonunda: **375 / 390 / 768 / 1024 / 1440 / 1600** ölçümleri, ardından
+`vitest` · `tsc` · `build` · `acceptance` · `git diff --check` raporlanır.
+**Commit yalnızca onaydan sonra.**
+
+#### 3.8.11 Sıradaki borçlar
+
+| Sıra | Sprint | Kapsam |
+| --- | --- | --- |
+| 1 | 2J | Tasarım dili birleştirme (Command Center, Sonuç, Finans) |
+| 2 | 2K | Heatmap temizliği (`components/heatmap`) |
+| 3 | 2L | Runtime gerçek cihaz doğrulaması (OPC-UA / MES) |
+| 4 | 2M | Storybook + Playwright + görsel regresyon + erişilebilirlik |
+
+---
+
 ## 4. Tipografi 🟡
 
 **Tek ve en önemli kural:** *Ölçülen her sayı `tabular-nums` taşır; her kelime
@@ -630,22 +768,36 @@ Kısıt üç sinyalle işaretlenir ve hiçbiri tek başına yeterli değildir:
 
 Aynı bileşen dört ekranda görünür ve **anlamı hiç değişmez.**
 
-> ✅ **Karar (Sprint 1A): geometri her varyantta aynı şeyi kodlar.**
+> ✅ **Karar (Anayasa V4 — Sprint 1A kararının yerine geçer): geometri
+> kısıtı kodlar.**
 >
-> Segment genişliği **her varyantta** aynı şeyi kodlar: istasyonun ölçülmüş
-> doluluğu (`money` varyantında da). Genişlik para miktarını **temsil etmez**;
-> finansal kayıp, segmentin üzerinde ayrı bir değer katmanı olarak yazılır.
+> Segment genişliği **o varyantta kısıtı belirleyen ölçümü** kodlar. Şeridin
+> tek ve değişmez sözü şudur: *en geniş segment kısıttır.*
 >
-> Gerekçe: bir görsel dilin tek bir kuralı olur. Genişlik Simülasyon'da
-> kapasite, Finans'ta para anlamına gelseydi, dört ekranda aynı görünen bir
-> şerit dört ekranda farklı bir şey söylerdi — ve kullanıcı hangi ekranda
-> olduğunu hatırlamak zorunda kalırdı. Şeridin değeri tam olarak "her yerde
-> aynı şeyi söylemesi"nden gelir.
+> | Varyant | Kısıtı belirleyen ölçüm | Genişlik |
+> | --- | --- | --- |
+> | `plan` (Sonuç) | `bottleneck_station_id` / doluluk | doluluk |
+> | `live` (Canlı) | `bottleneckStationId()` / **kuyruk** | kuyruk |
+> | `money` (Finans) | doluluk | doluluk |
+> | `compact` (Command Center) | doluluk | doluluk |
 >
-> Bedeli kabul edilmiştir: Finans'ta en geniş segment her zaman en pahalı
-> segment olmayabilir. Bu yüzden `money` varyantında para değeri **yazıyla**
-> taşınır ve en pahalı istasyon ayrıca işaretlenir — geometriyle değil,
-> etiketle.
+> **Neden Sprint 1A kararı değişti.** 1A "genişlik her varyantta doluluğu
+> kodlar" diyordu. Canlı ekran eklendiğinde görüldü ki `StationLiveState`
+> doluluk taşımıyor ve canlı kısıt yetkisi kuyruğa bakıyor. Kurala harfiyen
+> uymak (Sprint 2I-B.3) segmentleri eşitledi — ama bu, şeridin asıl sözünü
+> kırdı: kısıt artık en geniş segment değildi. V4 kuralı bir kademe yukarı
+> taşıdı: sabit olan "doluluk" değil, **"kısıtı belirleyen ölçüm"**. Böylece
+> şerit dört ekranda da aynı şeyi söylemeye devam eder.
+>
+> **Doluluk uydurulmaz.** Canlı ekranda `onlineMachines / machineCount` gibi
+> bir oran türetip ona "doluluk" demek yasaktır (Yasa 4).
+>
+> **Eşit genişlik yalnızca bir yedektir:** kısıtı belirleyen ölçüm de yoksa
+> (canlıda hiç kuyruk yoksa) bütün paylar 0 olur ve segmentler eşit çizilir.
+>
+> Finans için bedel değişmedi: en geniş segment her zaman en pahalı segment
+> olmayabilir; para değeri **yazıyla** taşınır ve en pahalı istasyon ayrıca
+> etiketle işaretlenir.
 
 ### 15.5 Ölçüm dürüstlüğü (Yasa 4)
 
@@ -981,7 +1133,7 @@ sorulmalıdır:
 ### Sprint 1A'da karara bağlananlar
 
 - **Radius ad alanı → Seçenek B** (ayrı `--of-radius-*`; §3.5)
-- **ConstraintRail geometrisi → her varyantta aynı oranı kodlar** (§15.4)
+- **ConstraintRail geometrisi → kısıtı belirleyen ölçümü kodlar** (§15.4)
   *(Sprint 2D: o oranın adı "kapasite payı" değil, ölçülmüş doluluk.)*
 - **İskelet parıltısı izin verilen hareketlere eklendi** (§3.7)
 
