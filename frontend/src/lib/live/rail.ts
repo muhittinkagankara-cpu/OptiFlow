@@ -4,30 +4,30 @@
  * Paylaşılan `ConstraintRail` bileşeni **çatallanmadı**; bu dosya yalnızca
  * canlı istasyonları o bileşenin beklediği alanlara çevirir.
  *
- * ## Segmentler neden eşit genişlikte? (Sprint 2I-B.3)
+ * ## Genişlik neyi kodlar? (Anayasa V4)
  *
- * Şeridin görsel dilinde **genişlik tek bir şeyi kodlar: ölçülmüş doluluk**
- * (MASTER §15.4). Bu kural varyanttan bağımsızdır; şeridin değeri tam olarak
- * dört ekranda aynı şeyi söylemesinden gelir.
+ * Şeridin verdiği söz şudur: **en geniş segment kısıttır.** Bu söz ancak
+ * genişlik, o varyantta kısıtı belirleyen ölçümle aynı olduğunda doğrudur.
  *
- * `StationLiveState` doluluk taşımıyor. 2I-B'de genişliği kuyruktan almıştım:
- * "en geniş segment kısıttır" sözünü korumak için doğru göründü, ama yanlıştı
- * — kuyruk doluluk değildir ve kuyruğu genişliğe çevirmek, ölçülmemiş bir
- * büyüklüğü ölçülmüş doluluk gibi göstermek anlamına geliyordu. Sekiz parçalık
- * bir kuyruk, o istasyonun %100 dolu olduğunu söylemez.
+ * Canlı varyantta kısıtı belirleyen ölçüm **kuyruktur**: `bottleneckStationId`
+ * kuyruğu diğerlerinin hepsinden uzun olan istasyonu işaretler. `share` bu
+ * yüzden kuyruk payıdır.
  *
- * MASTER §15.5'in bu duruma verdiği yanıt uygulandı: **doluluk ölçülmemişse
- * segmentler eşit genişlikte çizilir.** `share` bu yüzden her istasyonda 0'dır
- * — bileşen taban payını (`MIN_GROW`) uygulayınca segmentler eşitlenir ve dar
- * ekrandaki dolgu çubuğu boş kalır: ölçülmeyen doluluk için hiçbir şey iddia
- * edilmez (Yasa 4).
+ * Bu, iki kez tartışılmış bir karardır. Sprint 2I-B.3'te segmentler eşit
+ * genişliğe çekilmişti; gerekçe, MASTER §15.4'ün "genişlik her varyantta
+ * ölçülmüş doluluğu kodlar" kuralıydı ve `StationLiveState` doluluk taşımıyor.
+ * Anayasa V4 kuralı canlı varyant için yeniden yazdı: genişlik **kısıtı
+ * belirleyen ölçümü** kodlar; doluluk taşıyan ekranlarda bu doluluktur, canlı
+ * ekranda kuyruktur. MASTER §15.4 buna göre güncellendi, böylece iki belge
+ * birbiriyle çelişmez.
  *
- * Kuyruk kaybolmaz; **yazıyla** taşınır (`value`) ve kısıt yetkisi hâlâ ona
- * bakar. Yani kuyruk ölçüm olarak durur, genişlik olarak durmaz.
+ * Eşit genişlik yalnızca **kuyruk da yokken** devreye girer: hiç kuyruk yoksa
+ * bütün paylar 0 olur ve bileşen taban payıyla (`MIN_GROW`) hepsini eşit
+ * çizer. Sıfır kuyruk "ölçülmedi" değil, gerçekten sıfırdır.
  *
- * Doluluk türetilmez: `onlineMachines / machineCount` ya da kuyruktan,
- * çevrimden, throughput'tan bir oran üretip ona "doluluk" demek, ölçülmemiş
- * bir büyüklüğe ölçülmüş bir ad vermek olurdu.
+ * Doluluk yine de **türetilmez**: `onlineMachines / machineCount` gibi bir
+ * oran üretip ona "doluluk" demek, ölçülmemiş bir büyüklüğe ölçülmüş bir ad
+ * vermek olurdu (Yasa 4).
  *
  * ## Renk
  *
@@ -61,13 +61,17 @@ export function liveRailStations(
   }
 
   const constraintId = bottleneckStationId(stations);
+  const longest = stations.reduce(
+    (max, station) => Math.max(max, station.queue),
+    0,
+  );
 
   return stations.map((station) => ({
     id: station.stationId,
     label: station.stationName,
-    /* Doluluk ölçülmüyor: pay her istasyonda 0, segmentler eşit genişlikte
-       (MASTER §15.5). Kuyruk `value` alanında yazıyla taşınır. */
-    share: 0,
+    /* Pay, hattın en uzun kuyruğuna göre okunur. Hiç kuyruk yoksa hepsi 0
+       olur ve `ConstraintRail` taban payıyla segmentleri eşitler. */
+    share: longest > 0 ? station.queue / longest : 0,
     value: `${station.queue} parça`,
     state: stationState(station.status),
     /* Kısıt yetkisi değişmedi: hâlâ `bottleneckStationId`. */

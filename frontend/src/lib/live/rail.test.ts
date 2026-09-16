@@ -1,11 +1,12 @@
 /**
- * Canlı kısıt şeridi eşlemesi (Sprint 2I-B, genişlik kuralı 2I-B.3'te düzeltildi).
+ * Canlı kısıt şeridi eşlemesi (Anayasa V4).
  *
- * Korunan kural: **genişlik yalnızca ölçülmüş doluluğu kodlar** (MASTER §15.4).
- * `StationLiveState` doluluk taşımadığı için canlı segmentler eşit genişliktedir
- * (§15.5) ve kuyruk yazıyla taşınır. Kuyruk artık segment genişliğini
- * belirlemez — belirleseydi, ölçülmemiş bir büyüklük ölçülmüş doluluk gibi
- * görünürdü (Yasa 4).
+ * Korunan kural: **en geniş segment kısıttır.** Genişlik, o varyantta kısıtı
+ * belirleyen ölçümü kodlar; canlı ekranda bu kuyruktur (`bottleneckStationId`
+ * kuyruğa bakar). Eşit genişlik yalnızca hiç kuyruk yokken devreye girer.
+ *
+ * Bu kural iki kez tartışıldı: 2I-B.3 segmentleri eşitlemişti, V4 kararı canlı
+ * varyant için yeniden yazdı ve MASTER §15.4 buna göre güncellendi.
  */
 
 import { describe, expect, it } from "vitest";
@@ -33,8 +34,7 @@ const istasyon = (
   faultReason: null,
 });
 
-describe("segment genişliği ölçülmemiş doluluğu temsil etmez", () => {
-  // A) Kuyruklar çok farklı olsa bile segmentler eşit.
+describe("genişlik, kısıtı belirleyen ölçümü kodlar", () => {
   const farkli = [
     istasyon("s1", "Kesme", 0),
     istasyon("s2", "Torna", 1),
@@ -42,21 +42,48 @@ describe("segment genişliği ölçülmemiş doluluğu temsil etmez", () => {
     istasyon("s4", "Boyama", 10),
   ];
 
-  it("dört farklı kuyruk için dört eşit segment üretir", () => {
-    const paylar = liveRailStations(farkli).map((s) => s.share);
-    expect(paylar).toHaveLength(4);
-    expect(new Set(paylar).size).toBe(1);
+  it("en uzun kuyruk tam paya sahiptir", () => {
+    expect(liveRailStations(farkli).find((s) => s.id === "s4")!.share).toBe(1);
   });
 
-  it("uzun kuyruklu istasyon geniş segment kazanmaz", () => {
+  it("diğer paylar en uzun kuyruğa göre okunur", () => {
     const serit = liveRailStations(farkli);
-    const bos = serit.find((s) => s.id === "s1")!;
-    const dolu = serit.find((s) => s.id === "s4")!;
-    expect(dolu.share).toBe(bos.share);
+    expect(serit.find((s) => s.id === "s3")!.share).toBeCloseTo(0.5);
+    expect(serit.find((s) => s.id === "s2")!.share).toBeCloseTo(0.1);
+    expect(serit.find((s) => s.id === "s1")!.share).toBe(0);
   });
 
-  // B) Hiç kuyruk yokken de eşit.
-  it("bütün kuyruklar sıfırken segmentler yine eşit", () => {
+  it("en geniş segment kısıt olarak işaretlenir", () => {
+    // Şeridin verdiği söz budur; genişlik ile kısıt aynı ölçümden gelmeli.
+    const serit = liveRailStations(farkli);
+    const enGenis = [...serit].sort((a, b) => b.share - a.share)[0];
+    expect(enGenis.isConstraint).toBe(true);
+  });
+
+  it("kuyruk değişince pay da değişir", () => {
+    const hat = (q: number) => [istasyon("s1", "Kesme", q), istasyon("s2", "Torna", 10)];
+    expect(liveRailStations(hat(1))[0].share).toBeCloseTo(0.1);
+    expect(liveRailStations(hat(5))[0].share).toBeCloseTo(0.5);
+  });
+
+  it("kuyruk yazıyla da taşınmaya devam eder", () => {
+    const serit = liveRailStations(farkli);
+    expect(serit.find((s) => s.id === "s4")!.value).toBe("10 parça");
+    expect(serit.find((s) => s.id === "s1")!.value).toBe("0 parça");
+  });
+
+  it("doluluk türetilmez — pay yalnızca kuyruktan gelir", () => {
+    // İki istasyon aynı kuyruğa ama farklı makine sayısına sahip; paylar eşit
+    // kalmalı. Eşit kalmazsa bir yerde doluluk uydurulmuş demektir.
+    const a = { ...istasyon("s1", "Kesme", 4), machineCount: 1, onlineMachines: 1 };
+    const b = { ...istasyon("s2", "Torna", 4), machineCount: 4, onlineMachines: 2 };
+    const serit = liveRailStations([a, b]);
+    expect(serit[0].share).toBe(serit[1].share);
+  });
+});
+
+describe("kuyruk da yoksa eşit genişliğe düşülür", () => {
+  it("bütün kuyruklar sıfırken paylar eşitlenir", () => {
     const bos = [
       istasyon("s1", "Kesme", 0),
       istasyon("s2", "Torna", 0),
@@ -68,24 +95,9 @@ describe("segment genişliği ölçülmemiş doluluğu temsil etmez", () => {
     expect(new Set(paylar).size).toBe(1);
   });
 
-  // E) Kuyruk değişse bile genişlik değişmez.
-  it("kuyruk değiştiğinde pay değişmez", () => {
-    const once = liveRailStations([istasyon("s1", "Kesme", 1)]);
-    const sonra = liveRailStations([istasyon("s1", "Kesme", 99)]);
-    expect(sonra[0].share).toBe(once[0].share);
-  });
-
-  // F) Doluluk ölçülmediği için hiçbir segment doluluk genişliği üretmez.
-  it("hiçbir segment ölçülmemiş doluluktan pay türetmez", () => {
-    // `share` doğrudan `flexGrow` ve dar ekrandaki dolgu çubuğunun yüzdesidir;
-    // sıfır olması "doluluk hakkında bir iddia yok" demektir.
-    expect(liveRailStations(farkli).every((s) => s.share === 0)).toBe(true);
-  });
-
-  it("kuyruk yazıyla taşınmaya devam eder", () => {
-    const serit = liveRailStations(farkli);
-    expect(serit.find((s) => s.id === "s4")!.value).toBe("10 parça");
-    expect(serit.find((s) => s.id === "s1")!.value).toBe("0 parça");
+  it("eşit genişlikteyken kısıt da işaretlenmez", () => {
+    const bos = [istasyon("s1", "Kesme", 0), istasyon("s2", "Torna", 0)];
+    expect(liveRailStations(bos).some((s) => s.isConstraint)).toBe(false);
   });
 });
 
@@ -99,12 +111,6 @@ describe("kısıt yetkisi değişmedi", () => {
     ];
     const serit = liveRailStations(hat);
     expect(serit.filter((s) => s.isConstraint).map((s) => s.id)).toEqual(["s2"]);
-  });
-
-  it("kısıt işareti segment genişliğinden bağımsızdır", () => {
-    const hat = [istasyon("s1", "Kesme", 2), istasyon("s2", "Torna", 8)];
-    const kisit = liveRailStations(hat).find((s) => s.isConstraint)!;
-    expect(kisit.share).toBe(0);
   });
 
   it("kuyruklar eşitken kısıt yoktur", () => {
