@@ -306,8 +306,8 @@ describe("gereksiz yüzey ve gölge kalmadı", () => {
     // (`bg-amber-500`) taşır ve bu sprintin kapsamında değildir.
     const html = rapor(haritasizRapor(raporlaKalemler([doluKalem, eksikKalem])));
     expect(html).toContain("border-amber-400");
-    expect(html).not.toMatch(/bg-amber-50/);
-    expect(html).not.toMatch(/border-amber-200/);
+    expect(html).not.toMatch(/bg-amber-50(?![0-9])/);
+    expect(html).not.toMatch(/border-amber-200(?![0-9])/);
   });
 
   it("uyarı metni ve eksik oran adları korundu", () => {

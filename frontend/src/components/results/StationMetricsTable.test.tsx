@@ -34,8 +34,16 @@ const render = (
 
 describe("responsive sözleşme", () => {
   it("tablo yalnızca 768 ve üzerinde çizilir", () => {
-    expect(render()).toContain('class="hidden overflow-hidden rounded-xl');
-    expect(render()).toContain("md:block");
+    // Davranışa bakılır, sınıf dizgisinin tamamına değil: yüzey tokenları
+    // değiştiğinde (Sprint 2J) bu testin kırılması bir regresyon değil,
+    // kırılgan bir doğrulama demekti.
+    // Aynı `class` özniteliğinde hem `hidden` hem `md:block` taşıyan bir
+    // sarmalayıcı bulunmalı: 768 altında gizli, üstünde görünür.
+    const html = render();
+    const siniflar = [...html.matchAll(/class="([^"]*)"/g)].map((m) => m[1]);
+    expect(
+      siniflar.some((c) => c.includes("hidden") && c.includes("md:block")),
+    ).toBe(true);
   });
 
   it("kayıt listesi yalnızca 768 altında çizilir", () => {

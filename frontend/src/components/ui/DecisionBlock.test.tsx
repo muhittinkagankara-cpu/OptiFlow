@@ -143,6 +143,6 @@ describe("DecisionBlock — dikey ritim (Sprint 2F-C)", () => {
     // Sınıf adlarında "hairline" gibi diziler geçtiği için ham işaretlemede
     // değil, yalnızca görünen metinde aranır.
     const metin = html.replace(/<[^>]*>/g, " ");
-    expect(metin).not.toMatch(/Tebrikler|Harika|Mükemmel|yapay zekâ|AI/i);
+    expect(metin).not.toMatch(/Tebrikler|Harika|mükemmel|yapay zekâ|(?<![A-Za-z])AI(?![A-Za-z])/i);
   });
 });
