@@ -16,6 +16,7 @@ import {
   formatClock,
   type Alarm,
   type StationLiveState,
+  alarmAction,
 } from "../../lib/live";
 import { STATUS_STYLE } from "./liveStyles";
 
@@ -25,6 +26,13 @@ interface StationDrawerProps {
   lastAlarm: Alarm | null;
   clockMinutes: number;
   onClose: () => void;
+  /**
+   * Alarmın bağlanabildiği ekrana götürür (Sprint 2I-B).
+   *
+   * Yalnızca `alarmAction` güvenilir bir hedef bulduğunda çağrılır; hedefi
+   * olmayan alarm için düğme hiç çizilmez.
+   */
+  onOpenSimulation?: () => void;
 }
 
 function StationDrawerInner({
@@ -32,12 +40,15 @@ function StationDrawerInner({
   lastAlarm,
   clockMinutes,
   onClose,
+  onOpenSimulation,
 }: StationDrawerProps) {
   if (!station) {
     return null;
   }
 
   const style = STATUS_STYLE[station.status];
+  /* Eylem kararı bileşende verilmez; `lib/live/alarmAction` verir. */
+  const action = alarmAction(lastAlarm);
   const handled = station.completed + station.scrapped;
   const scrapRate = handled > 0 ? station.scrapped / handled : null;
   /*
@@ -152,6 +163,33 @@ function StationDrawerInner({
               </p>
             )}
           </section>
+
+          {/*
+            Sonraki adım (Yasa 5). Çekmece eskiden yalnızca "kapat" ile
+            bitiyordu: alarm okunuyor, sonra hiçbir yere gidilmiyordu.
+
+            Eylem **yalnızca** `alarmAction` üründe var olan bir ekran
+            bulduğunda çizilir — bugün bu yalnızca kuyruk alarmı için doğru.
+            Arıza ve fire alarmlarında düğme hiç görünmez; bağlanacak akış
+            olmadan düğme koymak olmayan bir yeteneği vaat etmek olurdu.
+          */}
+          {action !== null && onOpenSimulation && (
+            <section className="border-t border-slate-200 pt-3">
+              <h4 className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+                Sonraki adım
+              </h4>
+              <p className="mt-1 text-xs leading-relaxed text-slate-600">
+                {action.reason}
+              </p>
+              <button
+                type="button"
+                onClick={onOpenSimulation}
+                className="mt-2 inline-flex min-h-[44px] items-center gap-2 rounded-lg bg-brand-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+              >
+                {action.label}
+              </button>
+            </section>
+          )}
         </div>
       </aside>
     </>

@@ -19,6 +19,10 @@ import type {
 } from "../../types/simulationTypes";
 import { formatDecimal, formatUnits } from "../../lib/resultsFormatting";
 import { bottleneckSummary } from "../../lib/dashboardMetrics";
+/* Eşik bileşende değil `lib/live/thresholds` içinde: 0.85 burada çıplak bir
+   sayı olarak duruyordu, oysa aynı değer `BOTTLENECK_WARNING` adıyla zaten
+   tanımlı. Davranış aynı, kaynak tek. */
+import { bottleneckTone } from "../../lib/live";
 import { FactoryAnimation } from "../results/FactoryAnimation";
 import { Badge, Card, EmptyState, MetricRow, ProgressBar } from "../ui/Primitives";
 
@@ -209,7 +213,7 @@ export function LivePage({
                   </div>
                   <ProgressBar
                     value={bottleneck.utilization}
-                    tone={bottleneck.utilization >= 0.85 ? "bad" : "warning"}
+                    tone={bottleneckTone(bottleneck.utilization) ?? "neutral"}
                   />
                 </div>
                 <p className="mt-2.5 text-xs leading-relaxed text-slate-500">

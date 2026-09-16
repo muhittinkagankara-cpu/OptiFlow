@@ -17,6 +17,24 @@
  * gönderilebilirdi.
  *
  * Her kartın altında kaynağı yazar: "cihazdan" ya da "benzetim".
+ *
+ * ## Rol ayrımı (Sprint 2I-B.2)
+ *
+ * Sprint 2I-B, ekranın üstüne bir **karar özeti** (`MetricGroup`) koydu ve o
+ * özet throughput, OEE, kuyruk ve açık alarmı sonuçlarıyla birlikte yazıyor.
+ * Aynı dört sayı burada da duruyordu: dar ekranda kullanıcı aynı olguyu iki
+ * kez, birbirine yakın iki yüzeyde görüyordu (ANTI-PATTERNS #9).
+ *
+ * Kural, aynı anti-desenin verdiği kuraldır: *bir olgu bir ekranda en fazla
+ * iki yerde görünür — bir kez özet, bir kez ayrıntı düzeyinde.* Masaüstünde
+ * iki yüzey yan yana değil, biri solda biri sağda durur ve ikinci düzey
+ * (eğilim + kaynak etiketi) gerçekten yeni bilgi taşır; orada ikisi de kalır.
+ * `lg` altında ise iki yüzey üst üste yığılır ve tekrar tarama maliyetinden
+ * başka bir şey üretmez; bu yüzden örtüşen dört kart orada çizilmez.
+ *
+ * Panelin **benzersiz** taşıdıkları her genişlikte durur: ortalama çevrim /
+ * duruş, ölçülen makine sayısı, on beş dakikalık eğilim ve kart başına
+ * "cihazdan / benzetim" etiketi.
  */
 
 import { memo } from "react";
@@ -85,6 +103,9 @@ function LiveKpiPanelInner({
       <KpiCard
         icon={Activity}
         label="Throughput"
+        /* Karar özetinde (MetricGroup) sonucuyla birlikte zaten var; dar
+           ekranda ikinci kez gösterilmez (bkz. dosya başlığı). */
+        className="max-lg:hidden"
         value={
           live
             ? runtimeKpi.throughput === null
@@ -110,6 +131,9 @@ function LiveKpiPanelInner({
       <KpiCard
         icon={Gauge}
         label="OEE"
+        /* Karar özetinde (MetricGroup) sonucuyla birlikte zaten var; dar
+           ekranda ikinci kez gösterilmez (bkz. dosya başlığı). */
+        className="max-lg:hidden"
         value={totals.oee === null ? "—" : `%${Math.round(totals.oee * 100)}`}
         unit={totals.oee === null ? "istasyon yok" : "hat ortalaması"}
         series={trends.oee}
@@ -119,6 +143,9 @@ function LiveKpiPanelInner({
       <KpiCard
         icon={Layers}
         label="Kuyruk"
+        /* Karar özetinde (MetricGroup) sonucuyla birlikte zaten var; dar
+           ekranda ikinci kez gösterilmez (bkz. dosya başlığı). */
+        className="max-lg:hidden"
         value={
           live
             ? runtimeKpi.queue === null
@@ -173,6 +200,9 @@ function LiveKpiPanelInner({
       <KpiCard
         icon={BellRing}
         label="Açık alarm"
+        /* Karar özetinde (MetricGroup) sonucuyla birlikte zaten var; dar
+           ekranda ikinci kez gösterilmez (bkz. dosya başlığı). */
+        className="max-lg:hidden"
         value={String(live ? runtimeKpi.alarmCount : totals.openAlarms)}
         unit={
           live
@@ -220,6 +250,13 @@ interface KpiCardProps {
   series: TrendSample[];
   color: string;
   flipKey: number;
+  /**
+   * Yalnızca görünürlük için ek sınıf (Sprint 2I-B.2).
+   *
+   * Kartın içeriğine, rengine ya da ölçüm davranışına dokunmaz; tek işi
+   * kartın hangi genişlikte çizileceğini söylemektir.
+   */
+  className?: string;
 }
 
 const KpiCard = memo(function KpiCard({
@@ -230,11 +267,12 @@ const KpiCard = memo(function KpiCard({
   series,
   color,
   flipKey,
+  className = "",
 }: KpiCardProps) {
   const direction = trendDirection(series);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-2.5">
+    <div className={`rounded-xl border border-slate-200 bg-white p-2.5 ${className}`}>
       <p className="flex items-center gap-1.5 text-[10px] font-medium text-slate-500">
         <Icon className="h-3 w-3" />
         {label}

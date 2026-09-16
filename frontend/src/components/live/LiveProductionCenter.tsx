@@ -42,6 +42,9 @@ import {
   recordScenario,
   seedsFromConfig,
   useLiveFactory,
+  liveStatement,
+  liveRailStations,
+  liveMetrics,
   type ScenarioId,
 } from "../../lib/live";
 import {
@@ -56,6 +59,11 @@ import {
 import { API_BASE_URL } from "../../lib/apiClient";
 import { getAccessToken } from "../../lib/authClient";
 import { EmptyState } from "../ui/Primitives";
+/* Karar yüzeyi Command Center ve Sonuç ekranıyla **aynı** bileşenlerle
+   kurulur; canlı için ikinci bir kopya yazılmadı (MASTER §15, §19.1). */
+import { Statement } from "../ui/Statement";
+import { ConstraintRail } from "../ui/ConstraintRail";
+import { MetricGroup } from "../ui/MetricGroup";
 import { AlarmCenter } from "./AlarmCenter";
 import { EventTimeline } from "./EventTimeline";
 import { LiveFlowCanvas } from "./LiveFlowCanvas";
@@ -216,6 +224,18 @@ export function LiveProductionCenter({
 
   const totals = useMemo(() => liveTotals(state), [state]);
   const trends = useLiveTrends(state);
+
+  /* Karar yüzeyi: cümle, kısıt şeridi ve ölçümler. Üçü de mevcut canlı
+     durumdan **okunur**, hesaplanmaz (bkz. lib/live/statement, rail, metrics). */
+  const statement = useMemo(() => liveStatement(state.stations), [state.stations]);
+  const railStations = useMemo(
+    () => liveRailStations(state.stations),
+    [state.stations],
+  );
+  const metrics = useMemo(
+    () => liveMetrics(state.stations, totals),
+    [state.stations, totals],
+  );
   const replayControls = useMemo(() => asReplayControls(provider), [provider]);
 
   const selectedStation = useMemo(
@@ -310,7 +330,8 @@ export function LiveProductionCenter({
           <select
             value={sourceId}
             onChange={(event) => setSourceId(event.target.value as SourceId)}
-            className="rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-800 focus:outline-none"
+            /* Dokunma hedefi 44px (MASTER §14); punto ve dolgu değişmedi. */
+            className="min-h-[44px] rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-800 focus:outline-none"
           >
             {SOURCE_OPTIONS.map((choice) => (
               <option key={choice.id} value={choice.id}>
@@ -344,7 +365,7 @@ export function LiveProductionCenter({
           <select
             value={scenario}
             onChange={(event) => setScenario(event.target.value as ScenarioId)}
-            className="rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-800 focus:outline-none"
+            className="min-h-[44px] rounded-lg border border-slate-200 bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-800 focus:outline-none"
           >
             {SCENARIOS.map((item) => (
               <option key={item.id} value={item.id}>
@@ -361,9 +382,61 @@ export function LiveProductionCenter({
         )}
       </header>
 
-      <div className="relative flex min-h-0 flex-1 flex-col lg:flex-row">
-        {/* Diyagram yalnızca geniş ekranda; dar ekranda okunabilir bir liste. */}
-        <div className="min-h-[20rem] flex-1 lg:min-h-0">
+      {/*
+        Karar yüzeyi (Sprint 2I-B): cümle → kısıt → ölçüm.
+
+        Kontrol şeridinin altında, canlı görselleştirmenin üstünde durur;
+        kullanıcı önce hattın ne yaptığını okur, sonra diyagrama bakar.
+
+        Kutu yok, ızgara yok: bölümler ince çizgiyle ayrılır — Sonuç ekranının
+        2G'de kurduğu dilin aynısı. Cümle yoksa (hiç istasyon yoksa) bölüm hiç
+        çizilmez; boş bir karar yüzeyi ölçülmemişi ölçülmüş gibi gösterirdi.
+      */}
+      {/*
+        Yerleşim zinciri (Sprint 2I-B.2 — regresyon düzeltmesi).
+
+        2I-B'de bu satır `lg` altında da `flex-col` kalıyor, sol sütun `flex-1`,
+        kardeş `<aside>` ise `shrink-0` idi. Kenar panelin doğal yüksekliği
+        (375'te ~530px, 768'de 668px) satırın tamamını yiyor, `flex-1` olan sol
+        sütuna **0 piksel** kalıyordu: `clientHeight: 0`, `scrollHeight: 1137`.
+        Sonuç, tarayıcıda ölçüldü — Statement, ConstraintRail ve MetricGroup
+        hiç görünmüyor, olay akışı KPI kartlarının üstüne biniyor ve istasyon
+        düğmesi `elementFromPoint` ile yakalanamıyordu.
+
+        Ders: **`flex-1` vermek bir çocuğun görüneceğini garanti etmez.** Kardeş
+        `shrink-0` ve doğal yüksekliği kabın tamamından büyükse, `min-h-0` olan
+        esnek çocuk sıfıra iner.
+
+        Düzeltme, iki genişlik için iki ayrı kaydırma modeli kurar:
+
+        - `< lg`: satırın **kendisi** tek kaydırma kabıdır. Çocuklar doğal
+          yüksekliklerini alır; hiçbiri sıfıra çökmez, hiçbiri ötekinin üstüne
+          binmez. Olay akışı altta sabit kalır.
+        - `lg+`: satır yatay ve taşma gizli; sol sütun ile kenar panel kendi
+          içlerinde kayar — 2I-B'deki masaüstü davranışının aynısı.
+      */}
+      <div className="relative flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <div className="flex flex-col lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+          {statement && (
+            <div className="shrink-0 space-y-3 border-b border-slate-200 px-4 py-3">
+              <Statement
+                headline={statement.headline}
+                detail={statement.detail ?? undefined}
+              />
+              <ConstraintRail stations={railStations} />
+              {/* Ölçüm şeridi 375'te tek sütunda 353 piksel tutuyordu. Sarmalayıcı
+                  yalnızca `sm` altında iki sütuna indirir; paylaşılan
+                  `MetricGroup` bileşeninin kendi sınıfları değişmez, dolayısıyla
+                  Command Center ve Sonuç ekranı etkilenmez. */}
+              <div className="max-sm:[&>section]:grid-cols-2">
+                <MetricGroup items={metrics} />
+              </div>
+            </div>
+          )}
+
+          {/* Diyagram yalnızca geniş ekranda; dar ekranda okunabilir bir liste.
+              Mobilde `flex-1` yok: sayfa akışında doğal yüksekliğini alır. */}
+          <div className="min-h-[22rem] lg:flex-1">
           <div className="hidden h-full lg:block">
             <LiveFlowCanvas
               config={config}
@@ -372,15 +445,16 @@ export function LiveProductionCenter({
               selectedStationId={selectedStationId}
             />
           </div>
-          <div className="h-full overflow-y-auto lg:hidden">
+          <div className="h-full lg:hidden">
             <LiveStationList
               stations={state.stations}
               onSelectStation={handleSelectStation}
             />
           </div>
+          </div>
         </div>
 
-        <aside className="w-full shrink-0 space-y-3 overflow-y-auto border-t border-slate-200 px-3 py-3 lg:w-[23rem] lg:border-t-0 lg:border-l">
+        <aside className="w-full shrink-0 space-y-3 border-t border-slate-200 px-3 py-3 lg:w-[23rem] lg:overflow-y-auto lg:border-t-0 lg:border-l">
           <LiveKpiPanel
             totals={totals}
             trends={trends}
@@ -406,6 +480,10 @@ export function LiveProductionCenter({
           lastAlarm={lastAlarm}
           clockMinutes={state.clockMinutes}
           onClose={handleCloseDrawer}
+          /* Zaten var olan gezinme: `onStartSimulation` App'te
+             `goToSection("simulation")`e bağlı. Yeni bir gezinme API'si
+             eklenmedi. */
+          onOpenSimulation={onStartSimulation}
         />
       </div>
 
