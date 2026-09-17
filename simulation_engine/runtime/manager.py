@@ -108,6 +108,7 @@ from simulation_engine.runtime.streaming import (
     StreamRegistry,
     poll_interval_ms,
 )
+from simulation_engine.runtime.selection import selection_report
 from simulation_engine.runtime.registry import (
     ConnectionNotFound,
     ConnectionRegistry,
@@ -1910,6 +1911,15 @@ class RuntimeManager:
             "connections": [state.to_dict(now_ms) for state in self.registry.list(org_id)],
             "at_ms": now_ms if now_ms is not None else int(time.time() * 1000),
         }
+
+    def driver_report(self, org_id: str) -> Dict[str, object]:
+        """Canlı ekranı hangi bağlantı beslemeli?
+
+        Kararın kendisi `selection` modülündedir ve saftır; burası yalnızca o
+        organizasyonun kayıtlarını verir. Karar mantığı yöneticinin içinde
+        yazılsaydı, sınamak için bir yönetici örneği kurmak gerekirdi.
+        """
+        return selection_report(self.registry.list(org_id))
 
     def owns(self, org_id: str, connection_id: str) -> bool:
         """Bu organizasyonun böyle bir bağlantısı var mı?"""

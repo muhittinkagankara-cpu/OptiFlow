@@ -481,3 +481,38 @@ class TestAuthWiring:
     def test_mevcut_simulasyon_ucu_bozulmadi(self, client):
         # Runtime router'i eklemek eski uclari etkilememeli.
         assert "/api/simulations/run" in app.openapi()["paths"]
+
+
+class TestDriverUcu:
+    """`/driver` — canlı ekranı hangi bağlantı besliyor?
+
+    Uç, kararın kendisini değil **gerekçesini** de döndürür: operatör "neden
+    benzetim verisi görüyorum?" sorusunu ekranı terk etmeden yanıtlayabilmeli.
+    """
+
+    def test_hic_baglanti_yokken_benzetim_bildirilir(self, client):
+        payload = client.get("/api/runtime/driver").json()
+        assert payload["simulated"] is True
+        assert payload["connection_id"] is None
+        assert payload["candidates"] == 0
+
+    def test_gerekce_her_zaman_yazilir(self, client):
+        payload = client.get("/api/runtime/driver").json()
+        assert isinstance(payload["reason"], str)
+        assert payload["reason"].strip() != ""
+
+    def test_dogrulanmis_baglanti_surucu_olur(self, client):
+        # FakeAdapter basarili doner; kayit dogrulanmis ve bagli hale gelir.
+        client.post("/api/runtime/connect", json=connect_body())
+        payload = client.get("/api/runtime/driver").json()
+        assert payload["simulated"] is False
+        assert payload["connection_id"] == "hat-1"
+        assert payload["kind"] == "rest"
+        assert payload["candidates"] == 1
+
+    def test_baska_organizasyon_surucuyu_gormez(self, client):
+        client.post("/api/runtime/connect", json=connect_body())
+        with as_org(ORG_B):
+            payload = client.get("/api/runtime/driver").json()
+        assert payload["simulated"] is True
+        assert payload["connection_id"] is None

@@ -717,6 +717,21 @@ async def runtime_status(
     return manager.status_report(org_id)
 
 
+@router.get("/driver")
+async def runtime_driver(
+    org_id: str = Depends(get_current_org),
+    manager: RuntimeManager = Depends(get_runtime_manager),
+) -> dict:
+    """Canlı ekranı besleyecek bağlantı ve bu kararın gerekçesi.
+
+    Ayrı bir uç olmasının nedeni `/status`'un sözleşmesini bozmamaktır: orası
+    bağlantıların tek tek durumunu verir, burası aralarından **hangisinin**
+    seçildiğini. İkisi birleştirilseydi, yalnızca kararı okumak isteyen istemci
+    de bütün bağlantı listesini çekmek zorunda kalırdı.
+    """
+    return manager.driver_report(org_id)
+
+
 @router.get("/health")
 async def runtime_health(
     org_id: str = Depends(get_current_org),
