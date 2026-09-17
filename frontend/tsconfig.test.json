@@ -1,0 +1,28 @@
+{
+  /* Playwright test'leri `src/` dışında durduğu için hiçbir tsconfig'in
+     kapsamına girmiyordu: `tsc -b` onları hiç denetlemiyor, bir tip hatası
+     ancak koşum sırasında ortaya çıkıyordu. Ayrı bir proje olmasının nedeni
+     `types: ["node"]` — uygulama kodunun dosya sistemine erişmesini istemiyoruz,
+     test koşucusunun erişmesi ise normal. */
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "erasableSyntaxOnly": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["tests", "playwright.config.ts"]
+}

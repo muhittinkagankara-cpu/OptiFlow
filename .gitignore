@@ -52,3 +52,10 @@ frontend/dist/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# --- Playwright (Sprint 2M) ---
+# Koşum çıktıları paylaşılmaz; taban çizgisi anlık görüntüleri
+# (tests/__screenshots__) bilinçli olarak depoda durur.
+frontend/test-results/
+frontend/playwright-report/
+frontend/tests/.results/
