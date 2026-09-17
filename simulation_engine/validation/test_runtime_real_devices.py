@@ -478,3 +478,183 @@ class TestMqttAgainstRealBroker:
             )
         )
         assert isinstance(result.ok, bool)
+
+
+# --------------------------------------------------------------------------- #
+# Sprint 2L — gerçek OPC UA sunucusundan sürücü seçimine kadar zincir           #
+# --------------------------------------------------------------------------- #
+
+
+class FactoryOpcUaTestServer:
+    """Hat biçiminde bir OPC UA sunucusu: Running, Fault, Counter.
+
+    Öncekinden farkı, değerlerin **test sırasında değiştirilebilmesidir**:
+    bir arıza bitinin değişmesi ya da sayacın artması, sahada olan şeydir ve
+    zincirin buna tepki verdiği ancak değer gerçekten değiştirilerek
+    gösterilebilir.
+
+    Bu bir fabrika cihazı değildir. Doğrulanan şey protokol katmanıdır —
+    oturum açma, düğüm okuma, değişen değeri geri okuma — sahadaki bir PLC'nin
+    davranışı değil.
+    """
+
+    def __init__(self, port: int):
+        self.port = port
+        self.endpoint = f"opc.tcp://127.0.0.1:{port}/optiflow/hat/"
+        self.nodes: dict = {}
+        self._vars: dict = {}
+        self._loop = None
+        self._thread = None
+        self._ready = threading.Event()
+        self._stop = threading.Event()
+
+    def start(self) -> None:
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+        if not self._ready.wait(timeout=30):
+            raise RuntimeError("OPC UA hat sunucusu acilmadi")
+
+    def _run(self) -> None:
+        loop = asyncio.new_event_loop()
+        self._loop = loop
+        loop.run_until_complete(self._serve())
+        loop.close()
+
+    async def _serve(self) -> None:
+        from asyncua import Server
+
+        server = Server()
+        await server.init()
+        server.set_endpoint(self.endpoint)
+        namespace = await server.register_namespace("optiflow-hat")
+        line = await server.nodes.objects.add_object(namespace, "Torna")
+
+        for name, initial in (("Running", True), ("Fault", False), ("Counter", 100)):
+            variable = await line.add_variable(namespace, name, initial)
+            await variable.set_writable()
+            self._vars[name] = variable
+            self.nodes[name] = variable.nodeid.to_string()
+
+        async with server:
+            self._ready.set()
+            while not self._stop.is_set():
+                await asyncio.sleep(0.05)
+
+    def set_value(self, name: str, value) -> None:
+        """Düğüm değerini sunucunun kendi döngüsünde değiştirir.
+
+        Doğrudan yazılsaydı, sunucunun döngüsü başka bir iş parçacığında
+        olduğu için yazma yarışa girerdi.
+        """
+        future = asyncio.run_coroutine_threadsafe(
+            self._vars[name].write_value(value), self._loop
+        )
+        future.result(timeout=10)
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=10)
+
+
+@pytest.fixture(scope="module")
+def hat_server():
+    server = FactoryOpcUaTestServer(free_port())
+    server.start()
+    yield server
+    server.stop()
+
+
+def hat_spec(server: FactoryOpcUaTestServer) -> ConnectionSpec:
+    return spec(
+        ConnectionKind.OPCUA,
+        server.endpoint,
+        topics=[server.nodes["Running"], server.nodes["Fault"], server.nodes["Counter"]],
+    )
+
+
+class TestGercekSinyallerOkunur:
+    """Running / Fault / Counter gerçek sunucudan okunur."""
+
+    def test_uc_sinyal_de_okunur(self, hat_server):
+        readings, error = asyncio.run(
+            OpcUaAdapter().read_nodes(hat_spec(hat_server))
+        )
+        assert error is None
+        assert len(readings) == 3
+
+    def test_running_biti_okunur(self, hat_server):
+        hat_server.set_value("Running", True)
+        readings, _ = asyncio.run(OpcUaAdapter().read_nodes(hat_spec(hat_server)))
+        degerler = dict(readings)
+        assert degerler[hat_server.nodes["Running"]] is True
+
+    def test_duran_makine_calisir_gorunmez(self, hat_server):
+        # Bu ekranin en pahali hatasi: duran makineyi calisiyor gostermek.
+        hat_server.set_value("Running", False)
+        readings, _ = asyncio.run(OpcUaAdapter().read_nodes(hat_spec(hat_server)))
+        assert dict(readings)[hat_server.nodes["Running"]] is False
+        hat_server.set_value("Running", True)
+
+    def test_ariza_biti_degisince_okunan_deger_degisir(self, hat_server):
+        node = hat_server.nodes["Fault"]
+        hat_server.set_value("Fault", False)
+        once, _ = asyncio.run(OpcUaAdapter().read_nodes(hat_spec(hat_server)))
+        hat_server.set_value("Fault", True)
+        sonra, _ = asyncio.run(OpcUaAdapter().read_nodes(hat_spec(hat_server)))
+        assert dict(once)[node] is False
+        assert dict(sonra)[node] is True
+        hat_server.set_value("Fault", False)
+
+    def test_sayac_artinca_okunan_deger_artar(self, hat_server):
+        node = hat_server.nodes["Counter"]
+        hat_server.set_value("Counter", 100)
+        once, _ = asyncio.run(OpcUaAdapter().read_nodes(hat_spec(hat_server)))
+        hat_server.set_value("Counter", 137)
+        sonra, _ = asyncio.run(OpcUaAdapter().read_nodes(hat_spec(hat_server)))
+        assert dict(sonra)[node] - dict(once)[node] == 37
+
+    def test_sayac_asla_uydurulmaz(self, hat_server):
+        # Sunucudaki deger neyse o okunur; arayuzde bir "hedef" turetilmez.
+        hat_server.set_value("Counter", 0)
+        readings, _ = asyncio.run(OpcUaAdapter().read_nodes(hat_spec(hat_server)))
+        assert dict(readings)[hat_server.nodes["Counter"]] == 0
+        hat_server.set_value("Counter", 100)
+
+
+class TestSurucuSecimiGercekCihazla:
+    """Gerçek bir cihaz doğrulandığında canlı ekranı o besler."""
+
+    def test_dogrulanan_opcua_surucu_olur(self, hat_server):
+        manager = RuntimeManager()
+        manager.register(ORG, hat_spec(hat_server))
+        asyncio.run(manager.connect(ORG, "gercek-1"))
+
+        rapor = manager.driver_report(ORG)
+        assert rapor["simulated"] is False
+        assert rapor["kind"] == "opcua"
+        assert rapor["candidates"] == 1
+
+    def test_gerekce_cihazin_adini_yazar(self, hat_server):
+        manager = RuntimeManager()
+        manager.register(ORG, hat_spec(hat_server))
+        asyncio.run(manager.connect(ORG, "gercek-1"))
+        assert "OPC UA" in manager.driver_report(ORG)["reason"]
+
+    def test_hic_baglanmadan_benzetim_kalir(self, hat_server):
+        # Kayit var ama hic denenmedi: dogrulanmamis bir hat surucu olamaz.
+        manager = RuntimeManager()
+        manager.register(ORG, hat_spec(hat_server))
+        assert manager.driver_report(ORG)["simulated"] is True
+
+    def test_kapali_sunucuya_baglanti_surucu_olmaz(self):
+        manager = RuntimeManager()
+        manager.register(
+            ORG, spec(ConnectionKind.OPCUA, f"opc.tcp://127.0.0.1:{free_port()}/yok/")
+        )
+        asyncio.run(manager.connect(ORG, "gercek-1"))
+
+        rapor = manager.driver_report(ORG)
+        assert rapor["simulated"] is True
+        assert rapor["candidates"] == 0
+        assert "benzetim" in rapor["reason"].lower()
