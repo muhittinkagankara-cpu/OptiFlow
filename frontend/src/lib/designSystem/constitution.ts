@@ -240,3 +240,150 @@ export function readCssToken(css: string, token: string): string | null {
   }
   return css.slice(at + token.length + 1, end).trim();
 }
+
+/* -------------------------------------------------------------------------- */
+/* Kabul belgesi                                                               */
+/* -------------------------------------------------------------------------- */
+
+/** Bir kuralın nerede ve nasıl korunduğu. */
+export interface AcceptanceRow {
+  rule: string;
+  /** Kuralı zorlayan katman. */
+  guardedBy: string;
+  /**
+   * `otomatik`  — bir test düşerse kural ihlal edilmiş demektir.
+   * `ölçümle`   — tarayıcıda ölçülüyor, ihlal testi düşürüyor.
+   * `elle`      — henüz otomatik değil; sprint sonunda insan bakıyor.
+   */
+  status: "otomatik" | "ölçümle" | "elle";
+}
+
+/**
+ * V4 kabul tablosunun tek kaynağı.
+ *
+ * Belge elle yazılsaydı, kurallar değiştikçe sessizce yalan söylemeye
+ * başlardı. Buradan üretilir ve bir test belgenin güncel olduğunu doğrular.
+ */
+export const ACCEPTANCE: AcceptanceRow[] = [
+  {
+    rule: "Gradient yok",
+    guardedBy: "constitution.test.ts (kaynak) + tests/constitution.spec.ts (tarayıcı)",
+    status: "otomatik",
+  },
+  {
+    rule: "Glassmorphism yok",
+    guardedBy: "constitution.test.ts (kaynak) + tests/constitution.spec.ts (tarayıcı)",
+    status: "otomatik",
+  },
+  {
+    rule: "Dekoratif gölge yok",
+    guardedBy: "constitution.test.ts (kaynak) + tests/constitution.spec.ts (tarayıcı)",
+    status: "otomatik",
+  },
+  {
+    rule: "44px dokunma hedefi",
+    guardedBy: "tests/touch-targets.spec.ts (gerçek vuruş testi)",
+    status: "ölçümle",
+  },
+  {
+    rule: "Kanonik renkler",
+    guardedBy: "constitution.test.ts — index.css tokenları okunur",
+    status: "otomatik",
+  },
+  {
+    rule: "Kanonik yarıçap (14/16/20/24)",
+    guardedBy: "constitution.test.ts — index.css tokenları okunur",
+    status: "otomatik",
+  },
+  {
+    rule: "Yatay taşma yok",
+    guardedBy: "tests/constitution.spec.ts — altı genişlikte ölçülür",
+    status: "ölçümle",
+  },
+  {
+    rule: "Kısıt şeridi kısıtı belirleyen ölçümü kodlar",
+    guardedBy: "src/lib/live/rail.test.ts",
+    status: "otomatik",
+  },
+  {
+    rule: "Ekran statement ile açılır",
+    guardedBy: "src/lib/live/statement.test.ts + ekran testleri",
+    status: "otomatik",
+  },
+  {
+    rule: "Ölçülmeyen değer sıfıra düşmez",
+    guardedBy: "npm run acceptance — izleme katmanı taraması",
+    status: "otomatik",
+  },
+  {
+    rule: "Köken (provenance) görünür",
+    guardedBy: "src/lib/connectors/bridge/devices.test.ts — besleme durumu",
+    status: "otomatik",
+  },
+  {
+    rule: "Tipografi ölçeği (H1 32 / H2 24 / KPI 30)",
+    guardedBy: "Henüz otomatik değil; sprint sonunda tarayıcıda ölçülüyor",
+    status: "elle",
+  },
+  {
+    rule: "Erişilebilirlik — critical sıfır",
+    guardedBy: "tests/a11y.spec.ts (axe-core) — tartışmaya kapalı kademe",
+    status: "ölçümle",
+  },
+  {
+    rule: "Erişilebilirlik — yeni tür serious ihlal eklenemez",
+    guardedBy:
+      "tests/a11y.spec.ts — üç kalem gerekçeli borç listesinde; listenin " +
+      "uzaması testi düşürür",
+    status: "ölçümle",
+  },
+  {
+    rule: "Görsel taban çizgisi",
+    guardedBy: "tests/visual.spec.ts — 6 ekran × 6 genişlik",
+    status: "ölçümle",
+  },
+];
+
+/** Kabul belgesinin metnini üretir. */
+export function renderAcceptance(rows: AcceptanceRow[] = ACCEPTANCE): string {
+  const satirlar = rows
+    .map((r) => `| ${r.rule} | ${r.guardedBy} | ${r.status} |`)
+    .join("\n");
+
+  return `# V4 Kabul Tablosu
+
+> ⚠️ **Bu dosya elle düzenlenmez.** Kaynağı
+> \`frontend/src/lib/designSystem/constitution.ts\` içindeki \`ACCEPTANCE\`
+> listesidir ve \`constitution.test.ts\` belgenin güncel olduğunu doğrular.
+> Elle yazılsaydı, kurallar değiştikçe sessizce yalan söylemeye başlardı.
+
+Tasarım Anayasası V4 (MASTER §3.8) kurallarının hangi katmanda korunduğu.
+
+| Kural | Nerede korunuyor | Durum |
+| --- | --- | --- |
+${satirlar}
+
+## Durum ne demek
+
+- **otomatik** — bir test düşerse kural ihlal edilmiş demektir; tarayıcı gerekmez.
+- **ölçümle** — gerçek tarayıcıda ölçülür; ihlal testi düşürür.
+- **elle** — henüz otomatik değil, sprint sonunda insan bakıyor. Bu satırların
+  azalması bir sonraki sprintlerin işidir.
+
+## Korumalı alanlar
+
+Kaynak taraması yalnızca V4'ün zorunlu olduğu alanlarda çalışır:
+
+${PROTECTED_AREAS.map((a) => `- \`${a}\``).join("\n")}
+
+## Muafiyetler
+
+Muafiyet gerekçesiz olamaz; testler gerekçesiz muafiyeti de reddeder.
+
+${RULES.flatMap((rule) =>
+  rule.exemptions.map(
+    (item) => `- **${rule.title}** → \`${item.path}\`\n  ${item.reason}`,
+  ),
+).join("\n")}
+`;
+}

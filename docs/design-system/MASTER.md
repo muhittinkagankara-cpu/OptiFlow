@@ -429,14 +429,44 @@ Sprint sonunda: **375 / 390 / 768 / 1024 / 1440 / 1600** ölçümleri, ardından
 `vitest` · `tsc` · `build` · `acceptance` · `git diff --check` raporlanır.
 **Commit yalnızca onaydan sonra.**
 
-#### 3.8.11 Sıradaki borçlar
+#### 3.8.11 Otomatik koruma (Sprint 2M) 🟢
 
-| Sıra | Sprint | Kapsam |
+Anayasa artık insan gözüne değil testlere emanet. İki katman var ve biri
+ötekinin yerine geçmez:
+
+| Katman | Dosya | Ne yakalar |
 | --- | --- | --- |
-| 1 | 2J | Tasarım dili birleştirme (Command Center, Sonuç, Finans) |
-| 2 | 2K | Heatmap temizliği (`components/heatmap`) |
-| 3 | 2L | Runtime gerçek cihaz doğrulaması (OPC-UA / MES) |
-| 4 | 2M | Storybook + Playwright + görsel regresyon + erişilebilirlik |
+| Kaynak | `frontend/src/lib/designSystem/constitution.ts` | Birinin `shadow-lg` **yazdığını**; tarayıcı gerekmez, saniyeler sürer |
+| Tarayıcı | `frontend/tests/constitution.spec.ts` | Kaynakta yazmayan ihlali: kütüphane varsayılanı, `:hover` durumunda beliren gölge |
+
+Kaynak taraması yalnızca **korumalı alanlarda** çalışır: `components/` altında
+`live`, `results`, `reports`, `finance`, `heatmap`, `dashboard`, `ui`.
+
+Bir kural gevşetilecekse testi susturmak değil, `exemptions` listesine
+**gerekçesiyle** yazmak gerekir; testler gerekçesiz muafiyeti de reddeder.
+
+Kabul tablosu `docs/design-system/V4_ACCEPTANCE.md` dosyasındadır ve **elle
+düzenlenmez**: kaynağı `ACCEPTANCE` listesidir, bir test belgenin güncel
+olduğunu doğrular. Elle yazılsaydı kurallar değiştikçe sessizce yalan
+söylemeye başlardı.
+
+> **2M'in yakaladığı ilk ihlal.** `Card interactive` `optiflow-lift`
+> kullanıyordu; o sınıfın `:hover` kuralı `--shadow-lg` uyguluyor ve bu Finans
+> ekranında iki kartta canlıydı. İmleç kartın üstünde değilken görünmediği için
+> 2J'nin statik ölçümlerinde hiç yakalanmamıştı. Ders: **bir durum ölçülmediyse
+> korunmuyor demektir.**
+
+#### 3.8.12 Sıradaki borçlar
+
+| Sıra | Sprint | Kapsam | Durum |
+| --- | --- | --- | --- |
+| 1 | 2J | Tasarım dili birleştirme (Command Center, Sonuç, Finans) | ✅ |
+| 2 | 2K | Heatmap temizliği (`components/heatmap`) | ✅ (2J içinde) |
+| 3 | 2L | Runtime gerçek cihaz doğrulaması (OPC-UA / MES) | ✅ protokol katmanı |
+| 4 | 2M | Playwright + görsel regresyon + erişilebilirlik | ✅ |
+| 5 | 2N | Storybook bileşen kataloğu | açık |
+| 6 | 2N | Operatör camı ve telefon çerçevesi borcu | açık |
+| 7 | 2N | 1024px'te tuvalin 70px'e ezilmesi | açık |
 
 ---
 

@@ -78,6 +78,23 @@ If a visual change requires touching any of these, stop and ask.
 - Every recommendation must be able to answer "why did OptiFlow recommend this?"
   Provenance is not optional.
 
+## Automated constitution guards
+
+The V4 rules are enforced by tests, not by memory:
+
+- `npm test` runs the **source** guard
+  (`src/lib/designSystem/constitution.ts`): no gradient, no glass, no
+  decorative shadow, no oversized radius, canonical colors and radii.
+- `npm run test:constitution` adds the **browser** guard
+  (`tests/constitution.spec.ts`, `tests/touch-targets.spec.ts`): what the
+  source cannot see — library defaults and `:hover` states.
+- `npm run test:a11y` runs axe-core; `npm run test:visual` compares screenshots.
+
+To relax a rule, do **not** silence the test. Add an entry to that rule's
+`exemptions` with a written reason; the tests reject a reasonless exemption.
+
+`docs/design-system/V4_ACCEPTANCE.md` is generated — never edit it by hand.
+
 ## Before you finish
 
 - Run `cd frontend && npm run acceptance` and report the table.
