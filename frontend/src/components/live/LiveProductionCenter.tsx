@@ -144,19 +144,17 @@ export function LiveProductionCenter({
   config,
   results,
   onStartSimulation,
-  initialSource = "demo",
+  initialSource,
   initialScenario = "normal",
   bridge,
   runtimeKpi = null,
 }: LiveProductionCenterProps) {
-  const [sourceId, setSourceId] = useState<SourceId>(initialSource);
   /*
-   * Kullanıcı seçiciyi bir kez elletiyse otomatik seçim susar. Susmasaydı,
-   * operatörün demoya geçme kararı bir sonraki karar okumasında sessizce geri
-   * alınırdı; ekranın kendi başına kaynak değiştirmesi, ölçümü değil arayüzü
-   * tartışılır kılar.
+   * Kullanıcının **açık** seçimi; hiç seçmediyse `null`. Etkin kaynak bundan
+   * türetilir, ayrı bir state'te tutulmaz: iki yerde tutulsaydı, sürücü kararı
+   * geldiğinde hangisinin kazanacağı bir efektin çalışma sırasına kalırdı.
    */
-  const [sourceChosenByUser, setSourceChosenByUser] = useState(false);
+  const [chosenSource, setChosenSource] = useState<SourceId | null>(null);
   /*
    * Runtime kaynağının başlangıç anı bir kez okunur. `useMemo` içinde
    * okunsaydı her yeniden hesaplamada değişir ve gelen olayların dakika
@@ -184,19 +182,18 @@ export function LiveProductionCenter({
   const { driver, loaded: driverLoaded } = useRuntimeDriver(driverClient);
 
   /*
-   * Doğrulanmış bir cihaz varsa ekran onunla açılır. Karar gelene kadar
-   * (`driverLoaded` false) hiçbir şey değişmez: cihaz yokken runtime'a geçmek,
-   * boş bir ekranı "fabrika duruyor" diye okuturdu.
+   * Etkin kaynak render sırasında türetilir; sıra önem taşır.
+   *
+   * 1. Kullanıcının açık seçimi — her şeyi yener. Yenmeseydi, operatörün
+   *    demoya geçme kararı bir sonraki karar okumasında sessizce geri alınırdı.
+   * 2. Çağıranın verdiği başlangıç — demo modu bunu kullanır.
+   * 3. Sunucunun sürücü kararı — doğrulanmış cihaz varsa runtime.
+   * 4. Demo. Karar gelene kadar (`driverLoaded` false) burada kalınır: cihaz
+   *    var mı bilinmeden runtime'a geçmek, boş bir ekranı "fabrika duruyor"
+   *    diye okuturdu.
    */
-  useEffect(() => {
-    if (!driverLoaded || sourceChosenByUser) {
-      return;
-    }
-    const next = liveSourceFor(driver);
-    if (next === RUNTIME_SOURCE_ID) {
-      setSourceId(RUNTIME_SOURCE_ID);
-    }
-  }, [driverLoaded, driver, sourceChosenByUser]);
+  const detectedSource = driverLoaded ? liveSourceFor(driver) : null;
+  const sourceId: SourceId = chosenSource ?? initialSource ?? detectedSource ?? "demo";
 
   /*
    * Store ve sağlayıcı **birlikte** kurulur; ikisi tek bir oturum oluşturur.
@@ -385,10 +382,7 @@ export function LiveProductionCenter({
           Kaynak
           <select
             value={sourceId}
-            onChange={(event) => {
-              setSourceChosenByUser(true);
-              setSourceId(event.target.value as SourceId);
-            }}
+            onChange={(event) => setChosenSource(event.target.value as SourceId)}
             /* Dokunma hedefi 44px (MASTER §14). */
             className="min-h-[44px] w-full rounded-lg border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-2 py-1 text-[12px] font-medium text-[var(--of-cc-ink)] normal-case focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:w-auto"
           >
