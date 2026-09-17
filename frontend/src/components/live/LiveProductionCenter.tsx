@@ -53,6 +53,7 @@ import {
   BridgeLiveProvider,
   RUNTIME_SOURCE_ID,
   RuntimeBridgeClient,
+  liveSourceFor,
   feedStatus,
   isSimulatedSourceId,
   type FeedStatus,
@@ -76,6 +77,7 @@ import { LiveStationList } from "./LiveStationList";
 import { ReplayControls } from "./ReplayControls";
 import { StationDrawer } from "./StationDrawer";
 import { useLiveTrends } from "./useLiveTrends";
+import { useRuntimeDriver } from "./useRuntimeDriver";
 
 /** Bugün seçilebilen iki kaynak. */
 type SourceId = "demo" | "replay" | "runtime";
@@ -149,6 +151,13 @@ export function LiveProductionCenter({
 }: LiveProductionCenterProps) {
   const [sourceId, setSourceId] = useState<SourceId>(initialSource);
   /*
+   * Kullanıcı seçiciyi bir kez elletiyse otomatik seçim susar. Susmasaydı,
+   * operatörün demoya geçme kararı bir sonraki karar okumasında sessizce geri
+   * alınırdı; ekranın kendi başına kaynak değiştirmesi, ölçümü değil arayüzü
+   * tartışılır kılar.
+   */
+  const [sourceChosenByUser, setSourceChosenByUser] = useState(false);
+  /*
    * Runtime kaynağının başlangıç anı bir kez okunur. `useMemo` içinde
    * okunsaydı her yeniden hesaplamada değişir ve gelen olayların dakika
    * hesabı kayardı.
@@ -161,6 +170,33 @@ export function LiveProductionCenter({
     () => seedsFromConfig(config, results),
     [config, results],
   );
+
+  /*
+   * Sürücü kararını okuyan istemci, sağlayıcınınkinden ayrı durur ve bileşenin
+   * ömrü boyunca sabittir. Sağlayıcı memo'sunun içinde üretilseydi, kaynak her
+   * değiştiğinde yeni bir istemci doğar ve karar gereksiz yere yeniden
+   * sorulurdu.
+   */
+  const driverClient = useMemo(
+    () => new RuntimeBridgeClient({ baseUrl: API_BASE_URL, getToken: getAccessToken }),
+    [],
+  );
+  const { driver, loaded: driverLoaded } = useRuntimeDriver(driverClient);
+
+  /*
+   * Doğrulanmış bir cihaz varsa ekran onunla açılır. Karar gelene kadar
+   * (`driverLoaded` false) hiçbir şey değişmez: cihaz yokken runtime'a geçmek,
+   * boş bir ekranı "fabrika duruyor" diye okuturdu.
+   */
+  useEffect(() => {
+    if (!driverLoaded || sourceChosenByUser) {
+      return;
+    }
+    const next = liveSourceFor(driver);
+    if (next === RUNTIME_SOURCE_ID) {
+      setSourceId(RUNTIME_SOURCE_ID);
+    }
+  }, [driverLoaded, driver, sourceChosenByUser]);
 
   /*
    * Store ve sağlayıcı **birlikte** kurulur; ikisi tek bir oturum oluşturur.
@@ -349,7 +385,10 @@ export function LiveProductionCenter({
           Kaynak
           <select
             value={sourceId}
-            onChange={(event) => setSourceId(event.target.value as SourceId)}
+            onChange={(event) => {
+              setSourceChosenByUser(true);
+              setSourceId(event.target.value as SourceId);
+            }}
             /* Dokunma hedefi 44px (MASTER §14). */
             className="min-h-[44px] w-full rounded-lg border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-2 py-1 text-[12px] font-medium text-[var(--of-cc-ink)] normal-case focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 sm:w-auto"
           >
