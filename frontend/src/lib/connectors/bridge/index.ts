@@ -14,4 +14,5 @@ export * from "./client";
 export * from "./mapping";
 export * from "./devices";
 export * from "./live";
+export * from "./driver";
 export * from "./provider";

@@ -13,6 +13,7 @@
  * açtı; aynı hatanın burada tekrarlanmaması için bağlama tek yerde yapılır.
  */
 
+import { parseRuntimeDriver, type RuntimeDriver } from "./driver";
 import {
   parseConnection,
   parseConnections,
@@ -298,6 +299,17 @@ export class RuntimeBridgeClient {
       },
       parseConnection,
     );
+  }
+
+  /**
+   * Canlı ekranı hangi bağlantının beslemesi gerektiğini sorar.
+   *
+   * `status()` bütün bağlantıların durumunu getirir; bu uç aralarından
+   * **hangisinin** seçildiğini söyler. Yalnızca kararı okumak isteyen ekranın
+   * bütün bağlantı listesini çekmesi gerekmez.
+   */
+  driver(): Promise<BridgeResult<RuntimeDriver>> {
+    return this.request("/driver", { method: "GET" }, parseRuntimeDriver);
   }
 
   status(): Promise<BridgeResult<BridgeConnection[]>> {
