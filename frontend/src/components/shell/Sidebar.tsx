@@ -99,7 +99,7 @@ export function Sidebar({
         aria-current={isActive ? "page" : undefined}
         className={`relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 focus:outline-none ${
           isActive
-            ? "bg-brand-600/12 text-brand-700"
+            ? "bg-brand-600/12 text-[var(--of-text)]"
             : "text-slate-500 hover:bg-slate-100 hover:text-slate-900"
         }`}
       >
@@ -174,7 +174,7 @@ export function Sidebar({
                   : "mt-3 space-y-1 border-t border-slate-200 pt-3"
               }
             >
-              <p className="px-3 pb-1 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+              <p className="px-3 pb-1 text-[10px] font-semibold tracking-wider text-[var(--of-text-muted)] uppercase">
                 {group.label}
               </p>
               {group.items.map(renderItem)}
@@ -199,7 +199,7 @@ export function Sidebar({
 
         {/* Hangi fabrikanın açık olduğu her ekranda okunabilir kalır. */}
         <div className="border-t border-slate-200 px-4 py-3">
-          <p className="text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
+          <p className="text-[10px] font-semibold tracking-wider text-[var(--of-text-muted)] uppercase">
             Açık model
           </p>
           <p className="mt-1 truncate text-sm text-slate-700">
