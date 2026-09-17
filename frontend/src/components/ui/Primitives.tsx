@@ -32,9 +32,15 @@ export function Card({ children, className = "", interactive, index }: CardProps
       /* Sprint 2J: yüzey Anayasa V4 tokenlarına taşındı (MASTER §3.8.1).
          İmza ve davranış değişmedi; değişen yalnızca renk ve yarıçap, bu
          yüzden `Card` kullanan 68 dosya tek hamlede aynı dile geçer —
-         ekran ekran override etmek tekrar üretirdi. */
+         ekran ekran override etmek tekrar üretirdi.
+
+         Sprint 2M: `optiflow-lift` yerine `optiflow-cc-lift`. Öncekinin
+         `:hover` kuralı `--shadow-lg` (0 12px 32px -8px rgb(0 0 0 / .6))
+         uyguluyordu; bu, V4 §3.8.3'ün yasakladığı dekoratif gölgedir ve
+         yalnızca imleç kartın üstündeyken göründüğü için 2J'nin statik
+         ölçümlerinde hiç yakalanmamıştı. Anayasa testi yakaladı. */
       className={`rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] ${
-        interactive ? "optiflow-lift hover:border-[var(--of-cc-border-strong)]" : ""
+        interactive ? "optiflow-cc-lift" : ""
       } optiflow-enter ${className}`}
       style={index === undefined ? undefined : { animationDelay: `${index * 45}ms` }}
     >
