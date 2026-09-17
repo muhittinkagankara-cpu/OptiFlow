@@ -89,7 +89,7 @@ export function TopBar({
             onClick={() => setProfileOpen((open) => !open)}
             aria-expanded={isProfileOpen}
             aria-label="Profil menüsü"
-            className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-brand-700 text-xs font-bold text-white transition-transform duration-200 hover:scale-105 focus:outline-none"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-600 text-xs font-bold text-white transition-transform duration-200 hover:scale-105 focus:outline-none"
           >
             {initialsOf(userEmail, orgName)}
           </button>

@@ -136,7 +136,7 @@ export function Sidebar({
       >
         {/* Marka */}
         <div className="flex items-center gap-2.5 px-4 py-4">
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm">
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white">
             <Factory className="h-5 w-5" />
           </span>
           <div className="min-w-0 flex-1">
