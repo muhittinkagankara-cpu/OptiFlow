@@ -13,6 +13,7 @@
 
 import type { StationHeat } from "../../types/simulationTypes";
 import { formatMoney } from "../../lib/financeFormatting";
+import { Card } from "../ui/Primitives";
 import {
   bandDot,
   dominantComponentLabel,
@@ -33,7 +34,7 @@ export function TopLossStations({
 }: TopLossStationsProps) {
   if (stations.length === 0) {
     return (
-      <div className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-3 py-3">
+      <Card className="px-3 py-3">
         <p className="text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
           En çok kaybeden
         </p>
@@ -41,14 +42,14 @@ export function TopLossStations({
           Hiçbir istasyonda parasal kayıp hesaplanamadı. Maliyet oranlarını
           girdiğinizde bu liste dolar.
         </p>
-      </div>
+      </Card>
     );
   }
 
   const worst = stations[0].total_loss;
 
   return (
-    <div className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-3 py-3">
+    <Card className="px-3 py-3">
       <p className="text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
         En çok kaybeden
       </p>
@@ -107,6 +108,6 @@ export function TopLossStations({
           );
         })}
       </ol>
-    </div>
+    </Card>
   );
 }

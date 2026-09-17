@@ -15,6 +15,7 @@
 import { TriangleAlert, X } from "lucide-react";
 import type { StationHeat } from "../../types/simulationTypes";
 import { formatMoney } from "../../lib/financeFormatting";
+import { Card } from "../ui/Primitives";
 import {
   bandDot,
   bandLabel,
@@ -41,7 +42,7 @@ export function SelectedStationCard({
   const byName = new Map(heat.components.map((item) => [item.name, item]));
 
   return (
-    <div className="optiflow-enter rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] p-4">
+    <Card className="p-4">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold text-[var(--of-cc-ink)]">
@@ -118,6 +119,6 @@ export function SelectedStationCard({
           göreli bir sıralamadır, mutlak bir not değil.
         </p>
       )}
-    </div>
+    </Card>
   );
 }

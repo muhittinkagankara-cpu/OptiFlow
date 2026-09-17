@@ -10,6 +10,7 @@
 
 import type { HeatBand } from "../../types/simulationTypes";
 import { bandDot, bandLabel } from "../../lib/heatmapFormatting";
+import { Card } from "../ui/Primitives";
 
 /** Lejantta gösterilen bandlar ve karşılık gelen skor aralıkları. */
 const BANDS: { band: HeatBand; range: string }[] = [
@@ -21,7 +22,7 @@ const BANDS: { band: HeatBand; range: string }[] = [
 
 export function HeatLegend({ isRelative }: { isRelative: boolean }) {
   return (
-    <div className="rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card)] px-3 py-3">
+    <Card className="px-3 py-3">
       <p className="mb-2 text-[10px] font-medium tracking-[0.12em] text-[var(--of-cc-ink-label)] uppercase">
         Isı skoru
       </p>
@@ -53,6 +54,6 @@ export function HeatLegend({ isRelative }: { isRelative: boolean }) {
           ölçülür. Kutulardaki tutarlara da bakın.
         </p>
       )}
-    </div>
+    </Card>
   );
 }
