@@ -23,7 +23,7 @@ export function StationTooltip({ heat }: { heat: StationHeat }) {
   return (
     <div
       role="tooltip"
-      className="w-64 rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border)] bg-[var(--of-cc-card-raised)] p-3 shadow-[var(--of-cc-shadow)]"
+      className="w-64 rounded-[var(--of-cc-radius-card)] border border-[var(--of-cc-border-strong)] bg-[var(--of-cc-card-raised)] p-3"
     >
       <div className="mb-2 flex items-start justify-between gap-2">
         <div className="min-w-0">

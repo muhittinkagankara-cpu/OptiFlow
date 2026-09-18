@@ -70,7 +70,7 @@ function StationDrawerInner({
         className="fixed inset-0 z-30 bg-black/50 lg:hidden"
       />
 
-      <aside className="optiflow-screen fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-[var(--of-cc-border)] bg-[var(--of-cc-panel)] shadow-[var(--of-cc-shadow)] lg:absolute">
+      <aside className="optiflow-screen fixed inset-y-0 right-0 z-40 flex w-full max-w-md flex-col border-l border-[var(--of-cc-border-strong)] bg-[var(--of-cc-panel)] lg:absolute">
         <header className="flex items-start justify-between gap-2 border-b border-[var(--of-cc-border)] px-5 py-4">
           <div className="min-w-0">
             <h3 className="truncate text-[22px] leading-7 font-semibold text-[var(--of-cc-ink)]">
