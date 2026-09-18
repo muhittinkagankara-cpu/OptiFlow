@@ -170,7 +170,17 @@ export const NO_DECORATIVE_SHADOW: Rule = {
   why:
     "V4 §3.8.3: izin verilen tek gölgeler ölçülmüş parıltı (darboğaz) ve " +
     "alarm nabzıdır. Ötekiler derinlik taklidi yapar, bilgi taşımaz.",
-  patterns: [/shadow-(md|lg|xl|2xl)(?![a-z-])/, /optiflow-lift(?!-)/],
+  /*
+   * `shadow-\[...\]` deseni sonradan eklendi: ilk sürüm yalnızca adlandırılmış
+   * ölçekleri (`md`, `lg`, …) arıyordu ve ısı haritası ipucu balonundaki
+   * `shadow-[var(--of-cc-shadow)]` gölgesini kaçırdı. Onu hover testi yakaladı;
+   * kaynak taraması da yakalayabilmeli, çünkü orada yakalamak saniyeler sürer.
+   */
+  patterns: [
+    /shadow-(md|lg|xl|2xl)(?![a-z-])/,
+    /shadow-\[/,
+    /optiflow-lift(?!-)/,
+  ],
   exemptions: [],
 };
 
