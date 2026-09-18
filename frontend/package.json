@@ -13,7 +13,9 @@
     "test:e2e": "playwright test",
     "test:visual": "playwright test tests/visual.spec.ts",
     "test:a11y": "playwright test tests/a11y.spec.ts",
-    "test:constitution": "vitest run src/lib/designSystem && playwright test tests/constitution.spec.ts tests/touch-targets.spec.ts"
+    "test:constitution": "vitest run src/lib/designSystem && playwright test tests/constitution.spec.ts tests/touch-targets.spec.ts",
+    "storybook": "storybook dev -p 6006 --no-open",
+    "build-storybook": "storybook build"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.114.0",
@@ -30,6 +32,8 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@playwright/test": "^1.63.0",
+    "@storybook/addon-docs": "^10.6.0",
+    "@storybook/react-vite": "^10.6.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
@@ -37,6 +41,7 @@
     "@vitejs/plugin-react": "^6.1.0",
     "axe-core": "^4.13.0",
     "oxlint": "^1.79.0",
+    "storybook": "^10.6.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",
     "vite": "^8.2.2",
