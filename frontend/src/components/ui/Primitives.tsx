@@ -103,8 +103,12 @@ const BUTTON_VARIANT: Record<ButtonVariant, string> = {
  * geniştir; `min-w` yalnızca yalnızca-ikon düğmelerini büyütür.
  */
 const BUTTON_SIZE: Record<ButtonSize, string> = {
-  sm: "min-h-[44px] min-w-[44px] gap-1.5 rounded-lg px-2.5 py-1.5 text-xs",
-  md: "min-h-[44px] min-w-[44px] gap-2 rounded-lg px-3.5 py-2 text-sm",
+  /* Sprint 2M.2: `rounded-lg` (12px) yerine kanonik düğme yarıçapı.
+     Storybook kataloğu ölçtüğünde 12px çıktı; V4 §3.8.2 düğme için 14px
+     diyor ve `--of-cc-radius-button` tokenı zaten tanımlıydı, yalnızca
+     kullanılmıyordu. */
+  sm: "min-h-[44px] min-w-[44px] gap-1.5 rounded-[var(--of-cc-radius-button)] px-2.5 py-1.5 text-xs",
+  md: "min-h-[44px] min-w-[44px] gap-2 rounded-[var(--of-cc-radius-button)] px-3.5 py-2 text-sm",
 };
 
 interface ButtonProps {
